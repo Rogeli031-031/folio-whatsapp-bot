@@ -12,6 +12,7 @@ import {
   tokenHasGlobalPlantScope,
 } from "@/lib/auth";
 import { buildIgfForecastAccionesHref } from "@/lib/igf-to-acciones-href";
+import { sumMoneyCents, usesDetailedExpenseLayout } from "@/lib/igf-expense-layout";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
 import {
   fetchIgfForecast,
@@ -19,6 +20,8 @@ import {
   fetchIgfDiarioAcumulado,
   fetchIgfDiarioGastosManuales,
   patchIgfDiarioGastosManuales,
+  fetchIgfDiarioGastosDesglose,
+  patchIgfDiarioGastosDesglose,
   fetchArrLastUploadDay,
   postForecastProvincia,
   patchIgfForecastHg,
@@ -34,6 +37,7 @@ import {
   type IgfForecastMiniResponse,
   type IgfForecastMiniRow,
   type IgfDiarioGastoManual,
+  type IgfDiarioGastoDesglose,
   type PronosticoDetalleResponse,
   type IgfFolioDetalleItem,
   type IgfFolioDetalleTipo,
@@ -294,6 +298,65 @@ function applyManualGastosToAcumulado(
   };
 }
 
+const CORP_MODAL_FIELDS = [
+  { key: "gasto_corporativo" as const, label: "Gasto Corporativo" },
+  { key: "inversiones" as const, label: "Inversiones" },
+  { key: "impuestos_federales" as const, label: "Impuestos Federales" },
+];
+
+const OPER_MODAL_FIELDS = [
+  { key: "presupuesto_nomina_gastos" as const, label: "Presupuesto Nómina/Gastos" },
+  { key: "presupuesto_imss_sua" as const, label: "Presupuesto IMSS/SUA" },
+  { key: "extraordinarios" as const, label: "Extraordinarios" },
+  { key: "provisiones_planta" as const, label: "Provisiones de la Planta" },
+];
+
+function desgloseForPlant(rows: IgfDiarioGastoDesglose[], row: IgfForecastMiniRow): IgfDiarioGastoDesglose | null {
+  const code = foldPlantKey(row.plant_code);
+  const name = foldPlantKey(row.empresa);
+  return (
+    rows.find((item) => {
+      const key = foldPlantKey(item.plant_code);
+      return (code && key === code) || (name && key === name);
+    }) || null
+  );
+}
+
+function applyDesgloseTotals(
+  mini: IgfForecastMiniResponse | null,
+  rows: IgfDiarioGastoDesglose[],
+  year: number,
+  month: number
+): IgfForecastMiniResponse | null {
+  if (!mini || !usesDetailedExpenseLayout(year, month)) return mini;
+  const nextRows = (mini.rows || []).map((row) => {
+    const hit = desgloseForPlant(rows, row);
+    if (!hit) return { ...row };
+    const operativos = hit.operativos_desglosados && hit.operativos_total_desglose != null
+      ? hit.operativos_total_desglose
+      : row.operativos;
+    const corporativos = hit.corporativos_desglosados && hit.corporativos_total_desglose != null
+      ? hit.corporativos_total_desglose
+      : row.corporativos;
+    const gasto = operativos + corporativos;
+    const utilOperImporte = row.ingreso - operativos;
+    const resultadoFinalImporte = utilOperImporte - corporativos;
+    return { ...row, operativos, corporativos, gasto, utilOperImporte, resultadoFinalImporte };
+  });
+  return {
+    ...mini,
+    rows: nextRows,
+    zona: {
+      ...mini.zona,
+      operativos: nextRows.reduce((sum, row) => sum + (Number(row.operativos) || 0), 0),
+      corporativos: nextRows.reduce((sum, row) => sum + (Number(row.corporativos) || 0), 0),
+      gasto: nextRows.reduce((sum, row) => sum + (Number(row.gasto) || 0), 0),
+      utilOperImporte: nextRows.reduce((sum, row) => sum + (Number(row.utilOperImporte) || 0), 0),
+      resultadoFinalImporte: nextRows.reduce((sum, row) => sum + (Number(row.resultadoFinalImporte) || 0), 0),
+    },
+  };
+}
+
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -321,6 +384,14 @@ export function IgfForecastContent() {
   const [acumuladoLoading, setAcumuladoLoading] = useState(false);
   const [acumuladoError, setAcumuladoError] = useState<string | null>(null);
   const [gastosManuales, setGastosManuales] = useState<IgfDiarioGastoManual[]>([]);
+  const [gastosDesglose, setGastosDesglose] = useState<IgfDiarioGastoDesglose[]>([]);
+  const [desgloseModal, setDesgloseModal] = useState<{
+    plant: string;
+    group: "corporativos" | "operativos";
+    drafts: Record<string, string>;
+    agregado: number | null;
+    hasBreakdown: boolean;
+  } | null>(null);
   const [gastoEdit, setGastoEdit] = useState<{ plant: string; field: "operativos" | "corporativos"; draft: string } | null>(null);
   const [gastoSaving, setGastoSaving] = useState(false);
   const [gastoEditError, setGastoEditError] = useState<string | null>(null);
@@ -510,6 +581,32 @@ export function IgfForecastContent() {
     };
   }, [igfTableMode, token, igfForecast?.year, igfForecast?.month]);
 
+  useEffect(() => {
+    if (igfTableMode !== "igf_diario" || !token || !igfForecast) return;
+    if (!usesDetailedExpenseLayout(igfForecast.year, igfForecast.month)) {
+      setGastosDesglose([]);
+      setDesgloseModal(null);
+      return;
+    }
+    let cancel = false;
+    void fetchIgfDiarioGastosDesglose({
+      token,
+      year: igfForecast.year,
+      month: igfForecast.month,
+    })
+      .then((data) => {
+        if (!cancel) setGastosDesglose(data.rows || []);
+      })
+      .catch((error: unknown) => {
+        if (!cancel) {
+          setGastoEditError(error instanceof Error ? error.message : "No se pudo cargar el desglose");
+        }
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [igfTableMode, token, igfForecast?.year, igfForecast?.month]);
+
   const saveGastoManual = async (
     plantCode: string,
     field: "operativos" | "corporativos",
@@ -533,6 +630,58 @@ export function IgfForecastContent() {
       setGastoEdit(null);
     } catch (error: unknown) {
       setGastoEditError(error instanceof Error ? error.message : "No se pudo guardar el gasto manual");
+    } finally {
+      setGastoSaving(false);
+    }
+  };
+
+  const saveDesglose = async () => {
+    if (!token || !igfForecast || !desgloseModal || gastoSaving) return;
+    const fields = desgloseModal.group === "corporativos" ? CORP_MODAL_FIELDS : OPER_MODAL_FIELDS;
+    const numbers: Record<string, number> = {};
+    for (const field of fields) {
+      const raw = String(desgloseModal.drafts[field.key] || "").trim().replace(/,/g, "");
+      const n = Number(raw);
+      if (raw === "" || !Number.isFinite(n)) {
+        setGastoEditError("Captura todos los conceptos. 0 es válido.");
+        return;
+      }
+      numbers[field.key] = Math.round(n * 100) / 100;
+    }
+    const total = sumMoneyCents(fields.map((field) => numbers[field.key]));
+    if (total == null) {
+      setGastoEditError("Captura todos los conceptos. 0 es válido.");
+      return;
+    }
+    setGastoSaving(true);
+    setGastoEditError(null);
+    try {
+      const saved = await patchIgfDiarioGastosDesglose(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: desgloseModal.plant,
+        group: desgloseModal.group,
+        ...numbers,
+      });
+      setGastosDesglose((prev) => {
+        const rest = prev.filter((row) => foldPlantKey(row.plant_code) !== foldPlantKey(saved.plant_code));
+        return [...rest, saved.row];
+      });
+      setGastosManuales((prev) => {
+        const key = foldPlantKey(saved.plant_code);
+        const current = prev.find((row) => foldPlantKey(row.plant_code) === key);
+        const next = {
+          plant_code: saved.plant_code,
+          year: igfForecast.year,
+          month: igfForecast.month,
+          operativos: desgloseModal.group === "operativos" ? total : (current ? current.operativos : null),
+          corporativos: desgloseModal.group === "corporativos" ? total : (current ? current.corporativos : null),
+        };
+        return [...prev.filter((row) => foldPlantKey(row.plant_code) !== key), next];
+      });
+      setDesgloseModal(null);
+    } catch (error: unknown) {
+      setGastoEditError(error instanceof Error ? error.message : "No se pudo guardar el desglose");
     } finally {
       setGastoSaving(false);
     }
@@ -1466,7 +1615,12 @@ export function IgfForecastContent() {
             )}
             {igfMini && igfMini.rows && igfMini.rows.length > 0 && (igfTableMode === "forecast" || (igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant)) && (() => {
               const miniView = igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant
-                ? applyManualGastosToAcumulado(applyIgfDiarioAcumuladoMini(igfMini, acumuladoByPlant), gastosManuales)
+                ? applyDesgloseTotals(
+                    applyManualGastosToAcumulado(applyIgfDiarioAcumuladoMini(igfMini, acumuladoByPlant), gastosManuales),
+                    gastosDesglose,
+                    igfForecast.year,
+                    igfForecast.month
+                  )
                 : igfMini;
               if (!miniView) return null;
               const plantRows = plantaFilter
@@ -1519,13 +1673,18 @@ export function IgfForecastContent() {
                       typeof v === "number";
                     const gastoField = c.key === "operativos" || c.key === "corporativos" ? c.key : null;
                     const plantKey = String(miniRow.plant_code || miniRow.empresa || "").trim();
+                    const detailedLayout = Boolean(
+                      igfForecast && usesDetailedExpenseLayout(igfForecast.year, igfForecast.month)
+                    );
                     const editableGasto = igfTableMode === "igf_diario" && !isZona && gastoField != null && plantKey !== "";
+                    const legacyGasto = editableGasto && !detailedLayout;
+                    const detailedGasto = editableGasto && detailedLayout;
                     const manual = gastoField === "operativos"
                       ? Boolean(miniRow.operativosManual)
                       : gastoField === "corporativos"
                         ? Boolean(miniRow.corporativosManual)
                         : false;
-                    const editing = editableGasto && gastoEdit != null && gastoEdit.plant === plantKey && gastoEdit.field === gastoField;
+                    const editing = legacyGasto && gastoEdit != null && gastoEdit.plant === plantKey && gastoEdit.field === gastoField;
                     return (
                       <td
                         key={c.key}
@@ -1583,7 +1742,35 @@ export function IgfForecastContent() {
                               </button>
                             </span>
                           </div>
-                        ) : editableGasto && gastoField ? (
+                        ) : detailedGasto && gastoField ? (
+                          <button
+                            type="button"
+                            title="Editar desglose del mes"
+                            className="w-full text-right underline decoration-dotted decoration-sky-400/80 text-sky-200 hover:text-sky-100"
+                            onClick={() => {
+                              const hit = desgloseForPlant(gastosDesglose, miniRow);
+                              const fields = gastoField === "corporativos" ? CORP_MODAL_FIELDS : OPER_MODAL_FIELDS;
+                              const active = gastoField === "corporativos"
+                                ? Boolean(hit && hit.corporativos_desglosados)
+                                : Boolean(hit && hit.operativos_desglosados);
+                              const drafts: Record<string, string> = {};
+                              for (const field of fields) {
+                                const value = hit && hit.componentes ? hit.componentes[field.key] : null;
+                                drafts[field.key] = active && value != null ? String(value) : "";
+                              }
+                              setGastoEditError(null);
+                              setDesgloseModal({
+                                plant: plantKey,
+                                group: gastoField,
+                                drafts,
+                                agregado: typeof v === "number" ? v : null,
+                                hasBreakdown: active,
+                              });
+                            }}
+                          >
+                            {c.fmt(v as number)}
+                          </button>
+                        ) : legacyGasto && gastoField ? (
                           <div className="flex flex-col items-end gap-0.5">
                             <button
                               type="button"
@@ -1655,6 +1842,69 @@ export function IgfForecastContent() {
                 </div>
               );
             })()}
+            {desgloseModal ? (
+              <div
+                role="dialog"
+                aria-label={desgloseModal.group === "corporativos" ? "CORPORATIVOS" : "OPERATIVOS"}
+                className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
+              >
+                <div className="w-full max-w-md rounded border border-slate-600 bg-slate-900 p-4 text-slate-100">
+                  <h3 className="mb-3 text-lg font-semibold">
+                    {desgloseModal.group === "corporativos" ? "CORPORATIVOS" : "OPERATIVOS"}
+                  </h3>
+                  {!desgloseModal.hasBreakdown && desgloseModal.agregado != null ? (
+                    <p className="mb-3 text-sm text-amber-200">
+                      Total actual sin desglose: {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 2 }).format(desgloseModal.agregado)}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-col gap-2">
+                    {(desgloseModal.group === "corporativos" ? CORP_MODAL_FIELDS : OPER_MODAL_FIELDS).map((field) => (
+                      <label key={field.key} className="flex items-center justify-between gap-3 text-sm">
+                        <span>{field.label}</span>
+                        <input
+                          value={desgloseModal.drafts[field.key] || ""}
+                          inputMode="decimal"
+                          aria-label={field.label}
+                          className="w-36 rounded border border-slate-500 bg-slate-950 px-2 py-1 text-right"
+                          onChange={(event) => {
+                            const draft = event.target.value;
+                            setDesgloseModal((prev) => (
+                              prev ? { ...prev, drafts: { ...prev.drafts, [field.key]: draft } } : prev
+                            ));
+                          }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-right font-semibold">
+                    TOTAL = {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+                      (desgloseModal.group === "corporativos" ? CORP_MODAL_FIELDS : OPER_MODAL_FIELDS).reduce((sum, field) => {
+                        const raw = String(desgloseModal.drafts[field.key] || "").trim().replace(/,/g, "");
+                        const n = raw === "" ? 0 : Number(raw);
+                        return sum + (Number.isFinite(n) ? Math.round(n * 100) : 0);
+                      }, 0) / 100
+                    )}
+                  </p>
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      className="rounded bg-slate-600 px-3 py-1"
+                      onClick={() => setDesgloseModal(null)}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      disabled={gastoSaving}
+                      className="rounded bg-sky-700 px-3 py-1 text-white"
+                      onClick={() => void saveDesglose()}
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className={`overflow-x-auto ${plantaFilter ? "max-h-[55vh] overflow-y-auto" : ""}`}>
               <table className="w-full border-collapse text-sm">
                 <thead>
