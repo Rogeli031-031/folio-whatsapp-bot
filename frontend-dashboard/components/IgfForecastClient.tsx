@@ -104,25 +104,52 @@ import {
   toModalResumenRows,
 } from "@/lib/arr-categoria-commission";
 
-function acumuladoHit(
+type AcumuladoPlantHit = {
+  margen: number | null;
+  hg: number | null;
+  missing?: string[];
+  missing_components?: { margen?: string[]; hg?: string[] };
+};
+
+function acumuladoLookup(
   row: IgfForecastMiniRow,
-  byPlant: Record<string, { margen: number | null; hg: number | null } | null>
-): { margen: number; hg: number } | null {
+  byPlant: Record<string, AcumuladoPlantHit | null>
+): AcumuladoPlantHit | null {
   const code = String(row.plant_code || "").trim();
   const name = String(row.empresa || "").trim();
-  const hit = (code && byPlant[code]) || (name && byPlant[name]) || null;
+  return (code && byPlant[code]) || (name && byPlant[name]) || null;
+}
+
+function acumuladoHit(
+  row: IgfForecastMiniRow,
+  byPlant: Record<string, AcumuladoPlantHit | null>
+): { margen: number; hg: number } | null {
+  const hit = acumuladoLookup(row, byPlant);
   if (!hit || !Number.isFinite(hit.margen) || !Number.isFinite(hit.hg)) return null;
   return { margen: Number(hit.margen), hg: Number(hit.hg) };
 }
 
+function formatAcumuladoGap(row: IgfForecastMiniRow, byPlant: Record<string, AcumuladoPlantHit | null>): string {
+  const label = String(row.empresa || row.plant_code || "planta").trim() || "planta";
+  const hit = acumuladoLookup(row, byPlant);
+  const missing = (hit && hit.missing) || [];
+  if (!missing.length) return label;
+  const parts = missing.map((metric) => {
+    const key = metric === "HG" ? "hg" : "margen";
+    const components = (hit && hit.missing_components && hit.missing_components[key]) || [];
+    return components.length ? `${metric} (${components.join(", ")})` : metric;
+  });
+  return `${label} — falta ${parts.join(", ")}`;
+}
+
 function missingAcumuladoPlants(
   rows: IgfForecastMiniRow[],
-  byPlant: Record<string, { margen: number | null; hg: number | null } | null>
+  byPlant: Record<string, AcumuladoPlantHit | null>
 ): string[] {
   const missing: string[] = [];
   for (const row of rows || []) {
     if (acumuladoHit(row, byPlant)) continue;
-    missing.push(String(row.empresa || row.plant_code || "planta").trim() || "planta");
+    missing.push(formatAcumuladoGap(row, byPlant));
   }
   return missing;
 }
@@ -271,7 +298,7 @@ export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const lastIgfFetchKeyRef = useRef<string>("");
-  const acumuladoCacheRef = useRef<{ key: string; byPlant: Record<string, { margen: number | null; hg: number | null }> } | null>(null);
+  const acumuladoCacheRef = useRef<{ key: string; byPlant: Record<string, AcumuladoPlantHit> } | null>(null);
   const igfForecastRef = useRef<IgfForecastResponse | null>(null);
   const prevUploadDayRef = useRef<string>("");
   const UPLOAD_DAY_STORAGE_KEY = "Diana";
@@ -289,7 +316,7 @@ export function IgfForecastContent() {
   const [forecastExcelMsg, setForecastExcelMsg] = useState<string | null>(null);
   const [igfGraficaOpen, setIgfGraficaOpen] = useState(false);
   const [igfTableMode, setIgfTableMode] = useState<"forecast" | "igf_diario">("igf_diario");
-  const [acumuladoByPlant, setAcumuladoByPlant] = useState<Record<string, { margen: number | null; hg: number | null }> | null>(null);
+  const [acumuladoByPlant, setAcumuladoByPlant] = useState<Record<string, AcumuladoPlantHit> | null>(null);
   const [acumuladoMissing, setAcumuladoMissing] = useState<string[]>([]);
   const [acumuladoLoading, setAcumuladoLoading] = useState(false);
   const [acumuladoError, setAcumuladoError] = useState<string | null>(null);
@@ -423,13 +450,18 @@ export function IgfForecastContent() {
           versionAsOfCorte,
         });
         if (cancel) return;
-        const next: Record<string, { margen: number | null; hg: number | null }> = {};
+        const next: Record<string, AcumuladoPlantHit> = {};
         for (const row of data.rows || []) {
-          const hit = { margen: row.margen, hg: row.hg };
-          const code = String(row.plant_code || "").trim();
-          const empresa = String(row.empresa || "").trim();
-          if (code) next[code] = hit;
-          if (empresa) next[empresa] = hit;
+          const hit = {
+            margen: row.margen,
+            hg: row.hg,
+            missing: row.missing,
+            missing_components: row.missing_components,
+          };
+          for (const key of [row.plant_code, row.empresa, row.canon, row.igf_label]) {
+            const text = String(key || "").trim();
+            if (text) next[text] = hit;
+          }
         }
         acumuladoCacheRef.current = { key: cacheKey, byPlant: next };
         const missing = missingAcumuladoPlants(igfMini.rows || [], next);
@@ -1426,7 +1458,7 @@ export function IgfForecastContent() {
             {igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length > 0 && (
               <p className="mb-2 text-xs text-amber-300">
                 IGF Diario acumulado incompleto
-                {acumuladoMissing.length ? `: ${acumuladoMissing.join(", ")}` : ""}
+                {acumuladoMissing.length ? `: ${acumuladoMissing.join("; ")}` : ""}
               </p>
             )}
             {igfTableMode === "igf_diario" && gastoEditError && (
