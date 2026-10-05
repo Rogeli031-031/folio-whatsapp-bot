@@ -130,8 +130,12 @@ export async function fetchIgfDiarioGrafica(opts: {
 export type IgfDiarioAcumuladoRow = {
   plant_code: string;
   empresa: string;
+  canon?: string;
+  igf_label?: string;
   margen: number | null;
   hg: number | null;
+  missing?: string[];
+  missing_components?: { margen?: string[]; hg?: string[] };
 };
 
 export async function fetchIgfDiarioAcumulado(opts: {
