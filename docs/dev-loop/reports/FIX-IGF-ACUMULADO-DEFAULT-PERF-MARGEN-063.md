@@ -10,7 +10,7 @@ base_sha: abf146ec62f7cfc791cd67eb2da523a46ed43743
 
 branch: fix/igf-acumulado-default-perf-margen-063
 
-sha: pendiente del commit de esta entrega
+sha: fd956d15e5edfb10b75e70660336ebacf46f95c7
 
 ## Causa del 0.91
 
