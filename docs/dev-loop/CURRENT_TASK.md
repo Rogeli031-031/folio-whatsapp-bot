@@ -1,6 +1,6 @@
-﻿task_id: "G4-PREP-IGF-ACUMULADO-INCOMPLETO-PARIDAD-063-R1"
+﻿task_id: "G4-PREP-IGF-DIARIO-DESGLOSE-GASTOS-064"
 
-title: "Preparar PR de paridad de identidades IGF Diario acumulado 063-R1"
+title: "Preparar PR del desglose Corporativos/Operativos IGF Diario 064"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -15,94 +15,136 @@ human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-1
 g4_authorization: "G4_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-05"
 
 objective: >
-  Preparar el Pull Request de FIX-IGF-ACUMULADO-INCOMPLETO-PARIDAD-063-R1
-  hacia main. No modificar producto ni tests. El merge queda reservado
-  exclusivamente al HUMAN_APPROVER.
+  Preparar el Pull Request de IMPL-IGF-DIARIO-DESGLOSE-GASTOS-064
+  hacia main. No modificar producto ni tests. El merge a main queda
+  reservado exclusivamente al HUMAN_APPROVER.
 
-main_reference_sha: "59e88276159b5da089c39e50e9b53da64b416577"
+main_reference_sha: "7da3851c7bee0a629a2348478b3a1408985e5945"
 
-branch: "fix/igf-acumulado-incompleto-paridad-063-r1"
+branch: "implementation/igf-diario-desglose-gastos-064"
 
-product_sha: "c399a44acb323affede41bb91acd2f34ac05d64c"
+product_sha: "8335d52c16ed0aa361e34f7cfe6c7895cb34823b"
 
-validated_source_sha: "2ec8fcbe58002cd904d2b4635d26a80ec9ad2265"
+validated_source_sha: "a4356094c9c36c84401a01e57a165fb6411c7a18"
 
 target_branch: "main"
 
 validated_scope:
-  - "Tehuacán/Tehuacan usa equivalencia de planta para Venta."
-  - "GTM Queretaro/Querétaro/Queretaro usa equivalencia válida para Precio."
-  - "No hay hardcode de plantas o importes."
-  - "No se insertan datos."
-  - "No existe fallback a Forecast."
-  - "Endpoint sigue siendo GET /api/dashboard/igf-diario-acumulado."
-  - "Sigue existiendo una sola request HTTP."
-  - "Endpoint devuelve missing y missing_components."
-  - "Frontend muestra causa de acumulado incompleto."
-  - "063 null != 0 permanece intacto."
-  - "061 hg = y permanece intacto."
-  - "062 gastos manuales permanece intacto."
-  - "M3/T3 permanece intacto."
+  - "Nuevo desglose activo únicamente desde 2026-10."
+  - "2026-09 y anteriores mantienen layout y fórmulas legacy."
+  - "Corporativos: Gasto Corporativo + Inversiones + Impuestos Federales."
+  - "Operativos: Nómina/Gastos + IMSS/SUA + Extraordinarios + Provisiones Planta."
+  - "Dashboard muestra únicamente total CORPORATIVOS y OPERATIVOS."
+  - "Octubre+ abre modal para editar componentes."
+  - "Zona Provincia no es editable."
+  - "Manual/Auto deja de mostrarse octubre+."
+  - "Manual/Auto legacy permanece antes de octubre."
+  - "0 es valor válido."
+  - "Guardado del grupo es completo y atómico."
+  - "Desglose sincroniza total con tabla 062."
+  - "No se reclasifican valores existentes."
+  - "Sin desglose se conserva total agregado 062."
+  - "J/K/L/M implementado para Corporativos."
+  - "Q/R/S/T/U implementado para Operativos."
+  - "Nueva columna R desplaza columnas posteriores."
+  - "Día inhábil escribe 0 en los siete conceptos."
+  - "Semana usa dinero asignado por hábiles / Venta KG semanal."
+  - "TOTAL MES usa monto mensual / Venta KG total."
+  - "Provincia usa nuevo layout desde octubre."
+  - "Individual y Todas respetan gate histórico."
+  - "Forecast permanece intacto."
+  - "063-R1 permanece intacto."
 
-validated_evidence:
-  tehuacan: >
-    La venta del acumulado se resuelve usando plantsEquivalent sobre
-    nombre/canon/provinciaPlantCode/clave, eliminando la discrepancia
-    Tehuacán vs Tehuacan.
-  queretaro: >
-    La resolución de precio acepta la familia equivalente
-    GTM Queretaro / GTM Querétaro / Queretaro / Querétaro,
-    manteniendo preferencia por el código exacto cuando tiene precio válido.
-  san_luis: >
-    Fixture conserva Margen 8.20 cuando días futuros tienen margen null;
-    la semántica antigua produciría aproximadamente 0.91.
-  morelos: >
-    Usa la misma ponderación general, sin hardcode de valor.
-  limitation: >
-    No hubo consulta a producción porque DATABASE_URL no estaba disponible
-    en el entorno de implementación. La validación productiva debe realizarse
-    después del deploy.
+schema:
+  table: "arr.igf_diario_gastos_desglose"
+  primary_key:
+    - "plant_code"
+    - "year"
+    - "month"
+  concepts:
+    - "gasto_corporativo"
+    - "inversiones"
+    - "impuestos_federales"
+    - "presupuesto_nomina_gastos"
+    - "presupuesto_imss_sua"
+    - "extraordinarios"
+    - "provisiones_planta"
+  safety:
+    - "CREATE TABLE IF NOT EXISTS."
+    - "Sin migración."
+    - "Sin datos iniciales."
+    - "No modifica históricos."
+
+validated_excel_contract:
+  legacy_2026_09:
+    corporativos_total: "M"
+    operativos_total: "T"
+    hg: "X/Y"
+    sobrante_post_hg: "AA"
+    cd: "AC"
+    resultado: "AE/AF"
+    comentario: "AH"
+    ventas: "AI"
+    carry: "AJ/AK"
+  detailed_2026_10_plus:
+    corporate_components: "J/K/L"
+    corporate_total: "M"
+    margin_net: "O"
+    operative_components: "Q/R/S/T"
+    operative_total: "U"
+    sobra_operacion: "W"
+    hg: "Y/Z"
+    sobrante_post_hg: "AB"
+    cd: "AD"
+    resultado: "AF/AG"
+    comentario: "AI"
+    ventas: "AJ"
+    carry: "AK/AL"
 
 validated_tests:
-  - "063-R1 PASS 6/6."
-  - "Regresiones 063, 062, 061, 059-R1, 059, 053A, 053A-R1, 053A-R2, 054-R3 y 033 PASS."
-  - "62/62 pruebas PASS."
+  - "064 PASS 21/21."
+  - "Regresiones 063-R1, 063, 062, 061, 059-R1, 059, 053A, 053A-R1, 053A-R2, 054-R3 y Excel 036-041 PASS."
+  - "75/75 en corrida conjunta."
+  - "059-R1 5/5 al repetir."
   - "frontend npm run build PASS."
   - "node --check server.js PASS."
   - "git diff --check limpio."
 
 pr_contract:
   base: "main"
-  head: "fix/igf-acumulado-incompleto-paridad-063-r1"
-  title: "FIX 063-R1: paridad de identidades en IGF Diario acumulado"
+  head: "implementation/igf-diario-desglose-gastos-064"
+  title: "IMPL 064: desglose Corporativos y Operativos en IGF Diario"
   merge_executor: "HUMAN_APPROVER_ONLY"
   preferred_merge: "Squash and merge"
 
 production_validation_required_after_deploy:
-  cut: "usar el corte seleccionado en producción"
-  checks:
-    - "Tehuacan ya no aparece incompleto si su Excel tiene H/Y."
-    - "GTM Queretaro ya no aparece incompleto si su Excel tiene H/Y."
-    - "San Luis Margen coincide con H TOTAL MES del Excel del mismo corte."
-    - "Morelos Margen coincide con H TOTAL MES del Excel del mismo corte."
-    - "HG de todas las plantas coincide con Y TOTAL MES."
-    - "Zona Provincia vuelve a construirse."
-    - "Forecast permanece intacto."
-    - "Una sola request HTTP se conserva."
+  - "Octubre abre modal al hacer clic en CORPORATIVOS."
+  - "Modal Corporativos contiene 3 conceptos."
+  - "Octubre abre modal al hacer clic en OPERATIVOS."
+  - "Modal Operativos contiene 4 conceptos."
+  - "No aparecen Manual/Auto en octubre."
+  - "Guardar recalcula los totales del dashboard."
+  - "Excel octubre usa J/K/L/M y Q/R/S/T/U."
+  - "Días inhábiles tienen 0 en los conceptos."
+  - "Cierres semanales usan fórmula dinero semanal / venta semanal."
+  - "Excel Todas conserva el layout nuevo en cada planta y Provincia."
+  - "Descargar septiembre conserva layout histórico."
+  - "Forecast sigue intacto."
 
 in_scope:
   - "Verificar origin/main exacto."
   - "Verificar rama ahead 2 / behind 0."
-  - "Verificar product SHA y source SHA."
+  - "Verificar product SHA y delivery SHA."
   - "Crear reporte G4-PREP."
   - "Crear PR hacia main."
   - "STOP antes del merge."
 
 out_of_scope:
-  - "Modificar código de producto."
+  - "Modificar producto."
   - "Modificar tests."
-  - "Modificar DB."
-  - "Modificar datos productivos."
+  - "Modificar DB productiva."
+  - "Insertar datos."
+  - "Reclasificar valores actuales."
   - "Merge a main."
   - "Deploy."
   - "Abrir siguiente tarea."
@@ -113,13 +155,13 @@ merge_contract:
   deploy_authorized: false
 
 acceptance_criteria:
-  - "origin/main sigue exactamente en 59e88276159b5da089c39e50e9b53da64b416577."
-  - "No existen cambios nuevos de producto ni tests."
-  - "PR base main / head fix/igf-acumulado-incompleto-paridad-063-r1."
+  - "origin/main sigue exactamente en 7da3851c7bee0a629a2348478b3a1408985e5945."
+  - "No aparecen cambios nuevos de producto ni tests."
+  - "PR base main / head implementation/igf-diario-desglose-gastos-064."
   - "PR queda abierto y mergeable."
-  - "No se ejecuta merge."
-  - "No se ejecuta deploy."
-  - "Reporte registra número y URL del PR."
+  - "No merge."
+  - "No deploy."
+  - "Reporte contiene número y URL del PR."
   - "status final DONE_PENDING_REVIEW."
 
-result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-ACUMULADO-INCOMPLETO-PARIDAD-063-R1.md"
+result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-DESGLOSE-GASTOS-064.md"

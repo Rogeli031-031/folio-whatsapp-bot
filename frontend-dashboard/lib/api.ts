@@ -223,6 +223,73 @@ export async function patchIgfDiarioGastosManuales(
   return parsed as { ok: boolean; deleted: boolean; row: IgfDiarioGastoManual | null; plant_code: string };
 }
 
+export type IgfDiarioGastoDesgloseComponentes = {
+  gasto_corporativo: number | null;
+  inversiones: number | null;
+  impuestos_federales: number | null;
+  presupuesto_nomina_gastos: number | null;
+  presupuesto_imss_sua: number | null;
+  extraordinarios: number | null;
+  provisiones_planta: number | null;
+};
+
+export type IgfDiarioGastoDesglose = {
+  plant_code: string;
+  year: number;
+  month: number;
+  componentes: IgfDiarioGastoDesgloseComponentes;
+  corporativos_desglosados: boolean;
+  operativos_desglosados: boolean;
+  corporativos_total_desglose: number | null;
+  operativos_total_desglose: number | null;
+};
+
+export async function fetchIgfDiarioGastosDesglose(opts: {
+  token: string;
+  year: number;
+  month: number;
+}): Promise<{ ok: boolean; year: number; month: number; rows: IgfDiarioGastoDesglose[] }> {
+  const params = new URLSearchParams({
+    year: String(opts.year),
+    month: String(opts.month),
+  });
+  const res = await fetch(getApiUrl(`/api/dashboard/igf-diario-gastos-desglose?${params.toString()}`), {
+    headers: { Authorization: `Bearer ${opts.token}` },
+  });
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+  return body as { ok: boolean; year: number; month: number; rows: IgfDiarioGastoDesglose[] };
+}
+
+export async function patchIgfDiarioGastosDesglose(
+  token: string,
+  body: {
+    year: number;
+    month: number;
+    plant_code: string;
+    group: "corporativos" | "operativos";
+    gasto_corporativo?: number;
+    inversiones?: number;
+    impuestos_federales?: number;
+    presupuesto_nomina_gastos?: number;
+    presupuesto_imss_sua?: number;
+    extraordinarios?: number;
+    provisiones_planta?: number;
+  }
+): Promise<{ ok: boolean; plant_code: string; row: IgfDiarioGastoDesglose }> {
+  const res = await fetch(getApiUrl("/api/dashboard/igf-diario-gastos-desglose"), {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const parsed = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((parsed as { error?: string }).error || `HTTP ${res.status}`);
+  return parsed as { ok: boolean; plant_code: string; row: IgfDiarioGastoDesglose };
+}
+
 /** Descarga Excel Clasificación de apoyos (hoja COMPARATIVOS). */
 export async function downloadClasificacionApoyosExcel(
   token: string,

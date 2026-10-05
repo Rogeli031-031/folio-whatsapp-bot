@@ -296,7 +296,7 @@ test("Excel individual escribe M3 y T3 con el valor manual, incluido 0", () => {
   });
   const ws = wb.getWorksheet("IGF Diario Puebla");
   assert.equal(ws.getCell(3, 13).value, 333);
-  assert.equal(ws.getCell(3, 20).value, 0);
+  assert.equal(ws.getCell(3, 21).value, 0);
   const chrome = PUEBLA.slice(PUEBLA.indexOf("function paintIgfChrome"), PUEBLA.indexOf("function fillIgfDiarioPuebla"));
   assert.match(chrome, /\[13, opts && opts\.corporativos\], \[20, opts && opts\.operativos\]/);
 });
@@ -321,16 +321,16 @@ test("Excel Todas usa overrides independientes y Provincia suma las hojas", () =
   const sheets = ["IGF Diario Puebla", "IGF Diario Acapulco"];
   igf.fillIgfDiarioProvincia(wb, { year: 2026, month: 10, plantSheets: sheets, corteYmd: "2026-10-03" });
   assert.equal(wb.getWorksheet(sheets[0]).getCell(3, 13).value, 9);
-  assert.equal(wb.getWorksheet(sheets[0]).getCell(3, 20).value, 7);
+  assert.equal(wb.getWorksheet(sheets[0]).getCell(3, 21).value, 7);
   assert.equal(wb.getWorksheet(sheets[1]).getCell(3, 13).value, 4);
-  assert.equal(wb.getWorksheet(sheets[1]).getCell(3, 20).value, 3);
+  assert.equal(wb.getWorksheet(sheets[1]).getCell(3, 21).value, 3);
   const provincia = wb.getWorksheet("IGF Diario Provincia");
   const corporativos = provincia.getCell(3, 13).value.formula;
-  const operativos = provincia.getCell(3, 20).value.formula;
+  const operativos = provincia.getCell(3, 21).value.formula;
   assert.match(corporativos, /IGF Diario Puebla'!M3/);
   assert.match(corporativos, /IGF Diario Acapulco'!M3/);
-  assert.match(operativos, /IGF Diario Puebla'!T3/);
-  assert.match(operativos, /IGF Diario Acapulco'!T3/);
+  assert.match(operativos, /IGF Diario Puebla'!U3/);
+  assert.match(operativos, /IGF Diario Acapulco'!U3/);
 });
 
 test("API usa la auth financiera y el alcance de planta existente", () => {
