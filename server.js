@@ -15543,6 +15543,51 @@ app.get("/api/arr/annual-category-analysis", dashboardAuthMiddleware, async (req
   }
 });
 
+app.get("/api/dashboard/igf-diario-acumulado", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = parseInt(req.query.year, 10);
+  const month = parseInt(req.query.month, 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Faltan year y month válidos en query" });
+  }
+  const uploadDay = ((req.query.upload_day || "").toString().trim().slice(0, 10)) || null;
+  if (uploadDay && !/^\d{4}-\d{2}-\d{2}$/.test(uploadDay)) {
+    return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
+  }
+  const versionAsOfCorte = /^(1|true|yes)$/i.test(String(req.query.version_as_of_corte || "").trim());
+  if (versionAsOfCorte && !uploadDay) {
+    return res.status(400).json({ error: "version_as_of_corte requiere upload_day" });
+  }
+  const client = await pool.connect();
+  try {
+    const listed = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
+    const plants = listed.filter((plant) => igfDiarioGastosManuales.overrideVisible(req.dashboardAuth, plant && plant.plantaId));
+    let projection = null;
+    try {
+      projection = await dashboardArrForecast.buildPronosticoProjectionContext(client, year, month, uploadDay);
+    } catch (error) {
+      console.error("[igf-diario-acumulado] pronostico", error && error.message ? error.message : error);
+    }
+    const payload = await igfDiarioGrafica.loadIgfDiarioAcumulado(client, {
+      plants,
+      year,
+      month,
+      uploadDay,
+      corteYmd: uploadDay,
+      versionAsOfCorte,
+      projection,
+      loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
+    });
+    res.json(payload);
+  } catch (error) {
+    console.error("[igf-diario-acumulado]", error && error.message ? error.message : error);
+    res.status(500).json({ error: "No se pudo armar el IGF Diario acumulado" });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/dashboard/igf-diario-grafica", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;

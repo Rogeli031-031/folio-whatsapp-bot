@@ -20,10 +20,10 @@ const applyFn = CLIENT.slice(
 const catchBlock = effect.slice(effect.indexOf("} catch"), effect.indexOf("} finally"));
 
 test("cada carga acumulada limpia el estado anterior antes del request", () => {
-  assert.ok(effect.indexOf("setAcumuladoByPlant(null)") < effect.indexOf("fetchIgfDiarioGrafica"));
-  assert.ok(effect.indexOf("setAcumuladoError(null)") < effect.indexOf("fetchIgfDiarioGrafica"));
-  assert.ok(effect.indexOf("setAcumuladoLoading(true)") < effect.indexOf("fetchIgfDiarioGrafica"));
-  assert.ok(effect.indexOf("setAcumuladoMissing([])") < effect.indexOf("fetchIgfDiarioGrafica"));
+  assert.ok(effect.indexOf("setAcumuladoByPlant(null)") < effect.indexOf("fetchIgfDiarioAcumulado"));
+  assert.ok(effect.indexOf("setAcumuladoError(null)") < effect.indexOf("fetchIgfDiarioAcumulado"));
+  assert.ok(effect.indexOf("setAcumuladoLoading(true)") < effect.indexOf("fetchIgfDiarioAcumulado"));
+  assert.ok(effect.indexOf("setAcumuladoMissing([])") < effect.indexOf("fetchIgfDiarioAcumulado"));
 });
 
 test("corte, mes y versión disparan una carga que no reutiliza el acumulado previo", () => {

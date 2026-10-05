@@ -16,7 +16,7 @@ import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
 import {
   fetchIgfForecast,
   fetchIgfForecastMini,
-  fetchIgfDiarioGrafica,
+  fetchIgfDiarioAcumulado,
   fetchIgfDiarioGastosManuales,
   patchIgfDiarioGastosManuales,
   fetchArrLastUploadDay,
@@ -271,6 +271,7 @@ export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const lastIgfFetchKeyRef = useRef<string>("");
+  const acumuladoCacheRef = useRef<{ key: string; byPlant: Record<string, { margen: number | null; hg: number | null }> } | null>(null);
   const igfForecastRef = useRef<IgfForecastResponse | null>(null);
   const prevUploadDayRef = useRef<string>("");
   const UPLOAD_DAY_STORAGE_KEY = "Diana";
@@ -287,7 +288,7 @@ export function IgfForecastContent() {
   const [plantaFilter, setPlantaFilter] = useState<string>("");
   const [forecastExcelMsg, setForecastExcelMsg] = useState<string | null>(null);
   const [igfGraficaOpen, setIgfGraficaOpen] = useState(false);
-  const [igfTableMode, setIgfTableMode] = useState<"forecast" | "igf_diario">("forecast");
+  const [igfTableMode, setIgfTableMode] = useState<"forecast" | "igf_diario">("igf_diario");
   const [acumuladoByPlant, setAcumuladoByPlant] = useState<Record<string, { margen: number | null; hg: number | null }> | null>(null);
   const [acumuladoMissing, setAcumuladoMissing] = useState<string[]>([]);
   const [acumuladoLoading, setAcumuladoLoading] = useState(false);
@@ -391,37 +392,46 @@ export function IgfForecastContent() {
 
   useEffect(() => {
     if (igfTableMode !== "igf_diario" || !token || !igfForecast || !igfMini) return;
+    const up = uploadDay.trim();
+    const cacheKey = `${igfForecast.year}|${igfForecast.month}|${up}|${versionAsOfCorte ? "1" : "0"}`;
+    const cached = acumuladoCacheRef.current;
+    if (cached && cached.key === cacheKey) {
+      const cachedMissing = missingAcumuladoPlants(igfMini.rows || [], cached.byPlant);
+      if (cachedMissing.length) {
+        setAcumuladoByPlant(null);
+        setAcumuladoMissing(cachedMissing);
+      } else {
+        setAcumuladoMissing([]);
+        setAcumuladoByPlant(cached.byPlant);
+      }
+      setAcumuladoError(null);
+      setAcumuladoLoading(false);
+      return;
+    }
     let cancel = false;
     setAcumuladoByPlant(null);
     setAcumuladoMissing([]);
     setAcumuladoError(null);
     setAcumuladoLoading(true);
-    const up = uploadDay.trim();
     void (async () => {
       try {
-        const entries = await Promise.all((igfMini.rows || []).map(async (row) => {
-          const code = String(row.plant_code || "").trim();
-          if (!code) return null;
-          const data = await fetchIgfDiarioGrafica({
-            token,
-            year: igfForecast.year,
-            month: igfForecast.month,
-            range: "1m",
-            uploadDay: up,
-            versionAsOfCorte,
-            plantCode: code,
-          });
-          return [code, data.acumulado || null] as const;
-        }));
+        const data = await fetchIgfDiarioAcumulado({
+          token,
+          year: igfForecast.year,
+          month: igfForecast.month,
+          uploadDay: up,
+          versionAsOfCorte,
+        });
         if (cancel) return;
         const next: Record<string, { margen: number | null; hg: number | null }> = {};
-        for (const entry of entries) {
-          if (!entry) continue;
-          next[entry[0]] = {
-            margen: entry[1] ? entry[1].margen : null,
-            hg: entry[1] ? entry[1].hg : null,
-          };
+        for (const row of data.rows || []) {
+          const hit = { margen: row.margen, hg: row.hg };
+          const code = String(row.plant_code || "").trim();
+          const empresa = String(row.empresa || "").trim();
+          if (code) next[code] = hit;
+          if (empresa) next[empresa] = hit;
         }
+        acumuladoCacheRef.current = { key: cacheKey, byPlant: next };
         const missing = missingAcumuladoPlants(igfMini.rows || [], next);
         if (missing.length) {
           setAcumuladoByPlant(null);
