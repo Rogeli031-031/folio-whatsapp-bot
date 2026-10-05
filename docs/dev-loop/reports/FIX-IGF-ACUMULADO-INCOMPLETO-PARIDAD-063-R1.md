@@ -6,6 +6,8 @@ base_sha: 59e88276159b5da089c39e50e9b53da64b416577
 
 branch: fix/igf-acumulado-incompleto-paridad-063-r1
 
+product_sha: c399a44acb323affede41bb91acd2f34ac05d64c
+
 ## Causa
 
 El corte observado es 2026-10-05. El aviso `IGF Diario acumulado incompleto: Tehuacan, GTM Queretaro` sale porque el mini no encuentra Margen y HG finitos. No hubo `DATABASE_URL` en el entorno ni archivo dotenv en el worktree, así que no se contaron días productivos. La causa se demostró en el código y en un fixture que reproduce las dos identidades que el Excel ya trata como la misma planta.
