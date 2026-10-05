@@ -127,6 +127,35 @@ export async function fetchIgfDiarioGrafica(opts: {
   return body as IgfDiarioGraficaResponse;
 }
 
+export type IgfDiarioAcumuladoRow = {
+  plant_code: string;
+  empresa: string;
+  margen: number | null;
+  hg: number | null;
+};
+
+export async function fetchIgfDiarioAcumulado(opts: {
+  token: string;
+  year: number;
+  month: number;
+  uploadDay?: string | null;
+  versionAsOfCorte?: boolean;
+}): Promise<{ ok: boolean; year: number; month: number; corte_ymd: string | null; rows: IgfDiarioAcumuladoRow[] }> {
+  const up = (opts.uploadDay || "").trim();
+  const params = new URLSearchParams({
+    year: String(opts.year),
+    month: String(opts.month),
+  });
+  if (/^\d{4}-\d{2}-\d{2}$/.test(up)) params.set("upload_day", up);
+  if (opts.versionAsOfCorte && /^\d{4}-\d{2}-\d{2}$/.test(up)) params.set("version_as_of_corte", "1");
+  const res = await fetch(getApiUrl(`/api/dashboard/igf-diario-acumulado?${params.toString()}`), {
+    headers: { Authorization: `Bearer ${opts.token}` },
+  });
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+  return body as { ok: boolean; year: number; month: number; corte_ymd: string | null; rows: IgfDiarioAcumuladoRow[] };
+}
+
 export type IgfDiarioGastoManual = {
   plant_code: string;
   year: number;
