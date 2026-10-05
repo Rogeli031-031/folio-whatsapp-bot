@@ -1,10 +1,10 @@
-﻿task_id: "FIX-IGF-ACUMULADO-INCOMPLETO-PARIDAD-063-R1"
+﻿task_id: "G4-PREP-IGF-ACUMULADO-INCOMPLETO-PARIDAD-063-R1"
 
-title: "Corregir plantas incompletas y asegurar paridad real del IGF Diario acumulado"
+title: "Preparar PR de paridad de identidades IGF Diario acumulado 063-R1"
 
 status: "DONE_PENDING_REVIEW"
 
-mode: "IMPLEMENTATION"
+mode: "INTEGRATION"
 
 authorized_by: "HUMAN_APPROVER"
 
@@ -12,290 +12,114 @@ authorized_at: "2026-10-05"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-05"
 
-objective: >
-  Diagnosticar y corregir el caso productivo donde el nuevo endpoint ligero
-  de IGF Diario acumulado reporta incompleto para Tehuacan y GTM Queretaro.
-  La corrección debe hacer que Margen y HG del dashboard reproduzcan la
-  misma semántica y fuentes del IGF Diario Excel para cada planta y mismo
-  corte, sin mezclar Forecast como fallback y sin perder la mejora de
-  performance de FIX 063.
+g4_authorization: "G4_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-05"
 
-base_sha: "59e88276159b5da089c39e50e9b53da64b416577"
+objective: >
+  Preparar el Pull Request de FIX-IGF-ACUMULADO-INCOMPLETO-PARIDAD-063-R1
+  hacia main. No modificar producto ni tests. El merge queda reservado
+  exclusivamente al HUMAN_APPROVER.
+
+main_reference_sha: "59e88276159b5da089c39e50e9b53da64b416577"
 
 branch: "fix/igf-acumulado-incompleto-paridad-063-r1"
 
-production_symptom:
-  route: "/igf-forecast"
-  cut_observed: "2026-10-05"
-  mode: "IGF Diario acumulado"
-  message: "IGF Diario acumulado incompleto: Tehuacan, GTM Queretaro"
-  consequence: >
-    La mini tabla acumulada queda bloqueada por la protección de 059-R1
-    porque al menos Margen o HG es null en esas plantas.
-  important:
-    - >
-      La tabla financiera grande que queda debajo no prueba el valor del
-      acumulado; puede seguir mostrando valores del Forecast.
-    - "No usar esa tabla como evidencia de paridad acumulada."
+product_sha: "c399a44acb323affede41bb91acd2f34ac05d64c"
 
-frozen_contracts:
-  - "IGF Diario acumulado sigue siendo el modo default."
-  - "Forecast sigue siendo la opción secundaria por botón."
-  - "Forecast matemático queda intacto."
-  - "Una sola request HTTP para cargar todos los acumulados."
-  - "No volver a N requests de gráfica por planta."
-  - "062 Operativos/Corporativos manuales queda intacto."
-  - "M3/T3 queda intacto."
-  - "061 mantiene HG con signo natural de Y: hg = y."
-  - "063 mantiene null/vacío distinto de cero."
-  - "0 numérico sigue siendo válido."
-  - "No hacer fallback silencioso a Forecast."
-  - "No mezclar acumulado real con margen/HG de Forecast."
-  - "No hardcodear Tehuacan, Queretaro, San Luis, Morelos ni importes."
+validated_source_sha: "2ec8fcbe58002cd904d2b4635d26a80ec9ad2265"
 
-diagnostic_contract:
-  required_before_fix:
-    - >
-      Para Tehuacan y GTM Queretaro identificar por qué acumulado.margen
-      o acumulado.hg termina null.
-    - >
-      Registrar por planta y por día la cobertura necesaria de:
-      VENTA, PRECIO, COSTO, FLETE y HG.
-    - >
-      Determinar específicamente cuál componente impide producir H
-      (Margen) y cuál impide producir Y/HG.
-    - >
-      Comparar contra la hoja IGF Diario generada por el Excel para
-      exactamente la misma planta, mes y corte.
-    - >
-      Revisar equivalencias de nombre/canon/provinciaPlantCode/plantaId
-      antes de asumir ausencia de datos.
-  required_evidence:
-    - "Tehuacan: margen present/missing, hg present/missing y causa."
-    - "GTM Queretaro: margen present/missing, hg present/missing y causa."
-    - "San Luis: comparar H TOTAL MES contra acumulado.margen."
-    - "Morelos: comparar H TOTAL MES contra acumulado.margen."
-  forbidden:
-    - "Corregir a base de valores conocidos de capturas."
-    - "Insertar datos faltantes en DB."
-    - "Inventar costo/flete/HG."
-    - "Tomar 5.00 de Forecast como fallback."
+target_branch: "main"
 
-parity_contract:
-  source_of_truth: "La semántica del IGF Diario Excel generado por el mismo código y mismo corte."
-  margen:
-    excel: "TOTAL MES columna H"
-    dashboard: "acumulado.margen"
-    formula_semantics: >
-      Promedio ponderado por B únicamente en filas donde B y H son
-      numéricos.
-  hg:
-    excel: "TOTAL MES columna Y"
-    dashboard: "acumulado.hg"
-    formula_semantics: >
-      Promedio ponderado por B únicamente en filas donde B y Y son
-      numéricos, preservando el signo de Y.
-  dynamic_total:
-    - "No asumir H48/Y48."
-    - "Encontrar TOTAL MES dinámicamente."
-  same_inputs:
-    - "Mismo year/month."
-    - "Mismo upload_day/corte."
-    - "Misma planta resuelta."
-    - "Misma lógica de venta/proyección."
-    - "Misma lógica de precio."
-    - "Misma lógica de costo."
-    - "Misma lógica de flete."
-    - "Misma lógica de HG."
+validated_scope:
+  - "Tehuacán/Tehuacan usa equivalencia de planta para Venta."
+  - "GTM Queretaro/Querétaro/Queretaro usa equivalencia válida para Precio."
+  - "No hay hardcode de plantas o importes."
+  - "No se insertan datos."
+  - "No existe fallback a Forecast."
+  - "Endpoint sigue siendo GET /api/dashboard/igf-diario-acumulado."
+  - "Sigue existiendo una sola request HTTP."
+  - "Endpoint devuelve missing y missing_components."
+  - "Frontend muestra causa de acumulado incompleto."
+  - "063 null != 0 permanece intacto."
+  - "061 hg = y permanece intacto."
+  - "062 gastos manuales permanece intacto."
+  - "M3/T3 permanece intacto."
 
-likely_risk_areas_to_audit:
-  - >
-    loadIgfDiarioAcumulado usa nombre/canon/provinciaPlantCode/plantaId;
-    confirmar que Tehuacan y GTM Queretaro reciben la identidad correcta
-    en ventas, precio y Compras.
-  - >
-    loadSalesRows filtra por public.plantas/provincia_plants; confirmar que
-    el nombre usado realmente produce las ventas de la hoja Excel.
-  - >
-    loadPrecioDiario recibe precioPlantKey; confirmar equivalencias para
-    GTM Queretaro/Queretaro y Tehuacan.
-  - >
-    loadComprasDayMap usa plantaId; confirmar que corresponde a la misma
-    planta que usa CONTROL DE COMPRAS del Excel.
-  - >
-    resolveControlComprasDays y los fallbacks de COSTO/FLETE deben mantener
-    exactamente la cobertura usada por IGF Diario.
-  - >
-    Confirmar que HG importe se toma de la misma columna/fuente de CONTROL
-    DE COMPRAS que alimenta X/Y del Excel.
-  - >
-    Confirmar que el corte no elimina por error el último valor válido
-    necesario para H/Y.
+validated_evidence:
+  tehuacan: >
+    La venta del acumulado se resuelve usando plantsEquivalent sobre
+    nombre/canon/provinciaPlantCode/clave, eliminando la discrepancia
+    Tehuacán vs Tehuacan.
+  queretaro: >
+    La resolución de precio acepta la familia equivalente
+    GTM Queretaro / GTM Querétaro / Queretaro / Querétaro,
+    manteniendo preferencia por el código exacto cuando tiene precio válido.
+  san_luis: >
+    Fixture conserva Margen 8.20 cuando días futuros tienen margen null;
+    la semántica antigua produciría aproximadamente 0.91.
+  morelos: >
+    Usa la misma ponderación general, sin hardcode de valor.
+  limitation: >
+    No hubo consulta a producción porque DATABASE_URL no estaba disponible
+    en el entorno de implementación. La validación productiva debe realizarse
+    después del deploy.
 
-endpoint_contract:
-  path: "GET /api/dashboard/igf-diario-acumulado"
-  required_response_extension:
-    description: >
-      Añadir diagnóstico mínimo de cobertura suficiente para explicar
-      una planta incompleta sin devolver toda la gráfica.
-    acceptable_shape_example:
-      plant_code: "Tehuacan"
-      empresa: "Tehuacan"
-      margen: null
-      hg: -1.10
-      missing:
-        - "MARGEN"
-      missing_components:
-        margen:
-          - "FLETE"
-        hg: []
-  rules:
-    - "El shape exacto puede variar si existe una solución más limpia."
-    - "No devolver comentarios/clientes/insights."
-    - "No volver el endpoint pesado."
-    - "No exponer datos de plantas fuera del alcance del usuario."
-    - "Read-only."
-
-frontend_contract:
-  incomplete_message:
-    current: "IGF Diario acumulado incompleto: Tehuacan, GTM Queretaro"
-    expected_example: >
-      IGF Diario acumulado incompleto:
-      Tehuacan — falta MARGEN (FLETE);
-      GTM Queretaro — falta HG
-  rules:
-    - "Mostrar el componente real si backend lo conoce."
-    - "No decir que falta FLETE/HG si no hay evidencia."
-    - "Mantener la protección: si una planta necesaria está incompleta, no mezclar Forecast."
-    - >
-      Una vez corregida la causa real y todas las plantas tengan Margen/HG,
-      la mini tabla acumulada debe aparecer normalmente.
-
-performance_contract:
-  required:
-    - "1 request HTTP para todos los acumulados."
-    - "No usar fetchIgfDiarioGrafica para llenar la mini tabla."
-    - "No introducir Promise.all de requests por planta."
-    - "No cargar C&D si no se requiere para H/Y."
-    - "No cargar clientes nuevos."
-    - "No cargar comentarios/insights."
-    - "No cargar month_close."
-    - "No generar Excel dentro del endpoint."
-  improvement_allowed:
-    - >
-      Si varias consultas por planta pueden agruparse en menos queries sin
-      alterar semántica, puede optimizarse dentro del endpoint ligero.
-  forbidden:
-    - "Sacrificar paridad financiera por velocidad."
-
-san_luis_contract:
-  fixture_reference:
-    cut: "2026-10-03"
-    observed_excel_total_h: "aprox 8.20"
-  required:
-    - >
-      Mantener la corrección de 063: días con H null no diluyen Margen.
-    - >
-      Test de regresión debe seguir demostrando 8.20 en fixture y ~0.91
-      con la semántica antigua.
-    - >
-      Para producción usar el valor dinámico correspondiente al corte
-      actual; no exigir 8.20 si los datos del mismo corte cambiaron.
-    - >
-      La aceptación es igualdad con H TOTAL MES del Excel del mismo corte.
-
-morelos_contract:
-  required:
-    - "Aplicar exactamente la misma regla que a las demás plantas."
-    - "No hardcodear el valor esperado."
-    - "Comparar contra H TOTAL MES del Excel del mismo corte."
-
-tests_required:
-  - >
-    Caso Tehuacan con identidad/cobertura equivalente a producción que
-    reproduzca el null antes del fix y produzca Margen/HG correctos después.
-  - >
-    Caso GTM Queretaro/Queretaro que pruebe la equivalencia de nombre usada
-    en las fuentes que resulte ser la causa real.
-  - "No crear un fixture falso si la causa resulta distinta; probar la causa real."
-  - "Mensaje frontend identifica campo/componente faltante."
-  - "No fallback a Forecast cuando falta acumulado."
-  - "San Luis null-vs-zero 063 sigue PASS."
-  - "HG signo 061 sigue PASS."
-  - "Una request HTTP sigue PASS."
-  - "062 gastos manuales sigue PASS."
-  - "0 manual sigue válido."
-  - "M3/T3 no cambia."
-  - "Endpoint sigue read-only."
-  - "Permisos siguen restringiendo plantas."
-
-production_acceptance:
-  primary_cut: "2026-10-05"
-  required:
-    - "No aparece Tehuacan como incompleto si su Excel produce H/Y numéricos."
-    - "No aparece GTM Queretaro como incompleto si su Excel produce H/Y numéricos."
-    - "Las seis plantas muestran acumulado cuando sus Excel tienen H/Y."
-    - "Margen de cada planta coincide con TOTAL MES H del Excel del mismo corte."
-    - "HG de cada planta coincide con TOTAL MES Y del Excel del mismo corte."
-    - "San Luis ya no muestra la dilución causada por null -> 0."
-    - "Zona Provincia se reconstruye desde las seis plantas."
-    - "Forecast sigue intacto."
-    - "Performance de una sola request se conserva."
-
-regression_validation:
-  - "063-R1 PASS."
-  - "063 PASS."
-  - "062 PASS."
-  - "061 PASS."
-  - "059-R1 PASS."
-  - "059 PASS."
-  - "053A/053A-R1/053A-R2/054-R3 relevantes PASS."
+validated_tests:
+  - "063-R1 PASS 6/6."
+  - "Regresiones 063, 062, 061, 059-R1, 059, 053A, 053A-R1, 053A-R2, 054-R3 y 033 PASS."
+  - "62/62 pruebas PASS."
   - "frontend npm run build PASS."
   - "node --check server.js PASS."
   - "git diff --check limpio."
 
-recommended_files:
-  - "lib/igf-diario-grafica.js"
-  - "lib/igf-diario-puebla.js solo si la causa real lo requiere"
-  - "lib/dashboard-arr-forecast.js solo si la equivalencia compartida lo requiere"
-  - "lib/compras-dashboard.js o lib/compras-excel.js solo si evidencia demuestra la causa"
-  - "server.js"
-  - "frontend-dashboard/lib/api.ts"
-  - "frontend-dashboard/components/IgfForecastClient.tsx"
-  - "test/igf-acumulado-incompleto-paridad-063-r1.test.js"
-  - "tests 063/062/061/059-R1"
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/FIX-IGF-ACUMULADO-INCOMPLETO-PARIDAD-063-R1.md"
+pr_contract:
+  base: "main"
+  head: "fix/igf-acumulado-incompleto-paridad-063-r1"
+  title: "FIX 063-R1: paridad de identidades en IGF Diario acumulado"
+  merge_executor: "HUMAN_APPROVER_ONLY"
+  preferred_merge: "Squash and merge"
+
+production_validation_required_after_deploy:
+  cut: "usar el corte seleccionado en producción"
+  checks:
+    - "Tehuacan ya no aparece incompleto si su Excel tiene H/Y."
+    - "GTM Queretaro ya no aparece incompleto si su Excel tiene H/Y."
+    - "San Luis Margen coincide con H TOTAL MES del Excel del mismo corte."
+    - "Morelos Margen coincide con H TOTAL MES del Excel del mismo corte."
+    - "HG de todas las plantas coincide con Y TOTAL MES."
+    - "Zona Provincia vuelve a construirse."
+    - "Forecast permanece intacto."
+    - "Una sola request HTTP se conserva."
+
+in_scope:
+  - "Verificar origin/main exacto."
+  - "Verificar rama ahead 2 / behind 0."
+  - "Verificar product SHA y source SHA."
+  - "Crear reporte G4-PREP."
+  - "Crear PR hacia main."
+  - "STOP antes del merge."
 
 out_of_scope:
-  - "Cambiar Forecast."
-  - "Cambiar fórmulas financieras no relacionadas."
-  - "Cambiar Operativos/Corporativos."
-  - "Cambiar M3/T3."
-  - "Modificar DB/schema."
-  - "Insertar/corregir datos de producción."
-  - "Cambiar Action Register."
-  - "Cambiar permisos."
-  - "Eliminar la protección de acumulado incompleto."
-  - "Mostrar valores parciales mezclados con Forecast."
+  - "Modificar código de producto."
+  - "Modificar tests."
+  - "Modificar DB."
+  - "Modificar datos productivos."
   - "Merge a main."
   - "Deploy."
+  - "Abrir siguiente tarea."
 
 merge_contract:
   executor: "HUMAN_APPROVER_ONLY"
   merge_authorized: false
   deploy_authorized: false
 
-forbidden_actions:
-  - "git push origin main"
-  - "merge a main"
-  - "deploy"
-  - "DB writes"
-  - "hardcodes por planta"
-  - "fallback a Forecast"
-  - "autoautorizar G4"
-  - "abrir automáticamente siguiente tarea"
+acceptance_criteria:
+  - "origin/main sigue exactamente en 59e88276159b5da089c39e50e9b53da64b416577."
+  - "No existen cambios nuevos de producto ni tests."
+  - "PR base main / head fix/igf-acumulado-incompleto-paridad-063-r1."
+  - "PR queda abierto y mergeable."
+  - "No se ejecuta merge."
+  - "No se ejecuta deploy."
+  - "Reporte registra número y URL del PR."
+  - "status final DONE_PENDING_REVIEW."
 
-max_attempts: 1
-
-result_report_path: "docs/dev-loop/reports/FIX-IGF-ACUMULADO-INCOMPLETO-PARIDAD-063-R1.md"
+result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-ACUMULADO-INCOMPLETO-PARIDAD-063-R1.md"
