@@ -22,6 +22,8 @@ import {
   patchIgfDiarioGastosManuales,
   fetchIgfDiarioGastosDesglose,
   patchIgfDiarioGastosDesglose,
+  fetchIgfDiarioGastosDistribucion,
+  patchIgfDiarioGastosDistribucion,
   fetchArrLastUploadDay,
   postForecastProvincia,
   patchIgfForecastHg,
@@ -38,6 +40,7 @@ import {
   type IgfForecastMiniRow,
   type IgfDiarioGastoManual,
   type IgfDiarioGastoDesglose,
+  type IgfDiarioGastoDistribucion,
   type PronosticoDetalleResponse,
   type IgfFolioDetalleItem,
   type IgfFolioDetalleTipo,
@@ -395,6 +398,15 @@ export function IgfForecastContent() {
   const [gastoEdit, setGastoEdit] = useState<{ plant: string; field: "operativos" | "corporativos"; draft: string } | null>(null);
   const [gastoSaving, setGastoSaving] = useState(false);
   const [gastoEditError, setGastoEditError] = useState<string | null>(null);
+  const [distribucionModal, setDistribucionModal] = useState<{
+    plant: string;
+    concepto: string;
+    label: string;
+    schedule: IgfDiarioGastoDistribucion | null;
+    editing: string | null;
+    draft: string;
+    error: string | null;
+  } | null>(null);
   const [igfExcelUrl, setIgfExcelUrl] = useState("");
   const [uploadDay, setUploadDay] = useState<string>(() => {
     if (typeof window === "undefined") return "";
@@ -682,6 +694,62 @@ export function IgfForecastContent() {
       setDesgloseModal(null);
     } catch (error: unknown) {
       setGastoEditError(error instanceof Error ? error.message : "No se pudo guardar el desglose");
+    } finally {
+      setGastoSaving(false);
+    }
+  };
+
+  const openDistribucion = async (concepto: string, label: string) => {
+    if (!token || !igfForecast || !desgloseModal) return;
+    const plant = desgloseModal.plant;
+    setDistribucionModal({
+      plant,
+      concepto,
+      label,
+      schedule: null,
+      editing: null,
+      draft: "",
+      error: null,
+    });
+    try {
+      const schedule = await fetchIgfDiarioGastosDistribucion({
+        token,
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: plant,
+        concepto,
+      });
+      setDistribucionModal((prev) => (
+        prev && prev.concepto === concepto ? { ...prev, schedule, error: schedule.error } : prev
+      ));
+    } catch (error: unknown) {
+      setDistribucionModal((prev) => (
+        prev && prev.concepto === concepto
+          ? { ...prev, error: error instanceof Error ? error.message : "No se pudo cargar la distribución" }
+          : prev
+      ));
+    }
+  };
+
+  const saveDistribucionDia = async (fecha: string, importe: number | null) => {
+    if (!token || !igfForecast || !distribucionModal || gastoSaving) return;
+    setGastoSaving(true);
+    try {
+      const schedule = await patchIgfDiarioGastosDistribucion(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: distribucionModal.plant,
+        concepto: distribucionModal.concepto,
+        fecha,
+        importe,
+      });
+      setDistribucionModal((prev) => (
+        prev ? { ...prev, schedule, editing: null, draft: "", error: schedule.error } : prev
+      ));
+    } catch (error: unknown) {
+      setDistribucionModal((prev) => (
+        prev ? { ...prev, error: error instanceof Error ? error.message : "No se pudo guardar el día" } : prev
+      ));
     } finally {
       setGastoSaving(false);
     }
@@ -1859,21 +1927,30 @@ export function IgfForecastContent() {
                   ) : null}
                   <div className="flex flex-col gap-2">
                     {(desgloseModal.group === "corporativos" ? CORP_MODAL_FIELDS : OPER_MODAL_FIELDS).map((field) => (
-                      <label key={field.key} className="flex items-center justify-between gap-3 text-sm">
-                        <span>{field.label}</span>
-                        <input
-                          value={desgloseModal.drafts[field.key] || ""}
-                          inputMode="decimal"
-                          aria-label={field.label}
-                          className="w-36 rounded border border-slate-500 bg-slate-950 px-2 py-1 text-right"
-                          onChange={(event) => {
-                            const draft = event.target.value;
-                            setDesgloseModal((prev) => (
-                              prev ? { ...prev, drafts: { ...prev.drafts, [field.key]: draft } } : prev
-                            ));
-                          }}
-                        />
-                      </label>
+                      <div key={field.key} className="flex flex-col gap-1 text-sm">
+                        <label className="flex items-center justify-between gap-3">
+                          <span>{field.label}</span>
+                          <input
+                            value={desgloseModal.drafts[field.key] || ""}
+                            inputMode="decimal"
+                            aria-label={field.label}
+                            className="w-36 rounded border border-slate-500 bg-slate-950 px-2 py-1 text-right"
+                            onChange={(event) => {
+                              const draft = event.target.value;
+                              setDesgloseModal((prev) => (
+                                prev ? { ...prev, drafts: { ...prev.drafts, [field.key]: draft } } : prev
+                              ));
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="self-start text-xs text-sky-300 underline"
+                          onClick={() => void openDistribucion(field.key, field.label)}
+                        >
+                          Distribución diaria
+                        </button>
+                      </div>
                     ))}
                   </div>
                   <p className="mt-3 text-right font-semibold">
@@ -1900,6 +1977,128 @@ export function IgfForecastContent() {
                       onClick={() => void saveDesglose()}
                     >
                       Guardar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            {distribucionModal ? (
+              <div
+                role="dialog"
+                aria-label="Distribución diaria"
+                className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4"
+              >
+                <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded border border-slate-600 bg-slate-900 p-4 text-slate-100">
+                  <h3 className="mb-2 text-lg font-semibold">Distribución diaria — {distribucionModal.label}</h3>
+                  {distribucionModal.error ? <p className="mb-2 text-sm text-amber-200">{distribucionModal.error}</p> : null}
+                  {distribucionModal.schedule ? (
+                    <>
+                      <div className="mb-3 grid grid-cols-2 gap-2 text-sm md:grid-cols-3">
+                        <p>Monto mensual: {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(distribucionModal.schedule.monthly_amount)}</p>
+                        <p>Promedio inicial: {distribucionModal.schedule.initial_average == null ? "—" : new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(distribucionModal.schedule.initial_average)}</p>
+                        <p>Fijo acumulado: {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(distribucionModal.schedule.manual_assigned)}</p>
+                        <p>Saldo pendiente: {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(distribucionModal.schedule.remaining_amount)}</p>
+                        <p>Días hábiles restantes: {distribucionModal.schedule.remaining_business_days}</p>
+                        <p>Promedio restante: {distribucionModal.schedule.remaining_average == null ? "—" : new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(distribucionModal.schedule.remaining_average)}</p>
+                      </div>
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-600 text-left">
+                            <th className="py-1">Fecha</th>
+                            <th className="py-1 text-right">Importe asignado</th>
+                            <th className="py-1 text-right">Acción</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {distribucionModal.schedule.days.map((day) => (
+                            <tr key={day.fecha} className="border-b border-slate-800">
+                              <td className="py-1">{day.fecha}</td>
+                              <td className="py-1 text-right">
+                                {distribucionModal.editing === day.fecha ? (
+                                  <input
+                                    value={distribucionModal.draft}
+                                    inputMode="decimal"
+                                    aria-label={`Importe ${day.fecha}`}
+                                    className="w-28 rounded border border-slate-500 bg-slate-950 px-2 py-1 text-right"
+                                    onChange={(event) => {
+                                      const draft = event.target.value;
+                                      setDistribucionModal((prev) => (prev ? { ...prev, draft } : prev));
+                                    }}
+                                  />
+                                ) : (
+                                  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 }).format(day.importe_asignado)
+                                )}
+                              </td>
+                              <td className="py-1 text-right">
+                                {day.editable ? (
+                                  distribucionModal.editing === day.fecha ? (
+                                    <span className="inline-flex gap-2">
+                                      <button
+                                        type="button"
+                                        disabled={gastoSaving}
+                                        className="text-sky-300 underline"
+                                        onClick={() => {
+                                          const raw = distribucionModal.draft.trim().replace(/,/g, "");
+                                          const n = Number(raw);
+                                          if (raw === "" || !Number.isFinite(n) || n < 0) {
+                                            setDistribucionModal((prev) => (prev ? { ...prev, error: "Escribe un importe. 0 es válido." } : prev));
+                                            return;
+                                          }
+                                          void saveDistribucionDia(day.fecha, Math.round(n * 100) / 100);
+                                        }}
+                                      >
+                                        Guardar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="text-slate-300 underline"
+                                        onClick={() => setDistribucionModal((prev) => (prev ? { ...prev, editing: null, draft: "" } : prev))}
+                                      >
+                                        Cancelar
+                                      </button>
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex gap-2">
+                                      <button
+                                        type="button"
+                                        className="text-sky-300 underline"
+                                        onClick={() => setDistribucionModal((prev) => (
+                                          prev ? { ...prev, editing: day.fecha, draft: String(day.importe_asignado), error: null } : prev
+                                        ))}
+                                      >
+                                        Editar importe
+                                      </button>
+                                      {day.manual ? (
+                                        <button
+                                          type="button"
+                                          disabled={gastoSaving}
+                                          className="text-sky-300 underline"
+                                          onClick={() => void saveDistribucionDia(day.fecha, null)}
+                                        >
+                                          Restaurar promedio
+                                        </button>
+                                      ) : null}
+                                    </span>
+                                  )
+                                ) : (
+                                  <span className="text-slate-500">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  ) : (
+                    <p className="text-sm text-slate-300">Cargando distribución…</p>
+                  )}
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      className="rounded bg-slate-600 px-3 py-1"
+                      onClick={() => setDistribucionModal(null)}
+                    >
+                      Cerrar
                     </button>
                   </div>
                 </div>
