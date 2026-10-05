@@ -48,6 +48,7 @@ const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
 const igfDiarioGastosManuales = require("./lib/igf-diario-gastos-manuales");
 const igfDiarioGastosDesglose = require("./lib/igf-diario-gastos-desglose");
+const igfDiarioGastosDistribucion = require("./lib/igf-diario-gastos-distribucion");
 const igfDiarioDailyInsights = require("./lib/igf-diario-daily-insights");
 const igfDiarioGrafica = require("./lib/igf-diario-grafica");
 const arrAnnualCategoryAnalysis = require("./lib/arr-annual-category-analysis");
@@ -12499,6 +12500,52 @@ app.patch("/api/dashboard/igf-diario-gastos-desglose", dashboardAuthMiddleware, 
   }
 });
 
+app.get("/api/dashboard/igf-diario-gastos-distribucion", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const query = igfDiarioGastosDistribucion.parseQuery(req.query || {});
+  if (!query.ok) return res.status(400).json({ error: query.error });
+  const client = await pool.connect();
+  try {
+    const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, query.plantCode);
+    if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
+    if (!igfDiarioGastosManuales.overrideVisible(req.dashboardAuth, resolved.plantaId)) {
+      return res.status(403).json({ error: "Planta no permitida" });
+    }
+    const schedule = await igfDiarioGastosDistribucion.getSchedule(client, query);
+    res.json(schedule);
+  } catch (e) {
+    console.error("[igf-diario-gastos-distribucion GET]", e);
+    res.status(e.status || 500).json({ error: e.message || "No se pudo consultar la distribución" });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch("/api/dashboard/igf-diario-gastos-distribucion", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const patch = igfDiarioGastosDistribucion.parsePatch(req.body || {});
+  if (!patch.ok) return res.status(400).json({ error: patch.error });
+  const client = await pool.connect();
+  try {
+    const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, patch.plantCode);
+    if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
+    const denied = assertPlantaPermitidaDashboard(req, resolved.plantaId);
+    if (denied) return res.status(403).json({ error: denied });
+    const updatedBy = req.dashboardAuth && req.dashboardAuth.actor_id != null
+      ? `Dashboard:${req.dashboardAuth.actor_id}`
+      : "Dashboard";
+    const schedule = await igfDiarioGastosDistribucion.patchDistribucion(client, patch, updatedBy);
+    res.json(schedule);
+  } catch (e) {
+    console.error("[igf-diario-gastos-distribucion PATCH]", e);
+    res.status(e.status || 500).json({ error: e.message || "No se pudo guardar la distribución" });
+  } finally {
+    client.release();
+  }
+});
+
 /** Detalle hoja Pronóstico (lookback + días seleccionables) para una planta provincia. */
 app.get("/api/dashboard/pronostico-detalle", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
@@ -15891,12 +15938,21 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       const desgloseRows = igfDiarioGastosDesglose.usesDetailedExpenseLayout(year, month)
         ? await igfDiarioGastosDesglose.listMonth(client, year, month)
         : [];
+      const foundDesglose = igfDiarioGastosDesglose.findRow(desgloseRows, labels);
       const packet = igfDiarioGastosDesglose.excelPacket(
         year,
         month,
         effective,
-        igfDiarioGastosDesglose.findRow(desgloseRows, labels)
+        foundDesglose
       );
+      if (igfDiarioGastosDesglose.usesDetailedExpenseLayout(year, month)) {
+        packet.distribucionOverrides = await igfDiarioGastosDistribucion.overridesForPlant(
+          client,
+          year,
+          month,
+          foundDesglose && foundDesglose.plant_code
+        );
+      }
       if (packet.corporativos != null || packet.operativos != null || packet.desglose) {
         forecastOpts.igfDiarioGastos = packet;
       }
@@ -15937,24 +15993,34 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
           corteYmd: uploadDay || proyeccionHasta || "",
         });
         insightBundles.push(dailyInsights);
+        const foundTodas = igfDiarioGastosDesglose.findRow(desgloseRowsTodas, [code, plant.nombre, plant.canon, plant.provinciaPlantCode]);
+        const packetTodas = igfDiarioGastosDesglose.excelPacket(
+          year,
+          month,
+          igfDiarioGastosManuales.effectivePair(
+            {
+              corporativos: importeArrMini(plantMini && plantMini.corporativos),
+              operativos: importeArrMini(plantMini && plantMini.operativos),
+            },
+            manualRowsTodas,
+            [code, plant.nombre, plant.canon, plant.provinciaPlantCode]
+          ),
+          foundTodas
+        );
+        if (igfDiarioGastosDesglose.usesDetailedExpenseLayout(year, month)) {
+          packetTodas.distribucionOverrides = await igfDiarioGastosDistribucion.overridesForPlant(
+            client,
+            year,
+            month,
+            foundTodas && foundTodas.plant_code
+          );
+        }
         igfDiarioPlantas.push({
           exportPlant: code,
           humanName: plant.nombre,
           comprasPayload: await comprasDashboard.loadMonth(client, plant.plantaId, year, month),
           precioDiario: await dashboardArrForecast.loadPrecioDiario(client, code, year, month),
-          ...igfDiarioGastosDesglose.excelPacket(
-            year,
-            month,
-            igfDiarioGastosManuales.effectivePair(
-              {
-                corporativos: importeArrMini(plantMini && plantMini.corporativos),
-                operativos: importeArrMini(plantMini && plantMini.operativos),
-              },
-              manualRowsTodas,
-              [code, plant.nombre, plant.canon, plant.provinciaPlantCode]
-            ),
-            igfDiarioGastosDesglose.findRow(desgloseRowsTodas, [code, plant.nombre, plant.canon, plant.provinciaPlantCode])
-          ),
+          ...packetTodas,
           dailyInsights,
         });
       }

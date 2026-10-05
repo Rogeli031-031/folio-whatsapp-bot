@@ -290,6 +290,76 @@ export async function patchIgfDiarioGastosDesglose(
   return parsed as { ok: boolean; plant_code: string; row: IgfDiarioGastoDesglose };
 }
 
+export type IgfDiarioGastoDistribucionDia = {
+  fecha: string;
+  habil: boolean;
+  importe_asignado: number;
+  manual: boolean;
+  editable: boolean;
+};
+
+export type IgfDiarioGastoDistribucion = {
+  ok: boolean;
+  error: string | null;
+  year: number;
+  month: number;
+  plant_code: string;
+  concepto: string;
+  monthly_amount: number;
+  business_days: number;
+  manual_assigned: number;
+  remaining_amount: number;
+  remaining_business_days: number;
+  remaining_average: number | null;
+  initial_average: number | null;
+  days: IgfDiarioGastoDistribucionDia[];
+};
+
+export async function fetchIgfDiarioGastosDistribucion(opts: {
+  token: string;
+  year: number;
+  month: number;
+  plant_code: string;
+  concepto: string;
+}): Promise<IgfDiarioGastoDistribucion> {
+  const params = new URLSearchParams({
+    year: String(opts.year),
+    month: String(opts.month),
+    plant_code: opts.plant_code,
+    concepto: opts.concepto,
+  });
+  const res = await fetch(getApiUrl(`/api/dashboard/igf-diario-gastos-distribucion?${params.toString()}`), {
+    headers: { Authorization: `Bearer ${opts.token}` },
+  });
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+  return body as IgfDiarioGastoDistribucion;
+}
+
+export async function patchIgfDiarioGastosDistribucion(
+  token: string,
+  body: {
+    year: number;
+    month: number;
+    plant_code: string;
+    concepto: string;
+    fecha: string;
+    importe: number | null;
+  }
+): Promise<IgfDiarioGastoDistribucion> {
+  const res = await fetch(getApiUrl("/api/dashboard/igf-diario-gastos-distribucion"), {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const parsed = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((parsed as { error?: string }).error || `HTTP ${res.status}`);
+  return parsed as IgfDiarioGastoDistribucion;
+}
+
 /** Descarga Excel Clasificación de apoyos (hoja COMPARATIVOS). */
 export async function downloadClasificacionApoyosExcel(
   token: string,

@@ -11,6 +11,7 @@ const layout = require("../lib/igf-diario-expense-layout");
 const desglose = require("../lib/igf-diario-gastos-desglose");
 const igf = require("../lib/igf-diario-puebla");
 const forecast = require("../lib/dashboard-arr-forecast");
+const dist = require("../lib/igf-diario-gastos-distribucion");
 
 const LIB = fs.readFileSync(path.join(ROOT, "lib", "igf-diario-gastos-desglose.js"), "utf8");
 const EXCEL = fs.readFileSync(path.join(ROOT, "lib", "igf-diario-expense-excel.js"), "utf8");
@@ -140,6 +141,7 @@ function txClient(options) {
           rows: state.desglose.filter((item) => item.year === params[0] && item.month === params[1]).map((item) => ({ ...item })),
         };
       }
+      if (text.includes("arr.igf_diario_gastos_distribucion_manual")) return { rows: [] };
       if (text.startsWith("INSERT INTO arr.igf_diario_gastos_manual")) {
         const next = {
           plant_code: params[0],
@@ -348,9 +350,14 @@ test("inhabil escribe 0 en los 7 componentes y hábil divide monto/habiles/B", (
   const hRow = rowByDate(ws, 2026, 10, habil.day);
   const iRow = rowByDate(ws, 2026, 10, inhabil.day);
   for (const col of [10, 11, 12, 17, 18, 19, 20]) assert.equal(ws.getCell(iRow, col).value, 0);
-  assert.match(formulaOf(ws.getCell(hRow, 10)), new RegExp(`\\(\\$J\\$3\\/${cal.habiles}\\)\\/B${hRow}`));
+  const corpDay = dist.buildExpenseDailySchedule({ monthlyAmount: 270, days: cal.days, overrides: {} });
+  const operDay = dist.buildExpenseDailySchedule({ monthlyAmount: 540, days: cal.days, overrides: {} });
+  const corpMoney = corpDay.byFecha[habil.fecha].toFixed(2).replace(".", "\\.");
+  const operMoney = operDay.byFecha[habil.fecha].toFixed(2).replace(".", "\\.");
+  assert.match(formulaOf(ws.getCell(hRow, 10)), new RegExp(`${corpMoney}/B${hRow}`));
   assert.match(formulaOf(ws.getCell(hRow, 10)), /B\d+<>0/);
-  assert.match(formulaOf(ws.getCell(hRow, 18)), new RegExp(`\\(\\$R\\$3\\/${cal.habiles}\\)\\/B${hRow}`));
+  assert.doesNotMatch(formulaOf(ws.getCell(hRow, 10)), /\$J\$3/);
+  assert.match(formulaOf(ws.getCell(hRow, 17)), new RegExp(`${operMoney}/B${hRow}`));
   assert.equal(formulaOf(ws.getCell(hRow, 13)), `J${hRow}+K${hRow}+L${hRow}`);
   assert.equal(formulaOf(ws.getCell(hRow, 21)), `Q${hRow}+R${hRow}+S${hRow}+T${hRow}`);
 });
@@ -368,7 +375,12 @@ test("semana usa dinero asignado y TOTAL MES divide el monto entre B", () => {
   const week = rowByLabel(ws, "Semana 1");
   const total = rowByLabel(ws, "TOTAL MES");
   const weekJ = formulaOf(ws.getCell(week, 10));
-  assert.match(weekJ, new RegExp(`\\(\\$J\\$3\\/${cal.habiles}\\)\\*${weekHabiles}\\/B${week}`));
+  const weekMoney = dist.sumAssignedForWeek(
+    dist.buildExpenseDailySchedule({ monthlyAmount: 100, days: cal.days, overrides: {} }),
+    weeks[0]
+  ).toFixed(2).replace(".", "\\.");
+  assert.match(weekJ, new RegExp(`${weekMoney}/B${week}`));
+  assert.doesNotMatch(weekJ, new RegExp(`\\*${weekHabiles}/`));
   assert.doesNotMatch(weekJ, /AVERAGE|J6/);
   assert.equal(formulaOf(ws.getCell(week, 13)), `J${week}+K${week}+L${week}`);
   assert.equal(formulaOf(ws.getCell(week, 21)), `Q${week}+R${week}+S${week}+T${week}`);

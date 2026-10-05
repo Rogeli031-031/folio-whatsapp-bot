@@ -1,6 +1,6 @@
-﻿task_id: "G4-PREP-IGF-DIARIO-DESGLOSE-GASTOS-064"
+﻿task_id: "G4-PREP-IGF-DIARIO-REBALANCEO-GASTOS-064-R1"
 
-title: "Preparar PR del desglose Corporativos/Operativos IGF Diario 064"
+title: "Preparar PR del rebalanceo diario de gastos IGF Diario 064-R1"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -15,121 +15,137 @@ human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-1
 g4_authorization: "G4_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-05"
 
 objective: >
-  Preparar el Pull Request de IMPL-IGF-DIARIO-DESGLOSE-GASTOS-064
+  Preparar el Pull Request de
+  IMPL-IGF-DIARIO-REBALANCEO-DIARIO-GASTOS-064-R1
   hacia main. No modificar producto ni tests. El merge a main queda
   reservado exclusivamente al HUMAN_APPROVER.
 
-main_reference_sha: "7da3851c7bee0a629a2348478b3a1408985e5945"
+main_reference_sha: "a3e546fccdf7e89b5e4c3b59b148079587106505"
 
-branch: "implementation/igf-diario-desglose-gastos-064"
+branch: "implementation/igf-diario-rebalanceo-diario-gastos-064-r1"
 
-product_sha: "8335d52c16ed0aa361e34f7cfe6c7895cb34823b"
+product_sha: "631d8cae393a509b378cc3a6e06a3165731c1cd4"
 
-validated_source_sha: "a4356094c9c36c84401a01e57a165fb6411c7a18"
+validated_source_sha: "0a94785e02745d31f39d76f99ec5e2085d74109f"
 
 target_branch: "main"
 
 validated_scope:
-  - "Nuevo desglose activo únicamente desde 2026-10."
-  - "2026-09 y anteriores mantienen layout y fórmulas legacy."
-  - "Corporativos: Gasto Corporativo + Inversiones + Impuestos Federales."
-  - "Operativos: Nómina/Gastos + IMSS/SUA + Extraordinarios + Provisiones Planta."
-  - "Dashboard muestra únicamente total CORPORATIVOS y OPERATIVOS."
-  - "Octubre+ abre modal para editar componentes."
-  - "Zona Provincia no es editable."
-  - "Manual/Auto deja de mostrarse octubre+."
-  - "Manual/Auto legacy permanece antes de octubre."
-  - "0 es valor válido."
-  - "Guardado del grupo es completo y atómico."
-  - "Desglose sincroniza total con tabla 062."
-  - "No se reclasifican valores existentes."
-  - "Sin desglose se conserva total agregado 062."
-  - "J/K/L/M implementado para Corporativos."
-  - "Q/R/S/T/U implementado para Operativos."
-  - "Nueva columna R desplaza columnas posteriores."
-  - "Día inhábil escribe 0 en los siete conceptos."
-  - "Semana usa dinero asignado por hábiles / Venta KG semanal."
-  - "TOTAL MES usa monto mensual / Venta KG total."
-  - "Provincia usa nuevo layout desde octubre."
-  - "Individual y Todas respetan gate histórico."
-  - "Forecast permanece intacto."
-  - "063-R1 permanece intacto."
+  - "Distribución diaria editable para los siete conceptos de 064."
+  - "Aplica desde octubre 2026."
+  - "Septiembre 2026 y anteriores permanecen legacy."
+  - "El monto mensual permanece fijo al editar días."
+  - "Solo se persisten overrides explícitos."
+  - "0 es override válido."
+  - "null elimina override y restaura promedio."
+  - "Día inhábil no es editable."
+  - "Los cálculos operan en centavos."
+  - "Un override futuro no modifica automáticos anteriores."
+  - "Un día manual conserva exactamente su importe."
+  - "Los días automáticos posteriores absorben la diferencia."
+  - "El último automático absorbe residuo de redondeo."
+  - "La suma final mensual cierra exactamente al monto mensual."
+  - "No se permiten automáticos negativos."
+  - "Schedules imposibles se rechazan."
+  - "Cambio de monto mensual conserva overrides compatibles."
+  - "Cambio mensual incompatible se rechaza antes de escribir."
+  - "Excel diario usa importe asignado / Venta KG."
+  - "Semana usa suma monetaria asignada / Venta KG semanal."
+  - "TOTAL MES sigue usando monto mensual / Venta KG mensual."
+  - "Provincia semanal usa las celdas reales de cada planta."
+  - "064 sigue intacto."
+  - "063-R1 sigue intacto."
+  - "Forecast sigue intacto."
 
 schema:
-  table: "arr.igf_diario_gastos_desglose"
+  table: "arr.igf_diario_gastos_distribucion_manual"
   primary_key:
     - "plant_code"
     - "year"
     - "month"
-  concepts:
-    - "gasto_corporativo"
-    - "inversiones"
-    - "impuestos_federales"
-    - "presupuesto_nomina_gastos"
-    - "presupuesto_imss_sua"
-    - "extraordinarios"
-    - "provisiones_planta"
+    - "concepto"
+    - "fecha"
+  columns:
+    - "importe NUMERIC(18,2) NOT NULL"
+    - "updated_at TIMESTAMPTZ NOT NULL DEFAULT now()"
+    - "updated_by TEXT NULL"
   safety:
     - "CREATE TABLE IF NOT EXISTS."
+    - "Solo almacena overrides."
+    - "No almacena días automáticos."
     - "Sin migración."
     - "Sin datos iniciales."
-    - "No modifica históricos."
+    - "No modifica esquema de arr.igf_diario_gastos_desglose."
 
-validated_excel_contract:
-  legacy_2026_09:
-    corporativos_total: "M"
-    operativos_total: "T"
-    hg: "X/Y"
-    sobrante_post_hg: "AA"
-    cd: "AC"
-    resultado: "AE/AF"
-    comentario: "AH"
-    ventas: "AI"
-    carry: "AJ/AK"
-  detailed_2026_10_plus:
-    corporate_components: "J/K/L"
-    corporate_total: "M"
-    margin_net: "O"
-    operative_components: "Q/R/S/T"
-    operative_total: "U"
-    sobra_operacion: "W"
-    hg: "Y/Z"
-    sobrante_post_hg: "AB"
-    cd: "AD"
-    resultado: "AF/AG"
-    comentario: "AI"
-    ventas: "AJ"
-    carry: "AK/AL"
+validated_algorithm:
+  monthly_amount: "Permanece fijo."
+  sequential: true
+  cents: true
+  previous_days_frozen: true
+  manual_days_frozen: true
+  later_auto_days_rebalanced: true
+  exact_month_close: true
+  negative_auto_forbidden: true
+
+validated_fixture:
+  monthly_amount: 953777.33
+  business_days: 27
+  initial_average: 35325.09
+  first_three_manual_each: 37412.69
+  manual_total: 112238.07
+  remaining_amount: 841539.26
+  remaining_days: 24
+  remaining_average: 35064.14
+  final_sum: 953777.33
+
+validated_api:
+  get: "GET /api/dashboard/igf-diario-gastos-distribucion"
+  patch: "PATCH /api/dashboard/igf-diario-gastos-distribucion"
+  patch_semantics:
+    numeric: "Fija importe diario."
+    zero: "Valor válido."
+    null: "Elimina override y restaura promedio."
+
+validated_excel:
+  daily: "importe asignado del schedule / B"
+  weekly: "suma de importes monetarios de la semana / B semanal"
+  monthly: "monto mensual / B TOTAL MES"
+  holidays: "0"
+  b_zero_daily: >
+    Celda $/kg blank, pero el importe monetario sigue participando
+    en el cierre semanal.
 
 validated_tests:
+  - "064-R1 PASS 11/11."
   - "064 PASS 21/21."
-  - "Regresiones 063-R1, 063, 062, 061, 059-R1, 059, 053A, 053A-R1, 053A-R2, 054-R3 y Excel 036-041 PASS."
-  - "75/75 en corrida conjunta."
-  - "059-R1 5/5 al repetir."
-  - "frontend npm run build PASS."
+  - "063-R1, 063, 062, 061, 059-R1, 059, 053A, 053A-R1, 053A-R2, 054-R3 y Excel 036-041 PASS 76/76."
+  - "frontend npm run build terminó en 0."
   - "node --check server.js PASS."
   - "git diff --check limpio."
 
 pr_contract:
   base: "main"
-  head: "implementation/igf-diario-desglose-gastos-064"
-  title: "IMPL 064: desglose Corporativos y Operativos en IGF Diario"
+  head: "implementation/igf-diario-rebalanceo-diario-gastos-064-r1"
+  title: "IMPL 064-R1: rebalanceo diario de gastos IGF Diario"
   merge_executor: "HUMAN_APPROVER_ONLY"
   preferred_merge: "Squash and merge"
 
 production_validation_required_after_deploy:
-  - "Octubre abre modal al hacer clic en CORPORATIVOS."
-  - "Modal Corporativos contiene 3 conceptos."
-  - "Octubre abre modal al hacer clic en OPERATIVOS."
-  - "Modal Operativos contiene 4 conceptos."
-  - "No aparecen Manual/Auto en octubre."
-  - "Guardar recalcula los totales del dashboard."
-  - "Excel octubre usa J/K/L/M y Q/R/S/T/U."
-  - "Días inhábiles tienen 0 en los conceptos."
-  - "Cierres semanales usan fórmula dinero semanal / venta semanal."
-  - "Excel Todas conserva el layout nuevo en cada planta y Provincia."
-  - "Descargar septiembre conserva layout histórico."
-  - "Forecast sigue intacto."
+  - "Abrir Distribución diaria desde uno de los siete conceptos."
+  - "Confirmar monto mensual y promedio inicial."
+  - "Modificar un día hábil."
+  - "Confirmar que ese día queda fijo."
+  - "Confirmar que días anteriores no cambian."
+  - "Confirmar que días posteriores se rebalancean."
+  - "Confirmar Restaurar promedio."
+  - "Confirmar rechazo de un schedule imposible."
+  - "Descargar Excel octubre."
+  - "Confirmar importe diario asignado / Venta KG."
+  - "Confirmar cierre semanal con suma monetaria real."
+  - "Confirmar TOTAL MES sin cambio."
+  - "Confirmar descarga Todas y Provincia."
+  - "Confirmar septiembre legacy."
+  - "Confirmar Forecast intacto."
 
 in_scope:
   - "Verificar origin/main exacto."
@@ -143,8 +159,7 @@ out_of_scope:
   - "Modificar producto."
   - "Modificar tests."
   - "Modificar DB productiva."
-  - "Insertar datos."
-  - "Reclasificar valores actuales."
+  - "Insertar overrides."
   - "Merge a main."
   - "Deploy."
   - "Abrir siguiente tarea."
@@ -155,13 +170,13 @@ merge_contract:
   deploy_authorized: false
 
 acceptance_criteria:
-  - "origin/main sigue exactamente en 7da3851c7bee0a629a2348478b3a1408985e5945."
-  - "No aparecen cambios nuevos de producto ni tests."
-  - "PR base main / head implementation/igf-diario-desglose-gastos-064."
+  - "origin/main sigue exactamente en a3e546fccdf7e89b5e4c3b59b148079587106505."
+  - "No existen cambios nuevos de producto ni tests."
+  - "PR base main / head implementation/igf-diario-rebalanceo-diario-gastos-064-r1."
   - "PR queda abierto y mergeable."
   - "No merge."
   - "No deploy."
   - "Reporte contiene número y URL del PR."
   - "status final DONE_PENDING_REVIEW."
 
-result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-DESGLOSE-GASTOS-064.md"
+result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-REBALANCEO-GASTOS-064-R1.md"
