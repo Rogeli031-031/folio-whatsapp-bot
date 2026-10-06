@@ -363,14 +363,16 @@ export async function patchIgfDiarioGastosDistribucion(
 export type IgfDiarioMargenDia = {
   fecha: string;
   precio: number | null;
+  precio_automatico: number | null;
+  precio_manual: boolean;
   costo_kg: number | null;
-  flete_kg: number | null;
   costo_automatico: number | null;
+  costo_manual: boolean;
+  flete_kg: number | null;
   flete_automatico: number | null;
+  flete_manual: boolean;
   margen_bruto: number | null;
   editable: boolean;
-  costo_manual: boolean;
-  flete_manual: boolean;
 };
 
 export type IgfDiarioMargenDetalle = {
@@ -412,7 +414,7 @@ export async function patchIgfDiarioMargenDiario(
     month: number;
     plant_code: string;
     upload_day: string;
-    changes: Array<{ fecha: string; costo_kg?: number | null; flete_kg?: number | null }>;
+    changes: Array<{ fecha: string; precio?: number | null; costo_kg?: number | null; flete_kg?: number | null }>;
   }
 ): Promise<{ ok: boolean; plant_code: string }> {
   const res = await fetch(getApiUrl("/api/dashboard/igf-diario-margen-diario"), {

@@ -68,6 +68,7 @@ function memoryClient(seed) {
         state.creates += 1;
         return { rows: [] };
       }
+      if (text.startsWith("ALTER TABLE")) return { rows: [] };
       if (text.startsWith("DELETE FROM arr.igf_diario_margen_manual")) {
         state.rows = state.rows.filter((row) => !(row.plant_code === params[0] && row.year === params[1] && row.month === params[2] && row.fecha === params[3]));
         return { rows: [] };
@@ -80,7 +81,7 @@ function memoryClient(seed) {
         if (state.failAt && writes >= state.failAt) throw new Error("fallo de escritura");
         const next = {
           plant_code: params[0], year: params[1], month: params[2], fecha: params[3],
-          costo_kg: params[4], flete_kg: params[5], updated_by: params[6],
+          costo_kg: params[4], flete_kg: params[5], updated_by: params[6], precio: params[7] == null ? null : params[7],
         };
         const idx = state.rows.findIndex((row) => row.plant_code === next.plant_code && row.fecha === next.fecha && row.year === next.year && row.month === next.month);
         if (idx >= 0) state.rows[idx] = next;
