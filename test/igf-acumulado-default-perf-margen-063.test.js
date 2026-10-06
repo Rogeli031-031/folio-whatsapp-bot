@@ -129,7 +129,8 @@ test("el endpoint ligero es de solo lectura y no arma la gráfica", async () => 
   });
   assert.equal(payload.rows.length, 1);
   assert.equal(payload.rows[0].plant_code, "San Luis");
-  assert.equal(payload.query_count, 2);
+  assert.equal(payload.query_count, 3);
+  assert.equal(sqls.filter((sql) => sql.includes("arr.igf_diario_margen_manual") && sql.includes("SELECT")).length, 1);
   assert.ok(sqls.some((sql) => sql.includes("ventas_diarias_cliente")));
   assert.ok(sqls.every((sql) => !sql.includes("descuentos_diarios_cliente")));
   assert.equal(payload.new_clients_chart, undefined);

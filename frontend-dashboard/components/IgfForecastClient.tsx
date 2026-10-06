@@ -24,6 +24,8 @@ import {
   patchIgfDiarioGastosDesglose,
   fetchIgfDiarioGastosDistribucion,
   patchIgfDiarioGastosDistribucion,
+  fetchIgfDiarioMargenDiario,
+  patchIgfDiarioMargenDiario,
   fetchArrLastUploadDay,
   postForecastProvincia,
   patchIgfForecastHg,
@@ -41,6 +43,7 @@ import {
   type IgfDiarioGastoManual,
   type IgfDiarioGastoDesglose,
   type IgfDiarioGastoDistribucion,
+  type IgfDiarioMargenDia,
   type PronosticoDetalleResponse,
   type IgfFolioDetalleItem,
   type IgfFolioDetalleTipo,
@@ -360,6 +363,30 @@ function applyDesgloseTotals(
   };
 }
 
+function margenBrutoLocal(precio: number | null, costo: number | null, flete: number | null): number | null {
+  if (precio == null || costo == null || flete == null) return null;
+  if (!Number.isFinite(precio) || !Number.isFinite(costo) || !Number.isFinite(flete)) return null;
+  return precio - costo - flete;
+}
+
+function margenDraft(day: IgfDiarioMargenDia) {
+  return {
+    fecha: day.fecha,
+    precio: day.precio,
+    costo: day.costo_kg,
+    flete: day.flete_kg,
+    costoText: day.costo_kg == null ? "" : String(day.costo_kg),
+    fleteText: day.flete_kg == null ? "" : String(day.flete_kg),
+    costoRestore: false,
+    fleteRestore: false,
+    editable: day.editable,
+    costoAutomatico: day.costo_automatico,
+    fleteAutomatico: day.flete_automatico,
+    originalCosto: day.costo_kg,
+    originalFlete: day.flete_kg,
+  };
+}
+
 export function IgfForecastContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -383,6 +410,7 @@ export function IgfForecastContent() {
   const [igfGraficaOpen, setIgfGraficaOpen] = useState(false);
   const [igfTableMode, setIgfTableMode] = useState<"forecast" | "igf_diario">("igf_diario");
   const [acumuladoByPlant, setAcumuladoByPlant] = useState<Record<string, AcumuladoPlantHit> | null>(null);
+  const [acumuladoNonce, setAcumuladoNonce] = useState(0);
   const [acumuladoMissing, setAcumuladoMissing] = useState<string[]>([]);
   const [acumuladoLoading, setAcumuladoLoading] = useState(false);
   const [acumuladoError, setAcumuladoError] = useState<string | null>(null);
@@ -398,6 +426,13 @@ export function IgfForecastContent() {
   const [gastoEdit, setGastoEdit] = useState<{ plant: string; field: "operativos" | "corporativos"; draft: string } | null>(null);
   const [gastoSaving, setGastoSaving] = useState(false);
   const [gastoEditError, setGastoEditError] = useState<string | null>(null);
+  const [margenModal, setMargenModal] = useState<{
+    plant: string;
+    label: string;
+    corte: string;
+    days: ReturnType<typeof margenDraft>[];
+    error: string | null;
+  } | null>(null);
   const [distribucionModal, setDistribucionModal] = useState<{
     plant: string;
     concepto: string;
@@ -568,7 +603,7 @@ export function IgfForecastContent() {
     return () => {
       cancel = true;
     };
-  }, [igfTableMode, token, igfForecast, igfMini, uploadDay, versionAsOfCorte]);
+  }, [igfTableMode, token, igfForecast, igfMini, uploadDay, versionAsOfCorte, acumuladoNonce]);
 
   useEffect(() => {
     if (igfTableMode !== "igf_diario" || !token || !igfForecast) return;
@@ -694,6 +729,100 @@ export function IgfForecastContent() {
       setDesgloseModal(null);
     } catch (error: unknown) {
       setGastoEditError(error instanceof Error ? error.message : "No se pudo guardar el desglose");
+    } finally {
+      setGastoSaving(false);
+    }
+  };
+
+  const openMargenDiario = async (row: IgfForecastMiniRow) => {
+    if (!token || !igfForecast) return;
+    const plant = String(row.plant_code || row.empresa || "").trim();
+    const label = String(row.empresa || plant);
+    setMargenModal({ plant, label, corte: uploadDay.trim(), days: [], error: null });
+    try {
+      const detail = await fetchIgfDiarioMargenDiario({
+        token,
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: plant,
+        upload_day: uploadDay.trim(),
+        version_as_of_corte: versionAsOfCorte,
+      });
+      setMargenModal({
+        plant,
+        label,
+        corte: detail.corte,
+        days: (detail.days || []).map(margenDraft),
+        error: null,
+      });
+    } catch (error: unknown) {
+      setMargenModal((prev) => (
+        prev ? { ...prev, error: error instanceof Error ? error.message : "No se pudo cargar el margen diario" } : prev
+      ));
+    }
+  };
+
+  const saveMargenDiario = async () => {
+    if (!token || !igfForecast || !margenModal || gastoSaving) return;
+    const changes: Array<{ fecha: string; costo_kg?: number | null; flete_kg?: number | null }> = [];
+    for (const day of margenModal.days) {
+      if (!day.editable) continue;
+      const change: { fecha: string; costo_kg?: number | null; flete_kg?: number | null } = { fecha: day.fecha };
+      let touched = false;
+      if (day.costoRestore) {
+        change.costo_kg = null;
+        touched = true;
+      } else if (day.costo !== day.originalCosto) {
+        if (day.costo == null || !Number.isFinite(day.costo)) {
+          setMargenModal((prev) => (prev ? { ...prev, error: "Costo KG debe ser numérico. 0 es válido." } : prev));
+          return;
+        }
+        change.costo_kg = day.costo;
+        touched = true;
+      }
+      if (day.fleteRestore) {
+        change.flete_kg = null;
+        touched = true;
+      } else if (day.flete !== day.originalFlete) {
+        if (day.flete == null || !Number.isFinite(day.flete)) {
+          setMargenModal((prev) => (prev ? { ...prev, error: "Flete KG debe ser numérico. 0 es válido." } : prev));
+          return;
+        }
+        change.flete_kg = day.flete;
+        touched = true;
+      }
+      if (touched) changes.push(change);
+    }
+    if (!changes.length) {
+      setMargenModal(null);
+      return;
+    }
+    setGastoSaving(true);
+    try {
+      await patchIgfDiarioMargenDiario(token, {
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: margenModal.plant,
+        upload_day: uploadDay.trim(),
+        changes,
+      });
+      const detail = await fetchIgfDiarioMargenDiario({
+        token,
+        year: igfForecast.year,
+        month: igfForecast.month,
+        plant_code: margenModal.plant,
+        upload_day: uploadDay.trim(),
+        version_as_of_corte: versionAsOfCorte,
+      });
+      setMargenModal((prev) => (
+        prev ? { ...prev, corte: detail.corte, days: (detail.days || []).map(margenDraft), error: null } : prev
+      ));
+      acumuladoCacheRef.current = null;
+      setAcumuladoNonce((value) => value + 1);
+    } catch (error: unknown) {
+      setMargenModal((prev) => (
+        prev ? { ...prev, error: error instanceof Error ? error.message : "No se pudo guardar el margen diario" } : prev
+      ));
     } finally {
       setGastoSaving(false);
     }
@@ -1747,6 +1876,7 @@ export function IgfForecastContent() {
                     const editableGasto = igfTableMode === "igf_diario" && !isZona && gastoField != null && plantKey !== "";
                     const legacyGasto = editableGasto && !detailedLayout;
                     const detailedGasto = editableGasto && detailedLayout;
+                    const marginClick = igfTableMode === "igf_diario" && !isZona && c.key === "margen" && detailedLayout && plantKey !== "";
                     const manual = gastoField === "operativos"
                       ? Boolean(miniRow.operativosManual)
                       : gastoField === "corporativos"
@@ -1863,6 +1993,15 @@ export function IgfForecastContent() {
                               </button>
                             ) : null}
                           </div>
+                        ) : marginClick ? (
+                          <button
+                            type="button"
+                            title="Margen diario"
+                            className="w-full text-right underline decoration-dotted decoration-sky-400/80 text-sky-200 hover:text-sky-100"
+                            onClick={() => void openMargenDiario(miniRow)}
+                          >
+                            {typeof v === "number" ? c.fmt(v) : "—"}
+                          </button>
                         ) : ventaBtn ? (
                           <button
                             type="button"
@@ -1910,6 +2049,103 @@ export function IgfForecastContent() {
                 </div>
               );
             })()}
+            {margenModal ? (
+              <div role="dialog" aria-label={`Margen diario — ${margenModal.label}`} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4">
+                <div className="max-h-[85vh] w-full max-w-5xl overflow-hidden rounded border border-slate-600 bg-slate-900 p-4 text-slate-100">
+                  <h3 className="mb-2 text-lg font-semibold">Margen diario — {margenModal.label}</h3>
+                  {margenModal.error ? <p className="mb-2 text-sm text-amber-200">{margenModal.error}</p> : null}
+                  <div className="overflow-x-auto">
+                    <table className="border-collapse text-sm">
+                      <tbody>
+                        {([
+                          ["FECHA", (day: ReturnType<typeof margenDraft>) => day.fecha.slice(8, 10) + "/" + day.fecha.slice(5, 7)],
+                          ["COSTO KG", null],
+                          ["FLETE KG", null],
+                          ["MARGEN BRUTO", null],
+                        ] as const).map(([label]) => (
+                          <tr key={label}>
+                            <th className="sticky left-0 z-10 bg-slate-900 px-2 py-1 text-left">{label}</th>
+                            {margenModal.days.map((day) => {
+                              const costo = day.costoRestore ? day.costoAutomatico : day.costo;
+                              const flete = day.fleteRestore ? day.fleteAutomatico : day.flete;
+                              const margen = margenBrutoLocal(day.precio, costo, flete);
+                              const shown = label === "FECHA"
+                                ? `${day.fecha.slice(8, 10)}/${day.fecha.slice(5, 7)}`
+                                : label === "MARGEN BRUTO"
+                                  ? (margen == null ? "—" : margen.toFixed(2))
+                                  : "";
+                              return (
+                                <td key={`${label}-${day.fecha}`} className="min-w-24 border border-slate-800 px-2 py-1 text-right">
+                                  {label === "FECHA" || label === "MARGEN BRUTO" ? shown : day.editable ? (
+                                    <div className="flex flex-col items-end gap-1">
+                                      <input
+                                        value={label === "COSTO KG" ? day.costoText : day.fleteText}
+                                        inputMode="decimal"
+                                        aria-label={`${label} ${day.fecha}`}
+                                        className="w-20 rounded border border-slate-500 bg-slate-950 px-1 text-right"
+                                        onChange={(event) => {
+                                          const text = event.target.value;
+                                          const raw = text.trim().replace(/,/g, "");
+                                          const n = raw === "" ? null : Number(raw);
+                                          setMargenModal((prev) => prev ? {
+                                            ...prev,
+                                            days: prev.days.map((item) => {
+                                              if (item.fecha !== day.fecha) return item;
+                                              if (label === "COSTO KG") {
+                                                return { ...item, costoText: text, costoRestore: false, costo: raw === "" || !Number.isFinite(n) ? null : n };
+                                              }
+                                              return { ...item, fleteText: text, fleteRestore: false, flete: raw === "" || !Number.isFinite(n) ? null : n };
+                                            }),
+                                          } : prev);
+                                        }}
+                                      />
+                                      <button
+                                        type="button"
+                                        className="text-xs text-sky-300 underline"
+                                        onClick={() => setMargenModal((prev) => prev ? {
+                                          ...prev,
+                                          days: prev.days.map((item) => {
+                                            if (item.fecha !== day.fecha) return item;
+                                            if (label === "COSTO KG") {
+                                              return {
+                                                ...item,
+                                                costoRestore: true,
+                                                costo: item.costoAutomatico,
+                                                costoText: item.costoAutomatico == null ? "" : String(item.costoAutomatico),
+                                              };
+                                            }
+                                            return {
+                                              ...item,
+                                              fleteRestore: true,
+                                              flete: item.fleteAutomatico,
+                                              fleteText: item.fleteAutomatico == null ? "" : String(item.fleteAutomatico),
+                                            };
+                                          }),
+                                        } : prev)}
+                                      >
+                                        {label === "COSTO KG" ? "Restaurar Costo automático" : "Restaurar Flete automático"}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    label === "COSTO KG"
+                                      ? (costo == null ? "—" : costo.toFixed(2))
+                                      : (flete == null ? "—" : flete.toFixed(2))
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button type="button" className="rounded bg-slate-600 px-3 py-1" onClick={() => setMargenModal(null)}>Cancelar</button>
+                    <button type="button" disabled={gastoSaving} className="rounded bg-sky-700 px-3 py-1 text-white" onClick={() => void saveMargenDiario()}>Guardar cambios</button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             {desgloseModal ? (
               <div
                 role="dialog"
