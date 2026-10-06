@@ -1,6 +1,6 @@
-﻿task_id: "IMPL-ARR-IGF-DIARIO-FINANCIAL-SOURCES-066"
+﻿task_id: "FIX-ARR-IGF-DIARIO-RESULT-PARITY-066-R1"
 
-title: "Unificar ARR, Pronóstico e IGF Diario con los cierres mensuales del IGF Diario desde octubre 2026"
+title: "Alinear Venta y Resultado Final de ARR/IGF acumulado con AG TOTAL MES"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -13,535 +13,337 @@ authorized_at: "2026-10-06"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-06"
 
 objective: >
-  Desde octubre 2026, hacer que las métricas financieras base del ARR
-  provengan de la misma semántica mensual TOTAL MES del IGF Diario,
-  incluyendo los valores efectivos/proyectados del mismo corte.
-  Deben quedar alineados IGF Diario acumulado, ARR y Pronóstico para
-  Margen, Descuento, Operativos, Corporativos, Impuestos, HG y HG$.
-  Meses anteriores a octubre 2026 deben conservar exactamente el
-  comportamiento legacy actual.
+  Corregir 066 para que, desde octubre 2026, la Venta financiera y
+  Resultado Final mostrados en IGF Diario acumulado y ARR provengan
+  exactamente de la misma semántica TOTAL MES del IGF Diario.
+  Resultado Final / Rentabilidad debe coincidir con AG TOTAL MES.
+  Septiembre 2026 y anteriores permanecen sin cambios.
 
-base_sha: "67e13b780c0301e31fa7f27c2ed0de1eb3f3df59"
+base_sha: "1b7584683947d057ef49652d76399aa20a3bbafd"
 
-branch: "implementation/arr-igf-diario-financial-sources-066"
+branch: "fix/arr-igf-diario-result-parity-066-r1"
 
 effective_from:
   year: 2026
   month: 10
 
-historical_gate:
-  rule: >
-    Aplicar el nuevo contrato únicamente a periodos >= 2026-10.
-    2026-09 y anteriores permanecen exactamente con las fuentes y
-    fórmulas anteriores del ARR, Pronóstico e IGF.
-  requirements:
-    - "No reescribir históricos."
-    - "No alterar snapshots legacy."
-    - "Comparar septiembre vs octubre debe permitir contratos distintos."
+problem_evidence:
+  production_example:
+    plant: "GT Puebla"
+    period: "2026-10"
+    corte: "2026-10-06"
+
+    current_dashboard:
+      venta_ton: 1166.76
+      resultado_final_importe: 225470
+      arr_rentabilidad: 225470
+
+    excel_total_mes:
+      venta_kg_B: 1164953
+      margen_H_display: 6.39
+      gasto_corporativo_J: 953777.33
+      inversiones_K: 144297.15
+      impuestos_federales_L: 422193.00
+      operativos_U: 1620506.29
+      hg_Z_display: -0.41
+      descuento_AD_display: -4.27
+      resultado_AG: -201192
+
+    note: >
+      Los valores visibles están redondeados. La aceptación no debe
+      reconstruir AG usando los valores visuales redondeados; debe usar
+      la misma precisión diaria/mensual que alimenta el IGF Diario.
+
+root_causes:
+  - >
+    frontend-dashboard/lib/igf-october-mini.js conserva row.ventaTon
+    del mini/pronóstico anterior en vez de usar financials.ventaTon,
+    aunque 066 ya calcula ventaTon equivalente a B TOTAL MES.
+  - >
+    Resultado Final actualmente calcula ingreso - operativos - corporativos,
+    pero desde 066 Corporativos = J+K. Por lo tanto Impuestos Federales L
+    quedaron correctamente fuera de Corporativos pero también quedaron
+    fuera del Resultado Final.
+  - >
+    Excel mantiene los Impuestos Federales dentro del flujo que termina
+    en AG, por lo que el Resultado Final de dashboard debe restarlos una
+    sola vez como concepto independiente.
 
 north_star:
-  description: >
-    Para una misma planta, mes y corte, desde octubre 2026 deben coincidir
-    semánticamente Pronóstico, IGF Diario acumulado, ARR y Excel.
-  example:
-    - "Si AD TOTAL MES del Excel = -4.32, Pronóstico Desc. PROY = -4.32."
-    - "IGF Diario acumulado Com. y Desc. = -4.32."
-    - "ARR DESCUENTO = -4.32."
-  forbidden:
-    - "Dos cálculos mensuales paralelos para el mismo descuento."
-    - "Hardcodear fila 48."
-    - "Leer/parsing del archivo XLSX generado para obtener los valores."
+  from_october_2026:
+    - "IGF Diario acumulado Venta = B TOTAL MES / 1000."
+    - "ARR Venta = B TOTAL MES / 1000."
+    - "IGF Diario acumulado Resultado Final - Importe = AG TOTAL MES."
+    - "ARR Rentabilidad = AG TOTAL MES cuando no existe simulación ARR que deba alterar la rentabilidad."
+    - "No doble contabilización de Impuestos."
+    - "Corporativos sigue siendo J+K."
+    - "Gasto visible sigue siendo Operativos + Corporativos."
+    - "Impuestos sigue visible en su propia columna como L/B."
 
-semantic_total_month:
+historical_gate:
   rule: >
-    No usar números de fila literales como H48, AD48, etc.
-    Calcular el equivalente semántico de la fila TOTAL MES desde las
-    mismas series diarias que alimentan el Excel.
+    Aplicar 066-R1 únicamente a periodos >= 2026-10.
+    Septiembre 2026 y anteriores conservan exactamente la lógica legacy.
 
-  excel_mapping_october:
-    B: "VENTA KG TOTAL MES"
-    F: "COSTO KG TOTAL MES"
-    G: "FLETE KG TOTAL MES"
-    H: "MARGEN BRUTO TOTAL MES"
-    J: "Gasto Corporativo TOTAL MES"
-    K: "Inversiones TOTAL MES"
-    L: "Impuestos Federales TOTAL MES"
-    M: "J+K+L, solo referencia Excel"
-    Q: "Presupuesto Nómina/Gastos TOTAL MES"
-    R: "Presupuesto IMSS/SUA TOTAL MES"
-    S: "Extraordinarios TOTAL MES"
-    T: "Provisiones de la Planta TOTAL MES"
-    U: "Q+R+S+T"
-    Z: "HG $/KG TOTAL MES"
-    AD: "C&D TOTAL MES"
-
-  weighted_rule:
-    description: >
-      Las métricas $/kg mensuales deben usar la misma ponderación por
-      Venta KG de writeDetailedTotal/weightedRows del Excel.
-    formula: >
-      SUM(valor_diario * venta_kg_diaria) /
-      SUM(venta_kg_diaria)
-    null_semantics:
-      - "Solo incluir días con valor y Venta KG numéricos."
-      - "No convertir null/vacío a 0."
-      - "0 explícito sí es numérico."
-
-new_monthly_financial_contract:
-  venta:
-    arr_field: "VENTA"
-    source: "B TOTAL MES / 1000"
-    note: >
-      Mantener la misma venta proyectada del IGF Diario/Pronóstico que
-      ya alimenta el mini-resumen.
-
-  margen:
-    arr_field: "MARGEN"
-    mini_field: "margen"
-    source: "H TOTAL MES"
-    formula: >
-      SUM(MargenBrutoDia * VentaKgDia) /
-      SUM(VentaKgDia)
-    requirements:
-      - "Debe reflejar overrides C/F/G de 065-R1."
-      - "No promedio simple."
-
-  descuento:
-    arr_field: "DESCUENTO"
-    mini_field: "comDesc"
-    pronostico_field: "proy_desc_kg"
-    source: "AD TOTAL MES"
-    formula: >
-      SUM(C&D_diario_efectivo * VentaKgDia) /
-      SUM(VentaKgDia)
-    requirements:
-      - "Preservar signo original."
-      - "No usar abs()."
-      - "No invertir el signo nuevamente."
-      - "Pronóstico, mini y ARR deben devolver el mismo valor."
-      - "El lookback/PROM sigue construyendo los días futuros."
-      - >
-        La diferencia es que el resumen mensual final se calcula una sola
-        vez a granularidad diaria, exactamente como AD TOTAL MES.
-      - "Eliminar redondeos intermedios que produzcan -4.28 vs -4.32."
-
-  operativos:
-    arr_field: "OPERATIVOS"
-    mini_field: "operativos"
-    source: "importe mensual efectivo de Operativos"
-    formula: >
-      Presupuesto Nómina/Gastos +
-      Presupuesto IMSS/SUA +
-      Extraordinarios +
-      Provisiones de la Planta
-    equivalent: "U3 / monto mensual efectivo del grupo"
-    requirements:
-      - "Usar overrides/desglose 064 y rebalanceo 064-R1."
-      - "No tomar el valor legacy del compromiso para octubre+."
-
-  corporativos:
-    arr_field: "CORPORATIVOS"
-    mini_field: "corporativos"
-    source: "Gasto Corporativo + Inversiones"
-    formula: >
-      gasto_corporativo_mensual + inversiones_mensual
-    excluded:
-      - "Impuestos Federales"
-    requirements:
-      - "Impuestos Federales NO forma parte de CORPORATIVOS desde octubre."
-      - "No volver a sumarlo indirectamente en CORPORATIVOS."
-      - >
-        Si no se puede separar Corporativos de Impuestos con evidencia
-        suficiente, marcar fuente incompleta; no inventar distribución.
-
-  gasto:
-    arr_field: "GASTO"
-    mini_field: "gasto"
-    formula: "OPERATIVOS + CORPORATIVOS"
-    requirements:
-      - "Impuestos Federales queda fuera de GASTO."
-      - "No doble-contabilizar Impuestos."
-
-  impuestos:
-    arr_field: "IMPUESTOS"
-    mini_field: "impuestos"
-    source: "Impuestos Federales mensual / Venta KG proyectada TOTAL MES"
-    formula: >
-      impuestos_federales_mensual / venta_kg_total_mes
-    equivalent: "L TOTAL MES"
-    requirements:
-      - "Si venta kg <= 0, null."
-      - "Preservar precisión del cálculo."
-      - "No usar el impuesto legacy del compromiso para octubre+."
-
-  hg_dollar:
-    arr_field: "HG$"
-    source: "F TOTAL MES + G TOTAL MES"
-    formula: "costo_kg_total_mes + flete_kg_total_mes"
-    requirements:
-      - "No reconstruir HG$ como abs(HGkg/HGpct) desde octubre+."
-      - "Usar directamente F+G."
-
-  hg_kg:
-    source: "Z TOTAL MES"
-    mini_field: "hgKg"
-    requirements:
-      - "Conservar signo de Z."
-      - "IGF Diario acumulado puede seguir mostrando Z como HG - $/Kg."
-
-  hg_pct:
-    arr_field: "HG"
-    internal_unit: "ratio decimal"
-    formula: >
-      (Z_TOTAL_MES / (F_TOTAL_MES + G_TOTAL_MES)) * -1
-    display_contract: >
-      ARR actualmente presenta HG en puntos porcentuales, por lo que
-      el frontend sigue mostrando hg_pct * 100.
-    requirements:
-      - "Si F+G es 0 o falta un componente, hg_pct = null."
-      - "No usar el hg_pct legacy para octubre+."
-      - "HG$ debe ser exactamente F+G."
-
-downstream_calculation_contract:
-  rule: >
-    No rediseñar las fórmulas actuales de Rentabilidad,
-    Rentabilidad Final - Importe, Utilidad, Resultado u otras métricas
-    derivadas del ARR. Solo sustituir las fuentes base indicadas por 066.
-  requirements:
-    - "Mantener las fórmulas existentes."
-    - "Permitir que se recalculen naturalmente con los nuevos inputs."
-    - "No agregar ni quitar componentes de la fórmula final salvo el cambio explícito de fuentes."
-    - "No restar Impuestos dos veces."
-    - "No volver a incluir Impuestos dentro de Corporativos."
-
-igf_diario_acumulado_contract:
-  from_2026_10:
-    venta: "B TOTAL MES / 1000"
-    margen: "H TOTAL MES"
-    comDesc: "AD TOTAL MES"
-    operativos: "importe mensual U"
-    corporativos: "Gasto Corporativo + Inversiones"
-    impuestos: "Impuestos Federales mensual / B TOTAL MES"
-    hgKg: "Z TOTAL MES"
-    hgDollar: "F TOTAL MES + G TOTAL MES"
-    hgPct: "(Z/(F+G))*-1"
-
-  recalculation:
-    - "INGRESO conserva la fórmula vigente."
-    - "GASTO = OPERATIVOS + CORPORATIVOS."
-    - "Util. Operación conserva la fórmula vigente."
-    - "Resultado Final conserva la fórmula vigente."
-    - "No doble contabilizar Impuestos."
-
-  zona:
-    - "Venta suma plantas."
-    - "Margen ponderado por Venta KG."
-    - "Com. y Desc. ponderado por Venta KG."
-    - "Impuestos ponderado por Venta KG."
-    - "HG - $/Kg ponderado según contrato existente."
-    - "Importes suman plantas."
-    - "No inventar datos faltantes."
-
-arr_contract:
+venta_contract:
   october_plus:
-    rule: >
-      frontend-dashboard/app/arr/ArrClient.tsx debe usar la fuente
-      IGF Diario mensual para las métricas de 066, no los campos
-      legacy de forecastRow.
-
-    fields:
-      ventaTon: "mini/IGF Diario"
-      margenKg: "H TOTAL MES"
-      comDescKg: "AD TOTAL MES"
-      operativos: "U mensual"
-      corporativos: "J+K mensual"
-      gastoImporte: "Operativos + Corporativos"
-      impuestoKg: "L mensual / B TOTAL MES"
-      hgKg: "Z TOTAL MES"
-      hgPct: "(Z/(F+G))*-1"
-      hgDollar: "F+G"
-      rentabilidadImporte: "resultado derivado con fórmula actual"
-
-    sign:
-      discount: >
-        Desde octubre usar el valor firmado de AD TOTAL MES directamente.
-        No aplicar -Math.abs() al nuevo contrato.
-      legacy: >
-        Antes de octubre preservar exactamente el comportamiento de signo
-        existente.
-
-  comparison:
-    - "Septiembre puede usar legacy."
-    - "Octubre usa 066."
-    - "La fila COMPARACIÓN sigue siendo Octubre - Septiembre."
-    - "No normalizar septiembre con las reglas nuevas."
-
-pronostico_contract:
-  from_2026_10:
-    field: "proy_desc_kg"
-    source: "mismo cálculo mensual equivalente a AD TOTAL MES"
+    source: "financials.ventaTon"
+    semantic_source: "B TOTAL MES / 1000"
     requirements:
-      - "Desc. PROY debe coincidir con IGF Diario acumulado Com. y Desc."
-      - "Desc. PROY debe coincidir con ARR DESCUENTO."
-      - "No quitar la selección de días del PROM."
-      - "No quitar lookback."
-      - "No quitar proyección por día de semana."
-      - >
-        Lookback/PROM siguen determinando el C&D de los días futuros;
-        la salida mensual se pondera después a nivel diario con la Venta KG
-        efectiva/proyectada.
-      - "No usar un segundo algoritmo de resumen mensual."
-      - "Guardar y actualizar mini-resumen debe conservar esta paridad."
+      - "No usar row.ventaTon como fuente financiera cuando exista contrato 066."
+      - "No usar forecastRow.venta_ton para sustituir B TOTAL MES."
+      - "No fallback silencioso a venta legacy en octubre+."
+      - "Si financials.ventaTon falta, devolver null/incompleto."
 
   legacy:
-    - "Antes de octubre conservar computePronosticoProyByPlant legacy."
+    - "Antes de octubre conservar venta actual."
 
-shared_source_design:
-  requirement: >
-    Centralizar el cálculo semántico TOTAL MES en un helper reutilizable.
-    No copiar fórmulas distintas entre Pronóstico, acumulado y ARR.
+expense_contract:
+  operativos:
+    formula: >
+      presupuesto_nomina_gastos +
+      presupuesto_imss_sua +
+      extraordinarios +
+      provisiones_planta
+    equivalent: "U mensual"
 
-  recommended_module: "lib/igf-diario-monthly-financials.js"
+  corporativos:
+    formula: >
+      gasto_corporativo +
+      inversiones
+    equivalent: "J + K"
+    excluded:
+      - "impuestos_federales"
 
-  recommended_output:
-    - "ventaKg"
-    - "ventaTon"
-    - "precioKg opcional para evidencia"
-    - "costoKg"
-    - "fleteKg"
-    - "margenKg"
-    - "comDescKg"
-    - "hgKg"
-    - "hgDollar"
-    - "hgPct"
-    - "operativosImporte"
-    - "gastoCorporativoImporte"
-    - "inversionesImporte"
-    - "impuestosFederalesImporte"
-    - "corporativosImporte"
-    - "impuestoKg"
-    - "gastoImporte"
+  impuestos:
+    amount: "impuestos_federales"
+    per_kg: "impuestos_federales / venta_kg_TOTAL_MES"
+    equivalent: "L / B"
+
+  gasto_visible:
+    formula: "operativos + corporativos"
+    requirements:
+      - "No sumar impuestos dentro de GASTO."
+      - "No cambiar lo solicitado en 066."
+
+result_contract:
+  october_plus:
+    ingreso_importe: >
+      (margenKg + comDescKg - hgKg) * ventaKg
+
+    utilidad_operacion: >
+      ingresoImporte - operativosImporte
+
+    resultado_final_importe: >
+      utilidadOperacion
+      - corporativosImporte
+      - impuestosFederalesImporte
+
+    equivalent_expanded: >
+      ingresoImporte
+      - operativosImporte
+      - corporativosImporte
+      - impuestosFederalesImporte
+
+    excel_equivalence: >
+      Debe ser equivalente semánticamente al AG TOTAL MES del IGF Diario,
+      usando los mismos componentes y la misma Venta TOTAL MES.
 
   requirements:
-    - "Consumir las mismas series diarias que IGF Diario."
-    - "Consumir los overrides de 065-R1."
-    - "Consumir el desglose mensual efectivo 064."
-    - "No generar Excel para obtener los totales."
-    - "No leer celdas físicas del XLSX."
-    - "No hardcodear filas."
+    - "Impuestos Federales se resta exactamente una vez."
+    - "No volver a meter Impuestos dentro de Corporativos."
+    - "No volver a meter Impuestos dentro de Gasto visible."
+    - "No restar impuesto_kg además del importe mensual."
+    - "No usar valores de pantalla redondeados para calcular resultado."
+    - "Usar valores numéricos de precisión completa."
 
-discount_daily_parity:
-  closed_days:
-    rule: >
-      Para fecha < corte usar el C&D real actual de Provincia Comisiones.
+excel_formula_evidence:
+  daily:
+    - "M = J + K + L"
+    - "O = H - M"
+    - "W = O - U"
+    - "AB = W - Z"
+    - "AF = AB + AD"
+    - "AG = AF * B"
+  month:
+    - "AG TOTAL MES suma el resultado monetario de semanas/días."
+    - "AF TOTAL MES = AG TOTAL MES / B TOTAL MES."
+  implication: >
+    Si ARR presenta Corporativos como J+K e Impuestos en columna separada,
+    para conservar equivalencia con AG debe restar L una vez en Resultado Final.
 
-  projected_days:
-    rule: >
-      Para fecha >= corte usar exactamente el C&D proyectado que hoy
-      utiliza Provincia Comisiones/IGF Diario para esa fecha, derivado
-      del PROM/lookback seleccionado.
+frontend_contract:
+  file: "frontend-dashboard/lib/igf-october-mini.js"
 
-  month_summary:
-    rule: >
-      Después de materializar cada día del mes, calcular una sola
-      ponderación mensual AD-equivalente.
-    forbidden:
-      - "Redondear primero por DOW y luego volver a ponderar si cambia el resultado."
-      - "Construir proy_desc_kg con un resumen diferente al usado por AD TOTAL MES."
+  applyFinancialsToMiniRow:
+    venta:
+      before: "row.ventaTon"
+      after: "financials.ventaTon para contrato octubre+"
 
-expense_source_contract:
-  detailed_group:
-    corporate:
-      components:
-        - "gasto_corporativo"
-        - "inversiones"
-      taxes:
-        - "impuestos_federales"
+    impuestos:
+      denominator: "financials.ventaKg / financials.ventaTon"
+      requirement: >
+        El $/kg de Impuestos debe usar la misma Venta TOTAL MES,
+        no la venta legacy del mini.
 
-    operative:
-      components:
-        - "presupuesto_nomina_gastos"
-        - "presupuesto_imss_sua"
-        - "extraordinarios"
-        - "provisiones_planta"
+    ingreso:
+      requirement: "Calcular con venta TOTAL MES."
 
-  fallback:
-    rule: >
-      No usar el agregado Corporativos 062 como si fuera J+K cuando
-      Impuestos Federales no puede separarse.
-    valid_cases:
-      - "J y K explícitos disponibles."
-      - >
-        O bien agregado total corporativo e Impuestos Federales conocidos
-        de forma independiente, de modo que J+K pueda derivarse sin inventar.
-    invalid:
-      - "No separar impuestos por estimación."
-      - "No asumir Impuestos=0."
+    resultado:
+      before: "utilOperImporte - corporativos"
+      after: "utilOperImporte - corporativos - impuestosFederalesImporte"
+
+  output:
+    - "ventaTon"
+    - "margen"
+    - "comDesc"
+    - "hgKg"
+    - "hgPct"
+    - "hgDollar"
+    - "impuestos"
+    - "ingreso"
+    - "operativos"
+    - "corporativos"
+    - "gasto"
+    - "utilOperImporte"
+    - "resultadoFinalImporte"
+
+arr_contract:
+  file: "frontend-dashboard/app/arr/ArrClient.tsx"
+
+  requirements:
+    - >
+      Desde octubre computeRowValues continúa leyendo la mini financiera,
+      ahora corregida por 066-R1.
+    - "ARR Venta debe ser la misma venta TOTAL MES."
+    - "ARR Rentabilidad debe usar resultadoFinalImporte corregido."
+    - >
+      No rediseñar fórmulas de simulación ARR/ARR Plan que explícitamente
+      modifican venta/clientes; solo corregir la base financiera sin simulación.
+    - "Septiembre conserva lógica legacy."
+
+igf_accumulated_contract:
+  requirements:
+    - "Venta de fila planta debe mostrar financials.ventaTon."
+    - "Resultado Final - Importe debe usar resultadoFinalImporte corregido."
+    - "Zona Provincia suma resultados corregidos por planta."
+    - "Zona Venta suma las ventas TOTAL MES por planta."
+    - "No modificar Margen/Descuento/HG/Operativos/Corporativos ya corregidos por 066."
+
+unchanged_066_contract:
+  - "Margen = H TOTAL MES."
+  - "Com. y Desc. = AD TOTAL MES."
+  - "Pronóstico Desc. PROY = AD TOTAL MES."
+  - "Operativos = Q+R+S+T."
+  - "Corporativos = J+K."
+  - "Impuestos = L/B."
+  - "HG$ = F+G."
+  - "HG pct = (Z/(F+G))*-1."
+  - "HG $/kg = Z."
+  - "PROM/lookback intactos."
+  - "065-R1 intacto."
+  - "064-R1 intacto."
+  - "Excel intacto."
 
 missing_data_contract:
-  october_plus:
-    - "Si una métrica 066 no puede derivarse, retornar null y evidencia de componente faltante."
-    - "No caer silenciosamente al valor legacy para octubre+."
-    - "No mezclar fuente legacy y TOTAL MES dentro de la misma métrica."
-  ui:
-    - "Mantener la aplicación estable."
-    - "Mostrar/propagar faltante cuando aplique en vez de inventar valor."
+  - "Si venta TOTAL MES es null, resultado financiero queda null."
+  - "Si operativos falta, resultado queda null."
+  - "Si corporativos J/K falta, resultado queda null."
+  - "Si impuestos federales L falta, resultado queda null."
+  - "No asumir impuesto = 0."
+  - "0 explícito sí es válido."
+  - "No fallback legacy silencioso desde octubre."
 
-plant_identity_contract:
-  - "Preservar equivalencias 063-R1."
-  - "Puebla ↔ GT Puebla."
-  - "Tehuacan ↔ Tehuacán."
-  - "Queretaro ↔ Querétaro ↔ GTM Queretaro."
-  - "San Luis ↔ GTM San Luis."
-  - "Acapulco."
-  - "Morelos."
-  - "No hardcodear lógica exclusiva de una planta."
+precision_contract:
+  - "No calcular usando 6.39, -4.27, -0.41 visuales si internamente existen más decimales."
+  - "Usar valores completos provenientes del helper 066."
+  - "Redondear solo en presentación/final según contrato existente."
+  - "La comparación contra AG debe tolerar únicamente el redondeo monetario final esperado."
 
-api_contract:
-  igf_diario_acumulado:
-    path: "GET /api/dashboard/igf-diario-acumulado"
-    extend_rows_with:
-      - "com_desc"
-      - "costo_kg_total"
-      - "flete_kg_total"
-      - "hg_kg_total"
-      - "hg_dollar"
-      - "hg_pct"
-      - "operativos_importe"
-      - "gasto_corporativo_importe"
-      - "inversiones_importe"
-      - "impuestos_federales_importe"
-      - "corporativos_importe"
-      - "impuesto_kg"
-      - "venta_kg_total"
-    note: >
-      Nombres finales pueden variar si se conserva compatibilidad,
-      pero el contrato semántico debe existir.
+production_acceptance_puebla:
+  period: "2026-10"
+  cut_example: "2026-10-06"
 
-  mini:
-    requirements:
-      - >
-        IgfForecastMiniRow debe transportar desde octubre los valores
-        suficientes para que ARR no necesite volver a usar forecastRow
-        para Margen/Descuento/HG/Impuestos.
-      - "Agregar hgPct y hgDollar si es necesario."
-      - "Preservar compatibilidad de clientes existentes."
+  expected:
+    - "Venta dashboard debe pasar de la fuente 1166.76 legacy a B TOTAL MES / 1000."
+    - "En la evidencia actual B TOTAL MES es aproximadamente 1164.953 ton."
+    - "Corporativos permanece aproximadamente 1,098,074 = J+K."
+    - "Impuestos permanece aproximadamente 0.36 $/kg = L/B."
+    - "Gasto visible permanece Operativos + Corporativos."
+    - "Resultado Final ya no debe quedar positivo en 225,470 con esos datos."
+    - "Resultado Final debe coincidir con AG TOTAL MES del Excel."
+    - "En la captura actual AG TOTAL MES es aproximadamente -201,192."
+    - "ARR Rentabilidad debe coincidir con ese mismo Resultado Final."
+  note: "Ningún importe de este ejemplo puede hardcodearse."
 
-  pronostico:
-    path: "GET /api/dashboard/pronostico-detalle"
-    requirements:
-      - "proy_desc_kg usa cálculo AD-equivalente desde octubre."
-      - "proy_venta_ton conserva su lógica salvo lo necesario para paridad."
-      - "Respuesta mantiene forma compatible."
+production_acceptance_all_plants:
+  for_each:
+    - "GT Puebla"
+    - "Tehuacan"
+    - "Acapulco"
+    - "GTM Queretaro"
+    - "GTM San Luis"
+    - "Morelos"
+
+  validate:
+    - "Venta = B TOTAL MES / 1000."
+    - "Resultado Final mini = AG TOTAL MES."
+    - "ARR Rentabilidad base = AG TOTAL MES."
+    - "Corporativos = J+K."
+    - "Impuestos no incluidos en Corporativos."
+    - "Impuestos sí restados una vez del Resultado Final."
 
 performance_contract:
-  - "No generar una llamada HTTP adicional por planta desde ARR."
-  - "No introducir N+1 para gastos/desglose."
-  - "No introducir N+1 para C&D."
-  - "No introducir N+1 para overrides 065-R1."
-  - "Cargar datos mensuales compartidos en lote/cache cuando sea posible."
-  - "IGF Diario acumulado debe seguir usando una sola petición frontend."
-  - "Pronóstico de una planta puede usar su consulta puntual existente."
+  - "No nueva petición HTTP por planta."
+  - "No nueva query DB por planta."
+  - "No N+1."
+  - "Usar financials ya incluido en 066."
+  - "No leer Excel para calcular Resultado."
+  - "No generar Excel internamente para obtener B/AG."
 
-forecast_contract:
-  - "No modificar lógica de venta PROY salvo necesidad técnica para compartir serie diaria."
-  - "Días seleccionados del PROM siguen funcionando."
-  - "Guardar selección sigue persistiendo."
-  - "Recalcular venta forecast ARR sigue funcionando."
-  - "Solo cambia el resumen mensual de descuento desde octubre."
+recommended_files:
+  - "frontend-dashboard/lib/igf-october-mini.js"
+  - "frontend-dashboard/app/arr/ArrClient.tsx solo si realmente es necesario"
+  - "test/arr-igf-diario-result-parity-066-r1.test.js"
+  - "test/arr-igf-diario-financial-sources-066.test.js"
+  - "docs/dev-loop/CURRENT_TASK.md"
+  - "docs/dev-loop/reports/FIX-ARR-IGF-DIARIO-RESULT-PARITY-066-R1.md"
 
-065_r1_contract:
-  - "Precio manual C sigue funcionando."
-  - "Costo manual F sigue funcionando."
-  - "Flete manual G sigue funcionando."
-  - "Rangos independientes siguen funcionando."
-  - "H sigue C-F-G."
-  - "Los TOTAL MES F/G/H deben reflejar estos overrides."
-  - "Estos cambios deben fluir automáticamente a ARR 066."
-
-064_contract:
-  - "Desglose mensual permanece."
-  - "Distribución diaria permanece."
-  - "Operativos 4 componentes permanecen."
-  - "Corporativos 3 componentes permanecen en el Excel."
-  - >
-    Solo el concepto financiero ARR CORPORATIVOS excluye Impuestos Federales.
-  - "No alterar J/K/L/M del Excel."
-  - "No alterar Q/R/S/T/U del Excel."
-
-excel_contract:
-  rule: >
-    No cambiar las fórmulas/layout del IGF Diario salvo que se necesite
-    una corrección estrictamente para paridad. El Excel sigue siendo la
-    referencia semántica.
-  october:
-    - "H TOTAL MES = Margen ARR."
-    - "AD TOTAL MES = Descuento ARR/Pronóstico."
-    - "U3 = Operativos importe."
-    - "J3+K3 = Corporativos ARR."
-    - "L3/B TOTAL MES = Impuestos ARR."
-    - "F TOTAL MES + G TOTAL MES = HG$ ARR."
-    - "(Z TOTAL MES/(F TOTAL MES+G TOTAL MES))*-1 = hg_pct ARR."
-  forbidden:
-    - "Hardcodear fila 48."
-    - "Cambiar TOTAL MES a una posición fija."
-
-acceptance_example_san_luis:
-  period: "2026-10"
-  expected_parity:
-    - "Si AD TOTAL MES = -4.32 entonces Pronóstico Desc. PROY = -4.32."
-    - "IGF Diario acumulado Com. y Desc. = -4.32."
-    - "ARR DESCUENTO = -4.32."
-  hg:
-    formula: "(Z_TOTAL/(F_TOTAL+G_TOTAL))*-1"
-    hg_dollar: "F_TOTAL+G_TOTAL"
-  note: "No hardcodear -4.32 ni valores de San Luis."
+forbidden_product_changes:
+  - "Modificar lib/igf-diario-expense-excel.js salvo prueba que demuestre defecto del Excel."
+  - "Cambiar layout del Excel."
+  - "Cambiar J/K/L/M."
+  - "Cambiar Q/R/S/T/U."
+  - "Cambiar AD."
+  - "Cambiar Z."
+  - "Cambiar Pronóstico."
+  - "Cambiar Margen 065-R1."
+  - "Cambiar distribución 064-R1."
+  - "Reclasificar Impuestos dentro de Corporativos."
+  - "Sumar Impuestos a Gasto visible."
+  - "Hardcodear Puebla o -201192."
+  - "Hardcodear fila 48."
+  - "Parsing XLSX."
 
 mandatory_tests:
-  - "066 gate: septiembre usa legacy."
-  - "066 gate: octubre usa TOTAL MES."
-  - "066 gate: noviembre usa TOTAL MES."
-  - "Margen ARR = H TOTAL MES."
-  - "Margen acumulado = H TOTAL MES."
-  - "Descuento ARR = AD TOTAL MES."
-  - "Com. y Desc. acumulado = AD TOTAL MES."
-  - "Pronóstico proy_desc_kg = AD TOTAL MES."
-  - "Pronóstico/mini/ARR descuento iguales para mismo corte."
-  - "Descuento conserva signo negativo."
-  - "Descuento positivo eventual conserva signo positivo."
-  - "No -Math.abs para octubre+."
-  - "Lookback/PROM sigue afectando días futuros."
-  - "Cambiar selección PROM recalcula el mismo AD-equivalente."
-  - "No redondeo DOW produce divergencia mensual."
-  - "Operativos ARR = suma de cuatro conceptos / importe mensual U."
-  - "Corporativos ARR = Gasto Corporativo + Inversiones."
-  - "Impuestos Federales excluido de Corporativos."
-  - "GASTO = Operativos + Corporativos."
-  - "Impuestos ARR = impuestos federales / Venta KG TOTAL MES."
-  - "Impuestos no se suman otra vez a Corporativos."
-  - "HG$ = F TOTAL + G TOTAL."
-  - "HG pct = (Z/(F+G))*-1."
-  - "ARR display HG = hg_pct*100."
-  - "Z conserva signo."
-  - "F+G cero => hg_pct null."
-  - "Overrides Precio 065-R1 cambian H TOTAL y ARR Margen."
-  - "Overrides Costo 065-R1 cambian F/H/HG$ y ARR."
-  - "Overrides Flete 065-R1 cambian G/H/HG$ y ARR."
-  - "HG de 066 no usa hg_pct legacy."
-  - "Rentabilidad usa fórmulas actuales con nuevos inputs."
-  - "Rentabilidad Final - Importe conserva fórmula actual."
-  - "No doble cuenta de Impuestos."
-  - "Comparación Sep/Oct calcula Octubre - Septiembre."
-  - "Septiembre no cambia visualmente."
-  - "Zona Provincia pondera Margen/Desc/Impuestos."
-  - "Zona Provincia suma importes."
-  - "Tehuacan/Tehuacán paridad."
-  - "GTM Queretaro/Querétaro paridad."
-  - "San Luis/GTM San Luis paridad."
-  - "No hardcode TOTAL MES row."
-  - "No parsing del XLSX."
-  - "No N+1 nuevo."
-  - "Pronóstico de venta sigue funcionando."
+  - "Octubre usa financials.ventaTon."
+  - "Septiembre conserva venta legacy."
+  - "Impuestos $/kg usa la venta TOTAL MES."
+  - "Corporativos = J+K."
+  - "Gasto visible = Operativos + Corporativos."
+  - "Resultado Final = Ingreso - Operativos - Corporativos - Impuestos Federales."
+  - "Impuestos se resta una sola vez."
+  - "No impuesto doble."
+  - "Impuesto 0 explícito funciona."
+  - "Impuesto null produce resultado null."
+  - "Venta null produce resultado null."
+  - "Fixture con precisión completa coincide con AG equivalente."
+  - "No usar valores visuales redondeados."
+  - "Zona suma resultados corregidos."
+  - "ARR obtiene resultadoFinalImporte de mini corregida."
+  - "ARR sin simulación coincide con mini."
+  - "Comparación Sep/Oct sigue correcta."
+  - "066 PASS."
   - "065-R1 PASS."
   - "065 PASS."
   - "064-R1 PASS."
@@ -552,37 +354,18 @@ mandatory_tests:
   - "061 PASS."
   - "059-R1 PASS."
   - "059 PASS."
-  - "Excel 036-044 y regresiones relevantes PASS."
+  - "Excel 036-044 y relevantes PASS."
   - "frontend npm run build PASS."
   - "node --check server.js PASS."
   - "git diff --check limpio."
 
-recommended_files:
-  - "lib/igf-diario-monthly-financials.js nuevo"
-  - "lib/igf-diario-grafica.js"
-  - "lib/dashboard-arr-forecast.js"
-  - "lib/igf-diario-expense-excel.js solo si helper compartido lo requiere"
-  - "lib/igf-diario-gastos-desglose.js"
-  - "server.js"
-  - "frontend-dashboard/lib/api.ts"
-  - "frontend-dashboard/components/IgfForecastClient.tsx"
-  - "frontend-dashboard/app/arr/ArrClient.tsx"
-  - "test/arr-igf-diario-financial-sources-066.test.js"
-  - "tests Pronostico afectados"
-  - "tests acumulado afectados"
-  - "tests ARR afectados"
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-ARR-IGF-DIARIO-FINANCIAL-SOURCES-066.md"
-
 out_of_scope:
-  - "Cambiar fórmula de Venta."
-  - "Eliminar lookback."
-  - "Eliminar PROM."
-  - "Rediseñar Rentabilidad."
-  - "Modificar captura de Precio/Costo/Flete 065-R1."
-  - "Modificar distribución de gastos 064-R1."
-  - "Modificar meses anteriores a octubre 2026."
-  - "Modificar CONTROL DE COMPRAS."
+  - "Cambiar Pronóstico."
+  - "Cambiar forecast de venta."
+  - "Cambiar descuento."
+  - "Cambiar margen."
+  - "Cambiar HG."
+  - "Cambiar gastos manuales."
   - "Writes productivos."
   - "Merge a main."
   - "Deploy."
@@ -592,19 +375,13 @@ merge_contract:
   merge_authorized: false
   deploy_authorized: false
 
-forbidden_actions:
-  - "git push origin main"
-  - "merge a main"
-  - "deploy"
-  - "hardcodear AD48/H48/F48/G48/Z48"
-  - "hardcodear -4.32"
-  - "leer XLSX generado para obtener totales"
-  - "usar fallback legacy silencioso en octubre+"
-  - "volver a incluir Impuestos Federales dentro de Corporativos"
-  - "doble contabilizar Impuestos"
-  - "usar abs para el descuento nuevo"
-  - "abrir automáticamente siguiente tarea"
+stop_conditions:
+  - "Si origin/main != 1b7584683947d057ef49652d76399aa20a3bbafd, STOP."
+  - "Si para lograr paridad es necesario modificar fórmulas del Excel, STOP y reportar evidencia."
+  - "Si el helper 066 no contiene Venta TOTAL MES suficiente, STOP antes de inventar otra fuente."
+  - "Si se requiere fallback legacy para octubre, STOP."
+  - "Si una corrección rompe septiembre, STOP."
 
 max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/IMPL-ARR-IGF-DIARIO-FINANCIAL-SOURCES-066.md"
+result_report_path: "docs/dev-loop/reports/FIX-ARR-IGF-DIARIO-RESULT-PARITY-066-R1.md"
