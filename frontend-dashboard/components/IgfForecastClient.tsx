@@ -62,6 +62,7 @@ import {
   INVERSION_CDJZ_STORAGE_KEY,
 } from "@/lib/igf-kpi-ui";
 import { mergeVentaSheetHighlights, recomputeVentaSheetFromDays } from "@/lib/pronostico-local-recalc";
+import { applyDraftField, formatManualDisplay } from "@/lib/igf-margen-rangos";
 import {
   canOpenPronosticoMiniRow,
   decideOpenPronosticoFromQuery,
@@ -369,19 +370,31 @@ function margenBrutoLocal(precio: number | null, costo: number | null, flete: nu
   return precio - costo - flete;
 }
 
+function emptyMargenRanges() {
+  return {
+    precio: { desde: "", hasta: "", valor: "" },
+    costo_kg: { desde: "", hasta: "", valor: "" },
+    flete_kg: { desde: "", hasta: "", valor: "" },
+  };
+}
+
 function margenDraft(day: IgfDiarioMargenDia) {
   return {
     fecha: day.fecha,
     precio: day.precio,
     costo: day.costo_kg,
     flete: day.flete_kg,
-    costoText: day.costo_kg == null ? "" : String(day.costo_kg),
-    fleteText: day.flete_kg == null ? "" : String(day.flete_kg),
+    precioText: formatManualDisplay(day.precio),
+    costoText: formatManualDisplay(day.costo_kg),
+    fleteText: formatManualDisplay(day.flete_kg),
+    precioRestore: false,
     costoRestore: false,
     fleteRestore: false,
     editable: day.editable,
+    precioAutomatico: day.precio_automatico,
     costoAutomatico: day.costo_automatico,
     fleteAutomatico: day.flete_automatico,
+    originalPrecio: day.precio,
     originalCosto: day.costo_kg,
     originalFlete: day.flete_kg,
   };
@@ -431,6 +444,7 @@ export function IgfForecastContent() {
     label: string;
     corte: string;
     days: ReturnType<typeof margenDraft>[];
+    ranges: ReturnType<typeof emptyMargenRanges>;
     error: string | null;
   } | null>(null);
   const [distribucionModal, setDistribucionModal] = useState<{
@@ -738,7 +752,7 @@ export function IgfForecastContent() {
     if (!token || !igfForecast) return;
     const plant = String(row.plant_code || row.empresa || "").trim();
     const label = String(row.empresa || plant);
-    setMargenModal({ plant, label, corte: uploadDay.trim(), days: [], error: null });
+    setMargenModal({ plant, label, corte: uploadDay.trim(), days: [], ranges: emptyMargenRanges(), error: null });
     try {
       const detail = await fetchIgfDiarioMargenDiario({
         token,
@@ -753,6 +767,7 @@ export function IgfForecastContent() {
         label,
         corte: detail.corte,
         days: (detail.days || []).map(margenDraft),
+        ranges: emptyMargenRanges(),
         error: null,
       });
     } catch (error: unknown) {
@@ -764,32 +779,29 @@ export function IgfForecastContent() {
 
   const saveMargenDiario = async () => {
     if (!token || !igfForecast || !margenModal || gastoSaving) return;
-    const changes: Array<{ fecha: string; costo_kg?: number | null; flete_kg?: number | null }> = [];
+    const changes: Array<{ fecha: string; precio?: number | null; costo_kg?: number | null; flete_kg?: number | null }> = [];
     for (const day of margenModal.days) {
       if (!day.editable) continue;
-      const change: { fecha: string; costo_kg?: number | null; flete_kg?: number | null } = { fecha: day.fecha };
+      const change: { fecha: string; precio?: number | null; costo_kg?: number | null; flete_kg?: number | null } = { fecha: day.fecha };
       let touched = false;
-      if (day.costoRestore) {
-        change.costo_kg = null;
-        touched = true;
-      } else if (day.costo !== day.originalCosto) {
-        if (day.costo == null || !Number.isFinite(day.costo)) {
-          setMargenModal((prev) => (prev ? { ...prev, error: "Costo KG debe ser numérico. 0 es válido." } : prev));
-          return;
+      const fields = [
+        ["precio", "precioRestore", "originalPrecio", "Precio"] as const,
+        ["costo", "costoRestore", "originalCosto", "Costo KG"] as const,
+        ["flete", "fleteRestore", "originalFlete", "Flete KG"] as const,
+      ];
+      for (const [valueKey, restoreKey, originalKey, label] of fields) {
+        const apiKey = valueKey === "precio" ? "precio" : valueKey === "costo" ? "costo_kg" : "flete_kg";
+        if (day[restoreKey]) {
+          change[apiKey] = null;
+          touched = true;
+        } else if (day[valueKey] !== day[originalKey]) {
+          if (day[valueKey] == null || !Number.isFinite(day[valueKey])) {
+            setMargenModal((prev) => (prev ? { ...prev, error: `${label} debe ser numérico. 0 es válido.` } : prev));
+            return;
+          }
+          change[apiKey] = day[valueKey];
+          touched = true;
         }
-        change.costo_kg = day.costo;
-        touched = true;
-      }
-      if (day.fleteRestore) {
-        change.flete_kg = null;
-        touched = true;
-      } else if (day.flete !== day.originalFlete) {
-        if (day.flete == null || !Number.isFinite(day.flete)) {
-          setMargenModal((prev) => (prev ? { ...prev, error: "Flete KG debe ser numérico. 0 es válido." } : prev));
-          return;
-        }
-        change.flete_kg = day.flete;
-        touched = true;
       }
       if (touched) changes.push(change);
     }
@@ -826,6 +838,26 @@ export function IgfForecastContent() {
     } finally {
       setGastoSaving(false);
     }
+  };
+
+  const applyMargenRange = (field: "precio" | "costo_kg" | "flete_kg", restore: boolean) => {
+    if (!igfForecast) return;
+    setMargenModal((prev) => {
+      if (!prev) return prev;
+      const box = prev.ranges[field];
+      const result = applyDraftField(prev.days, {
+        field,
+        desde: box.desde,
+        hasta: box.hasta,
+        corte: prev.corte,
+        year: igfForecast.year,
+        month: igfForecast.month,
+        value: box.valor,
+        restore,
+      }) as { ok: boolean; error?: string; days: ReturnType<typeof margenDraft>[] };
+      if (!result.ok) return { ...prev, error: result.error || "Rango inválido" };
+      return { ...prev, days: result.days, error: null };
+    });
   };
 
   const openDistribucion = async (concepto: string, label: string) => {
@@ -2051,38 +2083,69 @@ export function IgfForecastContent() {
             })()}
             {margenModal ? (
               <div role="dialog" aria-label={`Margen diario — ${margenModal.label}`} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4">
-                <div className="max-h-[85vh] w-full max-w-5xl overflow-hidden rounded border border-slate-600 bg-slate-900 p-4 text-slate-100">
+                <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded border border-slate-600 bg-slate-900 p-4 text-slate-100">
                   <h3 className="mb-2 text-lg font-semibold">Margen diario — {margenModal.label}</h3>
                   {margenModal.error ? <p className="mb-2 text-sm text-amber-200">{margenModal.error}</p> : null}
-                  <div className="overflow-x-auto">
-                    <table className="border-collapse text-sm">
+                  <div className="mb-3 grid gap-2 md:grid-cols-3">
+                    {([
+                      ["precio", "PRECIO (C)"],
+                      ["costo_kg", "COSTO KG (F)"],
+                      ["flete_kg", "FLETE KG (G)"],
+                    ] as const).map(([field, label]) => {
+                      const box = margenModal.ranges[field];
+                      const enabled = margenModal.days.some((day) => day.editable);
+                      return (
+                        <fieldset key={field} disabled={!enabled} className="rounded border border-slate-700 p-2">
+                          <legend className="px-1 text-xs text-slate-300">{label}</legend>
+                          <label className="block text-xs">Desde
+                            <input type="date" aria-label={`${label} desde`} value={box.desde} className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-1" onChange={(event) => setMargenModal((prev) => prev ? { ...prev, ranges: { ...prev.ranges, [field]: { ...prev.ranges[field], desde: event.target.value } } } : prev)} />
+                          </label>
+                          <label className="mt-1 block text-xs">Hasta
+                            <input type="date" aria-label={`${label} hasta`} value={box.hasta} className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-1" onChange={(event) => setMargenModal((prev) => prev ? { ...prev, ranges: { ...prev.ranges, [field]: { ...prev.ranges[field], hasta: event.target.value } } } : prev)} />
+                          </label>
+                          <label className="mt-1 block text-xs">Valor
+                            <input inputMode="decimal" aria-label={`${label} valor`} value={box.valor} className="mt-1 w-full rounded border border-slate-600 bg-slate-950 px-1 text-right" onChange={(event) => setMargenModal((prev) => prev ? { ...prev, ranges: { ...prev.ranges, [field]: { ...prev.ranges[field], valor: event.target.value } } } : prev)} />
+                          </label>
+                          <div className="mt-2 flex flex-col gap-1">
+                            <button type="button" className="rounded bg-sky-800 px-2 py-1 text-xs" onClick={() => applyMargenRange(field, false)}>Aplicar al rango</button>
+                            <button type="button" className="rounded bg-slate-700 px-2 py-1 text-xs" onClick={() => applyMargenRange(field, true)}>Restaurar automático en rango</button>
+                          </div>
+                        </fieldset>
+                      );
+                    })}
+                  </div>
+                  <div className="overflow-y-auto">
+                    <table className="w-full border-collapse text-sm">
+                      <thead className="sticky top-0 bg-slate-900">
+                        <tr>
+                          {["FECHA", "PRECIO", "COSTO KG", "FLETE KG", "MARGEN BRUTO"].map((label) => (
+                            <th key={label} className="px-2 py-1 text-right first:text-left">{label}</th>
+                          ))}
+                        </tr>
+                      </thead>
                       <tbody>
-                        {([
-                          ["FECHA", (day: ReturnType<typeof margenDraft>) => day.fecha.slice(8, 10) + "/" + day.fecha.slice(5, 7)],
-                          ["COSTO KG", null],
-                          ["FLETE KG", null],
-                          ["MARGEN BRUTO", null],
-                        ] as const).map(([label]) => (
-                          <tr key={label}>
-                            <th className="sticky left-0 z-10 bg-slate-900 px-2 py-1 text-left">{label}</th>
-                            {margenModal.days.map((day) => {
-                              const costo = day.costoRestore ? day.costoAutomatico : day.costo;
-                              const flete = day.fleteRestore ? day.fleteAutomatico : day.flete;
-                              const margen = margenBrutoLocal(day.precio, costo, flete);
-                              const shown = label === "FECHA"
-                                ? `${day.fecha.slice(8, 10)}/${day.fecha.slice(5, 7)}`
-                                : label === "MARGEN BRUTO"
-                                  ? (margen == null ? "—" : margen.toFixed(2))
-                                  : "";
-                              return (
-                                <td key={`${label}-${day.fecha}`} className="min-w-24 border border-slate-800 px-2 py-1 text-right">
-                                  {label === "FECHA" || label === "MARGEN BRUTO" ? shown : day.editable ? (
-                                    <div className="flex flex-col items-end gap-1">
+                        {margenModal.days.map((day) => {
+                          const precio = day.precioRestore ? day.precioAutomatico : day.precio;
+                          const costo = day.costoRestore ? day.costoAutomatico : day.costo;
+                          const flete = day.fleteRestore ? day.fleteAutomatico : day.flete;
+                          const margen = margenBrutoLocal(precio, costo, flete);
+                          const cells = [
+                            { key: "precio", text: day.precioText, auto: day.precioAutomatico },
+                            { key: "costo", text: day.costoText, auto: day.costoAutomatico },
+                            { key: "flete", text: day.fleteText, auto: day.fleteAutomatico },
+                          ] as const;
+                          return (
+                            <tr key={day.fecha} className="border-t border-slate-800">
+                              <td className="px-2 py-1 text-left">{`${day.fecha.slice(8, 10)}/${day.fecha.slice(5, 7)}/${day.fecha.slice(0, 4)}`}</td>
+                              {cells.map((cell) => (
+                                <td key={cell.key} className="px-2 py-1 text-right">
+                                  {day.editable ? (
+                                    <span className="inline-flex items-center justify-end gap-1">
                                       <input
-                                        value={label === "COSTO KG" ? day.costoText : day.fleteText}
+                                        value={cell.text}
                                         inputMode="decimal"
-                                        aria-label={`${label} ${day.fecha}`}
-                                        className="w-20 rounded border border-slate-500 bg-slate-950 px-1 text-right"
+                                        aria-label={`${cell.key} ${day.fecha}`}
+                                        className="w-24 rounded border border-slate-500 bg-slate-950 px-1 text-right"
                                         onChange={(event) => {
                                           const text = event.target.value;
                                           const raw = text.trim().replace(/,/g, "");
@@ -2091,51 +2154,37 @@ export function IgfForecastContent() {
                                             ...prev,
                                             days: prev.days.map((item) => {
                                               if (item.fecha !== day.fecha) return item;
-                                              if (label === "COSTO KG") {
-                                                return { ...item, costoText: text, costoRestore: false, costo: raw === "" || !Number.isFinite(n) ? null : n };
-                                              }
-                                              return { ...item, fleteText: text, fleteRestore: false, flete: raw === "" || !Number.isFinite(n) ? null : n };
+                                              const value = raw === "" || !Number.isFinite(n) ? null : n;
+                                              if (cell.key === "precio") return { ...item, precioText: text, precioRestore: false, precio: value };
+                                              if (cell.key === "costo") return { ...item, costoText: text, costoRestore: false, costo: value };
+                                              return { ...item, fleteText: text, fleteRestore: false, flete: value };
                                             }),
                                           } : prev);
                                         }}
                                       />
                                       <button
                                         type="button"
+                                        title="Restaurar automático"
+                                        aria-label={`Auto ${cell.key} ${day.fecha}`}
                                         className="text-xs text-sky-300 underline"
                                         onClick={() => setMargenModal((prev) => prev ? {
                                           ...prev,
                                           days: prev.days.map((item) => {
                                             if (item.fecha !== day.fecha) return item;
-                                            if (label === "COSTO KG") {
-                                              return {
-                                                ...item,
-                                                costoRestore: true,
-                                                costo: item.costoAutomatico,
-                                                costoText: item.costoAutomatico == null ? "" : String(item.costoAutomatico),
-                                              };
-                                            }
-                                            return {
-                                              ...item,
-                                              fleteRestore: true,
-                                              flete: item.fleteAutomatico,
-                                              fleteText: item.fleteAutomatico == null ? "" : String(item.fleteAutomatico),
-                                            };
+                                            if (cell.key === "precio") return { ...item, precioRestore: true, precio: item.precioAutomatico, precioText: formatManualDisplay(item.precioAutomatico) };
+                                            if (cell.key === "costo") return { ...item, costoRestore: true, costo: item.costoAutomatico, costoText: formatManualDisplay(item.costoAutomatico) };
+                                            return { ...item, fleteRestore: true, flete: item.fleteAutomatico, fleteText: formatManualDisplay(item.fleteAutomatico) };
                                           }),
                                         } : prev)}
-                                      >
-                                        {label === "COSTO KG" ? "Restaurar Costo automático" : "Restaurar Flete automático"}
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    label === "COSTO KG"
-                                      ? (costo == null ? "—" : costo.toFixed(2))
-                                      : (flete == null ? "—" : flete.toFixed(2))
-                                  )}
+                                      >Auto</button>
+                                    </span>
+                                  ) : (cell.key === "precio" ? (precio == null ? "—" : formatManualDisplay(precio)) : cell.key === "costo" ? (costo == null ? "—" : formatManualDisplay(costo)) : (flete == null ? "—" : formatManualDisplay(flete)))}
                                 </td>
-                              );
-                            })}
-                          </tr>
-                        ))}
+                              ))}
+                              <td className="px-2 py-1 text-right">{margen == null ? "—" : margen.toFixed(2)}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
