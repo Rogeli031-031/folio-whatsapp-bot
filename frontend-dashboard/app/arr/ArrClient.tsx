@@ -16,8 +16,11 @@ import {
   ingresoClienteMarginal as ingresoClienteMarginalShared,
   targetKgDesdeIgfVentaTon,
 } from "../../../lib/ingreso-cliente-marginal.js";
+import { usesDetailedExpenseLayout } from "@/lib/igf-expense-layout";
+import { overlayMiniRows, blankOctoberMini } from "@/lib/igf-october-mini";
 import {
   fetchIgfForecast,
+  fetchIgfDiarioAcumulado,
   fetchIgfVersiones,
   fetchArrClientesMes,
   fetchArrLastUploadDay,
@@ -352,12 +355,14 @@ function pickInitialSels(
 }
 
 type RowValues = {
+  octoberContract?: boolean;
   operativos: number | null;
   corporativos: number | null;
   gastoImporte: number | null;
   margenKg: number | null;
   hgPct: number | null;
   hgKg: number | null;
+  hgDollar: number | null;
   comDescKg: number | null;
   /** Impuestos $/kg (IGF / mini resumen). */
   impuestoKg: number | null;
@@ -379,26 +384,55 @@ function findMiniRow(
   return miniRows.find((r) => normalizeEmpresa(r.empresa || "") === target);
 }
 
+function periodOctober(periodKey: string | undefined): boolean {
+  if (!periodKey) return false;
+  const [yStr, mStr] = periodKey.split("-");
+  const year = parseInt(yStr, 10);
+  const month = parseInt(mStr, 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return false;
+  return usesDetailedExpenseLayout(year, month);
+}
+
+function emptyRowValues(): RowValues {
+  return {
+    operativos: null,
+    corporativos: null,
+    gastoImporte: null,
+    margenKg: null,
+    hgPct: null,
+    hgKg: null,
+    hgDollar: null,
+    comDescKg: null,
+    impuestoKg: null,
+    ventaTon: null,
+    rentabilidadImporte: null,
+  };
+}
+
 function computeRowValues(
   data: IgfMonthData | undefined,
-  empresaLabel: string
+  empresaLabel: string,
+  periodKey?: string
 ): RowValues {
-  if (!data || !empresaLabel) {
-    return {
-      operativos: null,
-      corporativos: null,
-      gastoImporte: null,
-      margenKg: null,
-      hgPct: null,
-      hgKg: null,
-      comDescKg: null,
-      impuestoKg: null,
-      ventaTon: null,
-      rentabilidadImporte: null,
-    };
-  }
+  if (!data || !empresaLabel) return emptyRowValues();
   const forecastRow = findRowByPlanta(data.rows, empresaLabel);
   const miniRow = findMiniRow(data.miniRows, empresaLabel);
+  if (periodOctober(periodKey)) {
+    return {
+      octoberContract: true,
+      operativos: miniRow?.operativos ?? null,
+      corporativos: miniRow?.corporativos ?? null,
+      gastoImporte: miniRow?.gasto ?? null,
+      margenKg: miniRow?.margen ?? null,
+      hgPct: miniRow?.hgPct ?? null,
+      hgKg: miniRow?.hgKg ?? null,
+      hgDollar: miniRow?.hgDollar ?? null,
+      comDescKg: miniRow?.comDesc ?? null,
+      impuestoKg: miniRow?.impuestos ?? null,
+      ventaTon: miniRow?.ventaTon ?? null,
+      rentabilidadImporte: miniRow?.resultadoFinalImporte ?? null,
+    };
+  }
   return {
     operativos: miniRow?.operativos ?? null,
     corporativos: miniRow?.corporativos ?? null,
@@ -406,6 +440,7 @@ function computeRowValues(
     margenKg: forecastRow?.margen_kg ?? null,
     hgPct: forecastRow?.hg_pct ?? null,
     hgKg: forecastRow?.hg_kg ?? null,
+    hgDollar: null,
     comDescKg: forecastRow?.com_desc_kg ?? null,
     impuestoKg: forecastRow?.impuesto_kg ?? miniRow?.impuestos ?? null,
     /** Misma «Venta» que la tabla mini IGF (pronóstico PROY), no solo venta_ton del compromiso. */
@@ -444,13 +479,18 @@ type ResumenMesMetrics = {
 };
 
 function resumenMesMetrics(vals: RowValues): ResumenMesMetrics {
+  const october = vals.octoberContract === true;
   const hgDisplay = vals.hgPct != null ? vals.hgPct * 100 : null;
-  const hgDinero =
-    vals.hgKg != null && vals.hgPct != null && vals.hgPct !== 0
+  const hgDinero = october
+    ? (vals.hgDollar != null ? vals.hgDollar : null)
+    : vals.hgKg != null && vals.hgPct != null && vals.hgPct !== 0
       ? Math.abs(vals.hgKg / vals.hgPct)
       : null;
-  const descuentoSigned =
-    vals.comDescKg != null ? -Math.abs(vals.comDescKg) : null;
+  const descuentoSigned = october
+    ? vals.comDescKg
+    : vals.comDescKg != null
+      ? -Math.abs(vals.comDescKg)
+      : null;
   return {
     operativos: vals.operativos,
     corporativos: vals.corporativos,
@@ -2433,7 +2473,20 @@ export default function ArrClient() {
           include_mini: true,
           ...(uploadDay ? { upload_day: uploadDay } : {}),
         });
-        const miniRows = resp.mini?.rows ?? [];
+        let miniRows = resp.mini?.rows ?? [];
+        if (usesDetailedExpenseLayout(year, month)) {
+          try {
+            const acum = await fetchIgfDiarioAcumulado({
+              token,
+              year,
+              month,
+              ...(uploadDay ? { uploadDay } : {}),
+            });
+            miniRows = overlayMiniRows(miniRows, acum.rows || []);
+          } catch {
+            miniRows = miniRows.map((row) => blankOctoberMini(row));
+          }
+        }
         setSlice((prev) => ({
           ...prev,
           dataByKey: {
@@ -2559,8 +2612,8 @@ export default function ArrClient() {
       void ensureClientesLoaded(empresa, wsPlan.selB, wsPlan.dataByKey[wsPlan.selB], "plan");
   }, [empresa, wsPlan.selB, wsPlan.dataByKey[wsPlan.selB], ensureClientesLoaded]);
 
-  const rowA = useMemo(() => computeRowValues(dataByKey[selA], empresa), [dataByKey, selA, empresa]);
-  const rowB = useMemo(() => computeRowValues(dataByKey[selB], empresa), [dataByKey, selB, empresa]);
+  const rowA = useMemo(() => computeRowValues(dataByKey[selA], empresa, selA), [dataByKey, selA, empresa]);
+  const rowB = useMemo(() => computeRowValues(dataByKey[selB], empresa, selB), [dataByKey, selB, empresa]);
 
   const clientesKeyA =
     empresa && selA ? clientesCacheKey(empresa, selA, dataByKey[selA]) : "";
@@ -2574,8 +2627,8 @@ export default function ArrClient() {
     const vacío = { filasClientesMesPrimero: [] as ClienteTablaRow[], filasClientesSoloMesSegundo: [] as ClienteTablaRow[] };
     if (!empresa || !clientesA) return vacío;
 
-    const metA = resumenMesMetrics(computeRowValues(dataByKey[selA], empresa));
-    const metB = resumenMesMetrics(computeRowValues(dataByKey[selB], empresa));
+    const metA = resumenMesMetrics(computeRowValues(dataByKey[selA], empresa, selA));
+    const metB = resumenMesMetrics(computeRowValues(dataByKey[selB], empresa, selB));
 
     const mapA = new Map<string, ArrClienteMesRow>();
     for (const r of clientesA.rows) {
@@ -3535,8 +3588,8 @@ export default function ArrClient() {
       const comparacionLabel0 =
         sSelA && sSelB ? `${periodoMesNombre(sSelB)} − ${periodoMesNombre(sSelA)}` : "";
 
-      const metA = resumenMesMetrics(computeRowValues(sDataByKey[sSelA], empresa));
-      const metB = resumenMesMetrics(computeRowValues(sDataByKey[sSelB], empresa));
+      const metA = resumenMesMetrics(computeRowValues(sDataByKey[sSelA], empresa, sSelA));
+      const metB = resumenMesMetrics(computeRowValues(sDataByKey[sSelB], empresa, sSelB));
 
       const clientesKeyA0 =
         empresa && sSelA ? clientesCacheKey(empresa, sSelA, sDataByKey[sSelA]) : "";
