@@ -360,6 +360,74 @@ export async function patchIgfDiarioGastosDistribucion(
   return parsed as IgfDiarioGastoDistribucion;
 }
 
+export type IgfDiarioMargenDia = {
+  fecha: string;
+  precio: number | null;
+  costo_kg: number | null;
+  flete_kg: number | null;
+  costo_automatico: number | null;
+  flete_automatico: number | null;
+  margen_bruto: number | null;
+  editable: boolean;
+  costo_manual: boolean;
+  flete_manual: boolean;
+};
+
+export type IgfDiarioMargenDetalle = {
+  ok: boolean;
+  year: number;
+  month: number;
+  plant_code: string;
+  corte: string;
+  days: IgfDiarioMargenDia[];
+};
+
+export async function fetchIgfDiarioMargenDiario(opts: {
+  token: string;
+  year: number;
+  month: number;
+  plant_code: string;
+  upload_day: string;
+  version_as_of_corte?: boolean;
+}): Promise<IgfDiarioMargenDetalle> {
+  const params = new URLSearchParams({
+    year: String(opts.year),
+    month: String(opts.month),
+    plant_code: opts.plant_code,
+    upload_day: opts.upload_day,
+  });
+  if (opts.version_as_of_corte) params.set("version_as_of_corte", "1");
+  const res = await fetch(getApiUrl(`/api/dashboard/igf-diario-margen-diario?${params.toString()}`), {
+    headers: { Authorization: `Bearer ${opts.token}` },
+  });
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+  return body as IgfDiarioMargenDetalle;
+}
+
+export async function patchIgfDiarioMargenDiario(
+  token: string,
+  body: {
+    year: number;
+    month: number;
+    plant_code: string;
+    upload_day: string;
+    changes: Array<{ fecha: string; costo_kg?: number | null; flete_kg?: number | null }>;
+  }
+): Promise<{ ok: boolean; plant_code: string }> {
+  const res = await fetch(getApiUrl("/api/dashboard/igf-diario-margen-diario"), {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const parsed = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((parsed as { error?: string }).error || `HTTP ${res.status}`);
+  return parsed as { ok: boolean; plant_code: string };
+}
+
 /** Descarga Excel Clasificación de apoyos (hoja COMPARATIVOS). */
 export async function downloadClasificacionApoyosExcel(
   token: string,

@@ -49,6 +49,7 @@ const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
 const igfDiarioGastosManuales = require("./lib/igf-diario-gastos-manuales");
 const igfDiarioGastosDesglose = require("./lib/igf-diario-gastos-desglose");
 const igfDiarioGastosDistribucion = require("./lib/igf-diario-gastos-distribucion");
+const igfDiarioMargenManual = require("./lib/igf-diario-margen-manual");
 const igfDiarioDailyInsights = require("./lib/igf-diario-daily-insights");
 const igfDiarioGrafica = require("./lib/igf-diario-grafica");
 const arrAnnualCategoryAnalysis = require("./lib/arr-annual-category-analysis");
@@ -15700,6 +15701,81 @@ app.get("/api/dashboard/igf-diario-acumulado", dashboardAuthMiddleware, async (r
   }
 });
 
+app.get("/api/dashboard/igf-diario-margen-diario", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = parseInt(req.query.year, 10);
+  const month = parseInt(req.query.month, 10);
+  const plantCode = String(req.query.plant_code || "").trim();
+  const uploadDay = String(req.query.upload_day || "").trim().slice(0, 10);
+  const versionAsOfCorte = /^(1|true|yes)$/i.test(String(req.query.version_as_of_corte || "").trim());
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "year y month inválidos" });
+  }
+  if (!plantCode) return res.status(400).json({ error: "plant_code inválido" });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(uploadDay)) {
+    return res.status(400).json({ error: "upload_day debe ser YYYY-MM-DD" });
+  }
+  if (versionAsOfCorte && !uploadDay) {
+    return res.status(400).json({ error: "version_as_of_corte requiere upload_day" });
+  }
+  const client = await pool.connect();
+  try {
+    const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, plantCode);
+    if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
+    if (!igfDiarioGastosManuales.overrideVisible(req.dashboardAuth, resolved.plantaId)) {
+      return res.status(403).json({ error: "Planta no permitida" });
+    }
+    let projection = null;
+    try {
+      projection = await dashboardArrForecast.buildPronosticoProjectionContext(client, year, month, uploadDay);
+    } catch (error) {
+      console.error("[igf-diario-margen-diario] pronostico", error && error.message ? error.message : error);
+    }
+    const detail = await igfDiarioGrafica.loadMarginDetail(client, {
+      plant: resolved,
+      plantCode,
+      year,
+      month,
+      uploadDay,
+      corteYmd: uploadDay,
+      versionAsOfCorte,
+      projection,
+      loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
+    });
+    res.json({ ok: true, ...detail });
+  } catch (error) {
+    console.error("[igf-diario-margen-diario GET]", error);
+    res.status(error.status || 500).json({ error: error.message || "No se pudo consultar el margen diario" });
+  } finally {
+    client.release();
+  }
+});
+
+app.patch("/api/dashboard/igf-diario-margen-diario", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const patch = igfDiarioMargenManual.parsePatch(req.body || {});
+  if (!patch.ok) return res.status(400).json({ error: patch.error });
+  const client = await pool.connect();
+  try {
+    const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, patch.plantCode);
+    if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
+    const denied = assertPlantaPermitidaDashboard(req, resolved.plantaId);
+    if (denied) return res.status(403).json({ error: denied });
+    const updatedBy = req.dashboardAuth && req.dashboardAuth.actor_id != null
+      ? `Dashboard:${req.dashboardAuth.actor_id}`
+      : "Dashboard";
+    await igfDiarioMargenManual.patchMarginOverrides(client, patch, resolved.canon, updatedBy);
+    res.json({ ok: true, plant_code: resolved.canon, year: patch.year, month: patch.month });
+  } catch (error) {
+    console.error("[igf-diario-margen-diario PATCH]", error);
+    res.status(error.status || 500).json({ error: error.message || "No se pudo guardar el margen diario" });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/dashboard/igf-diario-grafica", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;
@@ -15952,8 +16028,10 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
           month,
           foundDesglose && foundDesglose.plant_code
         );
+        const marginRows = await igfDiarioMargenManual.listMonthOverrides(client, year, month);
+        packet.marginOverrides = igfDiarioMargenManual.overridesForPlant(marginRows, labels);
       }
-      if (packet.corporativos != null || packet.operativos != null || packet.desglose) {
+      if (packet.corporativos != null || packet.operativos != null || packet.desglose || packet.marginOverrides) {
         forecastOpts.igfDiarioGastos = packet;
       }
     }
@@ -15972,6 +16050,9 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       const manualRowsTodas = await igfDiarioGastosManuales.listMonth(client, year, month);
       const desgloseRowsTodas = igfDiarioGastosDesglose.usesDetailedExpenseLayout(year, month)
         ? await igfDiarioGastosDesglose.listMonth(client, year, month)
+        : [];
+      const marginRowsTodas = igfDiarioGastosDesglose.usesDetailedExpenseLayout(year, month)
+        ? await igfDiarioMargenManual.listMonthOverrides(client, year, month)
         : [];
       await comprasDashboard.ensureComprasTables(client);
       const igfDiarioPlantas = [];
@@ -16014,6 +16095,12 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
             month,
             foundTodas && foundTodas.plant_code
           );
+          packetTodas.marginOverrides = igfDiarioMargenManual.overridesForPlant(marginRowsTodas, [
+            code,
+            plant.nombre,
+            plant.canon,
+            plant.provinciaPlantCode,
+          ]);
         }
         igfDiarioPlantas.push({
           exportPlant: code,
