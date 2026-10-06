@@ -46,23 +46,30 @@ function ingresoImporte(margen, com, hg, ventaTon) {
   return Math.round((margen + com - hg) * Number(ventaTon) * 1000);
 }
 
+function closeResultadoFinal(ingreso, operativos, corporativos, impuestosFederales) {
+  if (ingreso == null || operativos == null || corporativos == null || impuestosFederales == null) return null;
+  const utilOperImporte = ingreso - operativos;
+  return utilOperImporte - corporativos - impuestosFederales;
+}
+
 function applyFinancialsToMiniRow(row, fin) {
   const margen = finite(fin && fin.margenKg);
   const com = finite(fin && fin.comDescKg);
   const hg = finite(fin && fin.hgKg);
-  const ventaTon = finite(row && row.ventaTon);
+  const ventaTon = finite(fin && fin.ventaTon);
   const ventaKg = ventaTon != null ? ventaTon * 1000 : null;
-  const impuesto = finite(fin && fin.impuestosFederalesImporte);
-  const impuestos = impuesto != null && ventaKg != null && ventaKg > 0 ? impuesto / ventaKg : finite(fin && fin.impuestoKg);
+  const impuestosFederales = finite(fin && fin.impuestosFederalesImporte);
+  const impuestos = impuestosFederales != null && ventaKg != null && ventaKg > 0 ? impuestosFederales / ventaKg : null;
   const ingreso = ingresoImporte(margen, com, hg, ventaTon);
   const operativos = finite(fin && fin.operativosImporte);
   const corporativos = finite(fin && fin.corporativosImporte);
-  const gasto = operativos != null && corporativos != null ? operativos + corporativos : finite(fin && fin.gastoImporte);
+  const gasto = operativos != null && corporativos != null ? operativos + corporativos : null;
   const utilOperImporte = ingreso != null && operativos != null ? ingreso - operativos : null;
-  const resultadoFinalImporte = utilOperImporte != null && corporativos != null ? utilOperImporte - corporativos : null;
+  const resultadoFinalImporte = closeResultadoFinal(ingreso, operativos, corporativos, impuestosFederales);
   return {
     ...row,
     octoberContract: true,
+    ventaTon,
     margen,
     comDesc: com,
     hgKg: hg,
@@ -129,12 +136,12 @@ function weightedMetric(rows, key) {
 
 function zonaFromPlantRows(rows) {
   const list = rows || [];
-  const venta = list.reduce((sum, row) => sum + (finite(row && row.ventaTon) || 0), 0);
+  const venta = sumMoney(list, "ventaTon");
   return {
     empresa: "Zona Provincia",
     plant_code: null,
     octoberContract: true,
-    ventaTon: Math.round(venta * 100) / 100,
+    ventaTon: venta == null ? null : Math.round(venta * 100) / 100,
     margen: weightedMetric(list, "margen"),
     comDesc: weightedMetric(list, "comDesc"),
     impuestos: weightedMetric(list, "impuestos"),
@@ -168,12 +175,13 @@ function expenseInputsFromComponentes(componentes, ventaTon) {
   const ventaKg = finite(ventaTon) != null ? finite(ventaTon) * 1000 : null;
   const impuestos = l != null && ventaKg != null && ventaKg > 0 ? l / ventaKg : null;
   const gasto = operativos != null && corporativos != null ? operativos + corporativos : null;
-  return { operativos, corporativos, gasto, impuestos };
+  return { operativos, corporativos, gasto, impuestos, impuestosFederales: l };
 }
 
 module.exports = {
   plantsShareCanon,
   applyFinancialsToMiniRow,
+  closeResultadoFinal,
   blankOctoberMini,
   overlayMiniRows,
   zonaFromPlantRows,

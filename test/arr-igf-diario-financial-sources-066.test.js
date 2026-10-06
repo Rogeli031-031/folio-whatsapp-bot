@@ -215,11 +215,11 @@ test("ARR de octubre usa la mini y conserva el signo; septiembre sigue con el va
 
 test("zona pondera margen, descuento e impuesto y respeta la identidad de planta", () => {
   const rows = [
-    mini.applyFinancialsToMiniRow({ empresa: "GT Puebla", plant_code: "Puebla", ventaTon: 1 }, {
-      margenKg: 8, comDescKg: -4, hgKg: -1, impuestosFederalesImporte: 1000, operativosImporte: 10, corporativosImporte: 4, hgPct: 0.2, hgDollar: 5,
+    mini.applyFinancialsToMiniRow({ empresa: "GT Puebla", plant_code: "Puebla", ventaTon: 9 }, {
+      ventaTon: 1, margenKg: 8, comDescKg: -4, hgKg: -1, impuestosFederalesImporte: 1000, operativosImporte: 10, corporativosImporte: 4, hgPct: 0.2, hgDollar: 5,
     }),
-    mini.applyFinancialsToMiniRow({ empresa: "Tehuacán", plant_code: "Tehuacan", ventaTon: 3 }, {
-      margenKg: 4, comDescKg: -2, hgKg: -1, impuestosFederalesImporte: 3000, operativosImporte: 6, corporativosImporte: 2, hgPct: 0.1, hgDollar: 3,
+    mini.applyFinancialsToMiniRow({ empresa: "Tehuacán", plant_code: "Tehuacan", ventaTon: 9 }, {
+      ventaTon: 3, margenKg: 4, comDescKg: -2, hgKg: -1, impuestosFederalesImporte: 3000, operativosImporte: 6, corporativosImporte: 2, hgPct: 0.1, hgDollar: 3,
     }),
   ];
   const zona = mini.zonaFromPlantRows(rows);

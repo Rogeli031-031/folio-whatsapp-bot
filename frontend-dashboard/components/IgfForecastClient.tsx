@@ -15,6 +15,7 @@ import { buildIgfForecastAccionesHref } from "@/lib/igf-to-acciones-href";
 import { sumMoneyCents, usesDetailedExpenseLayout } from "@/lib/igf-expense-layout";
 import {
   applyFinancialsToMiniRow,
+  closeResultadoFinal,
   expenseInputsFromComponentes,
   zonaFromPlantRows,
 } from "@/lib/igf-october-mini";
@@ -365,7 +366,7 @@ function applyDesgloseTotals(
     const gasto = classified.gasto;
     const ingreso = row.ingreso;
     const utilOperImporte = ingreso != null && operativos != null ? ingreso - operativos : null;
-    const resultadoFinalImporte = utilOperImporte != null && corporativos != null ? utilOperImporte - corporativos : null;
+    const resultadoFinalImporte = closeResultadoFinal(ingreso, operativos, corporativos, classified.impuestosFederales);
     return {
       ...row,
       octoberContract: true,
