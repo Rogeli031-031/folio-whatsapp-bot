@@ -127,6 +127,26 @@ export async function fetchIgfDiarioGrafica(opts: {
   return body as IgfDiarioGraficaResponse;
 }
 
+export type IgfDiarioMonthlyFinancials = {
+  contract: "066";
+  ventaKg: number | null;
+  ventaTon: number | null;
+  costoKg: number | null;
+  fleteKg: number | null;
+  margenKg: number | null;
+  comDescKg: number | null;
+  hgKg: number | null;
+  hgDollar: number | null;
+  hgPct: number | null;
+  operativosImporte: number | null;
+  gastoCorporativoImporte: number | null;
+  inversionesImporte: number | null;
+  impuestosFederalesImporte: number | null;
+  corporativosImporte: number | null;
+  impuestoKg: number | null;
+  gastoImporte: number | null;
+};
+
 export type IgfDiarioAcumuladoRow = {
   plant_code: string;
   empresa: string;
@@ -134,6 +154,7 @@ export type IgfDiarioAcumuladoRow = {
   igf_label?: string;
   margen: number | null;
   hg: number | null;
+  financials?: IgfDiarioMonthlyFinancials | null;
   missing?: string[];
   missing_components?: { margen?: string[]; hg?: string[] };
 };
@@ -1771,17 +1792,20 @@ export interface IgfForecastMiniRow {
   empresa: string;
   /** Código provincia (hoja Pronostico); null en fila Zona. */
   plant_code?: string | null;
-  ventaTon: number;
-  margen: number;
-  comDesc: number;
-  impuestos: number;
-  hgKg: number;
-  ingreso: number;
-  operativos: number;
-  corporativos: number;
-  gasto: number;
-  utilOperImporte: number;
-  resultadoFinalImporte: number;
+  ventaTon: number | null;
+  margen: number | null;
+  comDesc: number | null;
+  impuestos: number | null;
+  hgKg: number | null;
+  hgPct?: number | null;
+  hgDollar?: number | null;
+  octoberContract?: boolean;
+  ingreso: number | null;
+  operativos: number | null;
+  corporativos: number | null;
+  gasto: number | null;
+  utilOperImporte: number | null;
+  resultadoFinalImporte: number | null;
   operativosManual?: boolean;
   corporativosManual?: boolean;
 }

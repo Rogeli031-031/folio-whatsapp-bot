@@ -12208,7 +12208,11 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     const scale = bRes > 0 ? bIgf / bRes : 0;
 
     const C = rawIgfRow ? n(rawIgfRow.margen_kg) : igfRow ? n(igfRow.margen_kg) : 0;
-    const D = proy && Number.isFinite(Number(proy.proy_desc_kg)) ? Number(proy.proy_desc_kg) : igfRow ? n(igfRow.com_desc_kg) : 0;
+    const octoberDesc = require("./lib/igf-diario-monthly-financials").usesOctoberContract(year, month);
+    const descRaw = proy && proy.proy_desc_kg != null ? Number(proy.proy_desc_kg) : null;
+    const D = octoberDesc
+      ? (descRaw != null && Number.isFinite(descRaw) ? descRaw : null)
+      : proy && Number.isFinite(Number(proy.proy_desc_kg)) ? Number(proy.proy_desc_kg) : igfRow ? n(igfRow.com_desc_kg) : 0;
     const F = rawIgfRow ? n(rawIgfRow.impuesto_kg) : igfRow ? n(igfRow.impuesto_kg) : 0;
     // HG % y HG $/kg deben coincidir con la tabla principal (igf.rows = GET con forecast/corte). rawIgfRow
     // viene directo de BD y puede traer signos viejos distintos al forecast.
@@ -12225,7 +12229,7 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
     const O = rawIgfRow ? n(rawIgfRow.otros_programas_kg) * scale : igfRow ? n(igfRow.otros_programas_kg) * scale : 0;
     const P = rawIgfRow ? n(rawIgfRow.inversiones_kg) * scale : igfRow ? n(igfRow.inversiones_kg) * scale : 0;
 
-    const ingreso = Math.round((C + D - H) * bRes * 1000);
+    const ingreso = octoberDesc && D == null ? null : Math.round((C + (D || 0) - H) * bRes * 1000);
     const operativos = Math.round((E + I + J + F) * bRes * 1000);
     const corporativos = Math.round((M + N + O + P) * bRes * 1000);
     const gasto = operativos + corporativos;
@@ -15692,6 +15696,20 @@ app.get("/api/dashboard/igf-diario-acumulado", dashboardAuthMiddleware, async (r
       projection,
       loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
     });
+    const monthlyFinancials = require("./lib/igf-diario-monthly-financials");
+    if (monthlyFinancials.usesOctoberContract(year, month)) {
+      const expenseRows = await igfDiarioGastosDesglose.listMonth(client, year, month);
+      payload.rows = (payload.rows || []).map((row) => {
+        const found = (expenseRows || []).find((item) =>
+          dashboardArrForecast.plantsEquivalent(item.plant_code, row.plant_code)
+          || dashboardArrForecast.plantsEquivalent(item.plant_code, row.empresa)
+          || dashboardArrForecast.plantsEquivalent(item.plant_code, row.canon)
+        );
+        const view = found ? igfDiarioGastosDesglose.publicRow(found, year, month) : null;
+        const financials = monthlyFinancials.applyExpenses(row.financials, view && view.componentes);
+        return { ...row, financials, margen: financials.margenKg, hg: financials.hgKg };
+      });
+    }
     res.json(payload);
   } catch (error) {
     console.error("[igf-diario-acumulado]", error && error.message ? error.message : error);

@@ -13,6 +13,11 @@ import {
 } from "@/lib/auth";
 import { buildIgfForecastAccionesHref } from "@/lib/igf-to-acciones-href";
 import { sumMoneyCents, usesDetailedExpenseLayout } from "@/lib/igf-expense-layout";
+import {
+  applyFinancialsToMiniRow,
+  expenseInputsFromComponentes,
+  zonaFromPlantRows,
+} from "@/lib/igf-october-mini";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
 import {
   fetchIgfForecast,
@@ -40,6 +45,7 @@ import {
   type IgfForecastRow,
   type IgfForecastMiniResponse,
   type IgfForecastMiniRow,
+  type IgfDiarioAcumuladoRow,
   type IgfDiarioGastoManual,
   type IgfDiarioGastoDesglose,
   type IgfDiarioGastoDistribucion,
@@ -118,6 +124,7 @@ import {
 type AcumuladoPlantHit = {
   margen: number | null;
   hg: number | null;
+  financials?: IgfDiarioAcumuladoRow["financials"];
   missing?: string[];
   missing_components?: { margen?: string[]; hg?: string[] };
 };
@@ -134,10 +141,10 @@ function acumuladoLookup(
 function acumuladoHit(
   row: IgfForecastMiniRow,
   byPlant: Record<string, AcumuladoPlantHit | null>
-): { margen: number; hg: number } | null {
+): { margen: number; hg: number; financials: AcumuladoPlantHit["financials"] } | null {
   const hit = acumuladoLookup(row, byPlant);
   if (!hit || !Number.isFinite(hit.margen) || !Number.isFinite(hit.hg)) return null;
-  return { margen: Number(hit.margen), hg: Number(hit.hg) };
+  return { margen: Number(hit.margen), hg: Number(hit.hg), financials: hit.financials || null };
 }
 
 function formatAcumuladoGap(row: IgfForecastMiniRow, byPlant: Record<string, AcumuladoPlantHit | null>): string {
@@ -167,12 +174,15 @@ function missingAcumuladoPlants(
 
 function applyIgfDiarioAcumuladoMini(
   mini: IgfForecastMiniResponse,
-  byPlant: Record<string, { margen: number | null; hg: number | null } | null>
+  byPlant: Record<string, AcumuladoPlantHit | null>
 ): IgfForecastMiniResponse | null {
   if (missingAcumuladoPlants(mini.rows || [], byPlant).length) return null;
   const rows = (mini.rows || []).map((row) => {
     const hit = acumuladoHit(row, byPlant);
     if (!hit) return null;
+    if (hit.financials && hit.financials.contract === "066") {
+      return applyFinancialsToMiniRow(row, hit.financials);
+    }
     const margen = hit.margen;
     const hgKg = hit.hg;
     const venta = Number(row.ventaTon) || 0;
@@ -197,6 +207,9 @@ function applyIgfDiarioAcumuladoMini(
   });
   if (rows.some((row) => row == null)) return null;
   const ready = rows as IgfForecastMiniRow[];
+  if (ready.some((row) => row.octoberContract)) {
+    return { ...mini, rows: ready, zona: zonaFromPlantRows(ready) };
+  }
   const sumB = ready.reduce((sum, row) => sum + (Number(row.ventaTon) || 0), 0);
   const wAvg = (getter: (row: IgfForecastMiniRow) => number) => (
     sumB > 0
@@ -243,7 +256,7 @@ function manualForPlant(overrides: IgfDiarioGastoManual[], row: IgfForecastMiniR
   );
 }
 
-function manualAmount(manual: number | null | undefined, automatic: number): number {
+function manualAmount(manual: number | null | undefined, automatic: number | null): number {
   if (manual != null) {
     const n = Number(manual);
     if (Number.isFinite(n)) return Math.round(n);
@@ -257,15 +270,22 @@ function applyManualGastosToAcumulado(
 ): IgfForecastMiniResponse | null {
   if (!mini) return null;
   const rows = (mini.rows || []).map((row) => {
+    if (row.octoberContract) {
+      return {
+        ...row,
+        operativosManual: false,
+        corporativosManual: false,
+      };
+    }
     const hit = manualForPlant(overrides, row);
     const manualOperativos = hit ? hit.operativos : null;
     const manualCorporativos = hit ? hit.corporativos : null;
     const operativos = manualAmount(manualOperativos, row.operativos);
     const corporativos = manualAmount(manualCorporativos, row.corporativos);
     const ingreso = row.ingreso;
-    const gasto = operativos + corporativos;
-    const utilOperImporte = ingreso - operativos;
-    const resultadoFinalImporte = utilOperImporte - corporativos;
+    const gasto = Number(operativos) + Number(corporativos);
+    const utilOperImporte = Number(ingreso) - Number(operativos);
+    const resultadoFinalImporte = utilOperImporte - Number(corporativos);
     return {
       ...row,
       ingreso,
@@ -338,29 +358,29 @@ function applyDesgloseTotals(
   if (!mini || !usesDetailedExpenseLayout(year, month)) return mini;
   const nextRows = (mini.rows || []).map((row) => {
     const hit = desgloseForPlant(rows, row);
-    if (!hit) return { ...row };
-    const operativos = hit.operativos_desglosados && hit.operativos_total_desglose != null
-      ? hit.operativos_total_desglose
-      : row.operativos;
-    const corporativos = hit.corporativos_desglosados && hit.corporativos_total_desglose != null
-      ? hit.corporativos_total_desglose
-      : row.corporativos;
-    const gasto = operativos + corporativos;
-    const utilOperImporte = row.ingreso - operativos;
-    const resultadoFinalImporte = utilOperImporte - corporativos;
-    return { ...row, operativos, corporativos, gasto, utilOperImporte, resultadoFinalImporte };
+    const classified = expenseInputsFromComponentes(hit && hit.componentes, row.ventaTon);
+    if (!classified) return { ...row };
+    const operativos = classified.operativos;
+    const corporativos = classified.corporativos;
+    const gasto = classified.gasto;
+    const ingreso = row.ingreso;
+    const utilOperImporte = ingreso != null && operativos != null ? ingreso - operativos : null;
+    const resultadoFinalImporte = utilOperImporte != null && corporativos != null ? utilOperImporte - corporativos : null;
+    return {
+      ...row,
+      octoberContract: true,
+      operativos,
+      corporativos,
+      gasto,
+      impuestos: classified.impuestos,
+      utilOperImporte,
+      resultadoFinalImporte,
+    };
   });
   return {
     ...mini,
     rows: nextRows,
-    zona: {
-      ...mini.zona,
-      operativos: nextRows.reduce((sum, row) => sum + (Number(row.operativos) || 0), 0),
-      corporativos: nextRows.reduce((sum, row) => sum + (Number(row.corporativos) || 0), 0),
-      gasto: nextRows.reduce((sum, row) => sum + (Number(row.gasto) || 0), 0),
-      utilOperImporte: nextRows.reduce((sum, row) => sum + (Number(row.utilOperImporte) || 0), 0),
-      resultadoFinalImporte: nextRows.reduce((sum, row) => sum + (Number(row.resultadoFinalImporte) || 0), 0),
-    },
+    zona: zonaFromPlantRows(nextRows),
   };
 }
 
@@ -587,6 +607,7 @@ export function IgfForecastContent() {
           const hit = {
             margen: row.margen,
             hg: row.hg,
+            financials: row.financials,
             missing: row.missing,
             missing_components: row.missing_components,
           };
