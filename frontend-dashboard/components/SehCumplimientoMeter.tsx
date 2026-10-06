@@ -7,17 +7,35 @@ const orbitron = Orbitron({
   weight: ["700"],
 });
 
+type Parte = {
+  complying: number;
+  total: number;
+};
+
 type Props = {
   pct: number;
   complying: number;
   total: number;
   loading?: boolean;
+  /** Desglose opcional: evita confundir % de REGULACIÓN con filas de OPERACIÓN. */
+  operacion?: Parte;
+  regulacion?: Parte;
+  showRegulacion?: boolean;
 };
 
 /** Indicador digital estilo display verde (cumplimiento %). */
-export default function SehCumplimientoMeter({ pct, complying, total, loading }: Props) {
+export default function SehCumplimientoMeter({
+  pct,
+  complying,
+  total,
+  loading,
+  operacion,
+  regulacion,
+  showRegulacion,
+}: Props) {
   const safePct = Number.isFinite(pct) ? Math.max(0, Math.min(100, Math.round(pct))) : 0;
   const digits = String(safePct).padStart(3, "0");
+  const showBreakdown = Boolean(operacion || (showRegulacion && regulacion));
 
   return (
     <div
@@ -38,6 +56,20 @@ export default function SehCumplimientoMeter({ pct, complying, total, loading }:
       <div className="mt-1 text-[10px] tabular-nums text-slate-400">
         {loading ? "…" : `${complying}/${total}`}
       </div>
+      {!loading && showBreakdown && (
+        <div className="mt-1.5 w-full space-y-0.5 border-t border-slate-800 pt-1.5 text-center text-[8px] leading-tight text-slate-500">
+          {operacion && (
+            <div>
+              Op {operacion.complying}/{operacion.total}
+            </div>
+          )}
+          {showRegulacion && regulacion && (
+            <div>
+              Reg {regulacion.complying}/{regulacion.total}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

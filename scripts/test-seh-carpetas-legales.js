@@ -19,6 +19,29 @@ assert.strictEqual(m.parseVencimientoDate("08/15/2026"), "2026-08-15");
 assert.strictEqual(m.parseVencimientoDate("15-08-2026"), "2026-08-15");
 assert.strictEqual(m.parseVencimientoDate(""), null);
 
+{
+  const score = m.scoreRegulacion(
+    [
+      ...Array.from({ length: 10 }, (_, i) => ({
+        doc_no: m.CATALOG_DOC_NOS[i],
+        estatus: "vigente",
+        vencimiento: "2099-01-01",
+        vencimiento_na: false,
+      })),
+      ...Array.from({ length: 3 }, (_, i) => ({
+        doc_no: m.CATALOG_DOC_NOS[10 + i],
+        estatus: "na",
+      })),
+    ],
+    "2026-08-10"
+  );
+  assert.strictEqual(score.catalog_total, 69);
+  assert.strictEqual(score.na, 3);
+  assert.strictEqual(score.total, 66);
+  assert.strictEqual(score.complying, 10);
+  assert.strictEqual(score.pct, 15);
+}
+
 const mapped = m.mapRow({
   planta_id: 1,
   doc_no: "0.1",
