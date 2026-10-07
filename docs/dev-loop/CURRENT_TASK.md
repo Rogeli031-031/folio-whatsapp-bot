@@ -1,222 +1,552 @@
-﻿task_id: "G4-PREP-IGF-DIARIO-WEEKLY-PLANT-VIEW-067"
+﻿task_id: "IMPL-IGF-DIARIO-FOLIOS-DEPOSITO-MATRIX-068"
 
-title: "Preparar PR de vista semanal vertical IGF Diario 067 + R1 + R2"
+title: "Matriz diaria de folios en Depósito y Cierre o adelante por planta"
 
 status: "DONE_PENDING_REVIEW"
 
-mode: "INTEGRATION"
+mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
 
-authorized_at: "2026-10-06"
+authorized_at: "2026-10-07"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-06"
-
-g4_authorization: "G4_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-06"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-07"
 
 objective: >
-  Preparar el Pull Request de la entrega completa 067,
-  incluyendo FIX 067-R1 y FIX 067-R2, hacia main.
-  No modificar producto ni tests.
-  El merge queda reservado exclusivamente al HUMAN_APPROVER.
+  En IGF Diario acumulado con Planta=Todas, eliminar la sección inferior
+  actual de detalle IGF Forecast señalada por el usuario y sustituirla por
+  una matriz mensual de folios que hayan alcanzado Depósito y Cierre o una
+  etapa posterior válida, excluyendo cancelados.
 
-main_reference_sha: "d58216dd128c459df6ac9aff4a05a75f9505d8a6"
+  Las filas serán plantas y las columnas serán los días calendario del mes
+  correspondiente a Fecha de carga (corte).
 
-branch: "fix/igf-diario-weekly-crossmonth-result-kg-067-r2"
+  Cada celda debe mostrar:
+  importe total,
+  número de folios,
+  y una descripción corta del contenido.
 
-delivery_chain:
-  impl_067_product: "d04c01ebdcb3779da1eccfb4b5642568c392e509"
-  impl_067_final: "940cc0907fc1aab6a23708cc49f192aa42f2b24a"
+  Debe incluir total mensual por planta, total diario de todas las plantas
+  y total general del periodo.
 
-  fix_067_r1_product: "c4c806b19683a4153d2724b772cf4ce68807f82c"
-  fix_067_r1_final: "0dd2bb5847ed328fe5b73dec0d25297fb275f568"
+base_sha: "c4f2db88784642433008b8b313ad2d60e17d896a"
 
-  fix_067_r2_product: "39b1236880a14a194ba41bfbaf330e79ff1aa8d2"
-  validated_source_sha: "9328caef1f7c2a5e78b1a6988ed405a377a0317c"
+branch: "implementation/igf-diario-folios-deposito-matrix-068"
 
-target_branch: "main"
+ui_scope:
+  show_when:
+    igf_mode: "IGF Diario acumulado"
+    plant_filter: "Todas"
 
-validated_scope:
-  - "Planta seleccionada + IGF Diario muestra panel semanal vertical."
-  - "Planta seleccionada + IGF Diario deja de mostrar comparación contra mes anterior."
-  - "No se carga mes anterior cuando no se usa."
-  - "Modo Forecast conserva comparación legacy."
-  - "Planta Todas conserva vista actual."
-  - "Semana ISO lunes-domingo."
-  - "Número real de semana ISO."
-  - "Semana puede cruzar meses."
-  - "Corte 06/10/2026 abre 05/10–11/10."
-  - "Anterior/Siguiente desplaza exactamente 7 días."
-  - "Cambio de planta/mes/corte vuelve a semana del corte."
-  - "Estados REAL/PARCIAL/PROYECTADA."
-  - "Tabla vertical sin scroll horizontal."
-  - "Venta = suma B."
-  - "Ingreso = suma D."
-  - "Precio = ingreso / venta."
-  - "Costo/Flete ponderados."
-  - "Margen = Precio - Costo - Flete."
-  - "J/K/L/Q/R/S/T usan schedules diarios 064-R1."
-  - "Overrides diarios 064-R1 fluyen a la semana."
-  - "Overrides C/F/G 065-R1 fluyen a la semana."
-  - "Margen Neto/Sobrantes siguen semántica Excel."
-  - "HG importe suma días."
-  - "C&D preserva signo."
-  - "Resultado Importe suma resultado diario con precisión completa."
-  - "Resultado $/kg de semana detallada conserva fórmula normal."
-  - "Resultado histórico legacy pre-octubre se preserva cuando existe."
-  - "No se inventa desglose J/K/L/Q/R/S/T pre-octubre."
-  - "Semana mixta Sep/Oct conserva Resultado legacy + detallado."
-  - "Semana mixta deriva Resultado $/kg = Resultado Importe / Venta cuando la cadena detallada no existe."
-  - "resultado_kg * venta_kg = resultado_mxn en semana mixta."
-  - "Sin Resultado Importe, Resultado $/kg queda null."
-  - "Con Venta 0, Resultado $/kg queda null."
-  - "Gráfica abre la métrica seleccionada."
-  - "Venta usa eje kg."
-  - "Ingreso/HG/Resultado importe usan eje MXN."
-  - "Métricas por kilo usan eje $/kg."
-  - "Título de serie es Gráfica · {métrica}."
-  - "Modal legacy conserva título Rentabilidad IGF Diario."
-  - "Ventanas 1D/5D/1M/3M/YTD/1A/5A/Todo permanecen."
-  - "Real/proyectado/tendencia permanecen."
-  - "Histórico detallado inexistente conserva gaps."
-  - "Resultado histórico existente no se borra."
-  - "No parsing XLSX."
-  - "No hardcode de semanas/filas/importes."
-  - "No query por día."
-  - "No query por concepto."
-  - "No N+1 por planta."
+  replace:
+    description: >
+      Sustituir la tabla inferior actual que contiene columnas como
+      Presupuesto, Folios Aprob. Director ZP, Folios en carro,
+      Depósito y cierre, HG, Bancos, Resultado, etc.
 
-validated_week_40:
-  range: "2026-09-28/2026-10-04"
-  iso_week: 40
+  keep:
+    - "Tabla superior IGF Diario acumulado."
+    - "Zona Provincia."
+    - "Selector Planta."
+    - "067 cuando se selecciona una planta específica."
+    - "Forecast y sus tablas actuales."
+
+  plant_selected_behavior:
+    rule: >
+      Si Planta != Todas, conservar el panel semanal vertical 067.
+      No mostrar simultáneamente la matriz 068.
+
+matrix_title:
+  title: "Folios en Depósito y Cierre (o adelante)"
+  subtitle: >
+    Importe de folios por día y planta.
+    Incluye folios que alcanzaron Depósito y Cierre o una etapa posterior.
+    No incluye cancelados.
+
+period_contract:
+  source: "Fecha de carga (corte)"
+
+  month:
+    rule: >
+      El año y mes de la matriz provienen del año/mes de la Fecha de carga
+      seleccionada.
+
+  examples:
+    - "06/10/2026 => columnas 01 a 31 de octubre 2026."
+    - "15/09/2026 => columnas 01 a 30 de septiembre 2026."
+
+  event_limit:
+    rule: >
+      Nunca colocar en la matriz eventos posteriores a la Fecha de carga
+      (corte). Los días posteriores al corte pueden permanecer visibles
+      como días del mes, pero sin incorporar eventos futuros.
+
+  version_as_of_corte:
+    rule: >
+      Respetar el comportamiento existente de Versión <= corte para
+      determinar la versión/estado efectivo del folio cuando corresponda.
+
+calendar_contract:
+  - "Una columna por día calendario real del mes."
+  - "Febrero usa 28/29 correctamente."
+  - "Abril/junio/septiembre/noviembre usan 30."
+  - "Resto usa 31."
+  - "Encabezado compacto: 01, 02, 03 ... 31."
+  - "No incluir días inexistentes."
+
+plant_contract:
+  rows:
+    - "GT Puebla"
+    - "Tehuacan"
+    - "Acapulco"
+    - "GTM Queretaro"
+    - "GTM San Luis"
+    - "Morelos"
+
+  rule: >
+    No hardcodear IDs. Reutilizar la identidad/equivalencias de plantas
+    vigente en IGF Diario y 063-R1.
+
+  order:
+    rule: "Usar el mismo orden visual de plantas del IGF Diario acumulado."
+
+folio_threshold_contract:
+  visual_stage_order:
+    - "PENDIENTE_APROB_PLANTA"
+    - "APROB_DIRECTOR_ZP"
+    - "CARRO_COMPRA"
+    - "CUENTA_FONDOS"
+    - "CHEQUE_GENERADO"
+    - "DEPOSITO_CIERRE"
+    - "COMPROBACIONES"
+    - "EVIDENCIAS"
+    - "CANCELADO"
+
+  include:
+    threshold: "DEPOSITO_CIERRE"
+    stages:
+      - "DEPOSITO_CIERRE"
+      - "COMPROBACIONES"
+      - "EVIDENCIAS"
+
+  exclude:
+    - "CANCELADO"
+
+  critical_rule: >
+    Reutilizar el mapeo canónico existente de estatus técnico a etapa visual.
+    No crear una segunda interpretación independiente de PAGADO, CERRADO,
+    COMPROBACIONES, EVIDENCIAS, etc.
+
+  current_status_rule: >
+    El folio debe tener como estado efectivo, según el corte/versionado,
+    Depósito y Cierre o una etapa posterior válida.
+
+  canceled_rule: >
+    Si el estado efectivo del folio es CANCELADO, excluirlo completamente
+    de importe, conteo, descripción y detalle.
+
+entry_date_contract:
+  definition: >
+    El día de la matriz es la primera fecha autoritativa en que el folio
+    alcanzó DEPOSITO_CIERRE o una etapa posterior válida.
+
+  preferred_source: "public.folio_historial"
+
+  rule:
+    - "Buscar la primera transición/evento calificante del folio."
+    - "Usar su fecha autoritativa de historial."
+    - "No usar fecha de creación del folio como sustituto."
+    - "No usar mes_cargo como fecha de entrada."
+    - "No mover el folio de día cuando posteriormente avanza a Comprobaciones/Evidencias."
+    - "Contar cada folio como máximo una vez."
+
+  direct_jump:
+    rule: >
+      Si un folio pasó directamente a una etapa posterior sin evento explícito
+      de DEPOSITO_CIERRE, usar la primera transición histórica que ya cumpla
+      el umbral.
+
+  missing_history:
+    rule: >
+      No inventar una fecha. Si la fecha de entrada no puede demostrarse
+      con la información autoritativa existente, marcarla como dato no
+      clasificable y reportarlo; no usar created_at silenciosamente.
+
+  stop_condition: >
+    Si el esquema real no permite determinar de forma fiable la primera
+    transición al umbral, STOP antes de implementar un fallback inventado.
+
+amount_contract:
+  source: "public.folios.importe"
+
+  meaning: "Monto total del folio."
+
+  rules:
+    - "Usar importe del folio, no monto comprobado."
+    - "No usar suma de facturas."
+    - "No usar presupuesto."
+    - "No usar $/kg."
+    - "No duplicar importe por múltiples eventos."
+    - "0 explícito es un importe válido."
+
+  missing_amount:
+    rule: >
+      Un folio calificante con importe NULL sigue contando como folio pero
+      no aporta importe a la suma.
+
+    ui:
+      - "Mostrar cantidad de folios sin importe en detalle."
+      - "No convertir NULL en $0."
+      - "No ocultar silenciosamente el faltante."
+
+cell_aggregation:
+  key: "(planta efectiva, fecha de entrada)"
+
+  total_amount:
+    formula: >
+      SUM(folio.importe)
+      únicamente sobre importes numéricos de folios calificantes únicos.
+
+  folio_count:
+    formula: "COUNT(folios calificantes únicos)"
+
+  missing_amount_count:
+    formula: "COUNT(folios calificantes con importe NULL)"
+
+cell_display:
+  non_empty:
+    lines:
+      - "$ IMPORTE TOTAL"
+      - "N folio / N folios"
+      - "Descripción corta"
+
+  empty:
+    display: "—"
+    rule: "No mostrar $0 para una celda sin folios."
+
+  examples:
+    single:
+      amount: "$80,000"
+      count: "1 folio"
+      description: "Reparación compresor"
+
+    multiple:
+      amount: "$250,000"
+      count: "4 folios"
+      description: "Mantenimiento tanque +3"
+
+description_contract:
+  source_priority:
+    - "descripcion_display si existe"
+    - "concepto"
+    - "Sin descripción"
+
+  one_folio:
+    rule: >
+      Mostrar la descripción corta del folio.
+
+  multiple_folios:
+    rule: >
+      Elegir de forma determinista la descripción del folio con mayor
+      importe numérico y añadir +N para indicar los demás.
+
+    example: "Mantenimiento tanque +3"
+
+  tie_break:
+    rule: >
+      Si hay empate de importe, usar un orden estable por identificador
+      del folio.
+
+  display:
+    - "Máximo aproximado 24-32 caracteres visibles."
+    - "Usar ellipsis si excede."
+    - "No alterar el texto almacenado."
+    - "Tooltip/title puede mostrar la descripción completa."
+
+monthly_totals:
+  plant_total_column:
+    title: "Total mes"
+
+    display:
+      - "importe total de la planta"
+      - "número total de folios"
+      - "número de folios sin importe si aplica"
+
+    formula: >
+      SUM de las celdas diarias de la planta sin duplicar folios.
+
+daily_totals:
+  row_title: "Total día"
+
+  per_day:
+    display:
+      - "importe total de todas las plantas"
+      - "número total de folios"
+
+    formula: >
+      SUM de importes del día de todas las plantas.
+
+grand_total:
+  position: "esquina inferior derecha"
+
+  display:
+    - "importe total del periodo"
+    - "número total de folios"
+
+  rule: >
+    Debe coincidir tanto con la suma de Totales mes por planta como con
+    la suma de Totales día.
+
+detail_contract:
+  trigger: "Click/tap sobre una celda no vacía."
+
+  header:
+    - "Planta"
+    - "Fecha"
+    - "Importe total"
+    - "Número de folios"
+
+  folio_columns:
+    - "Folio"
+    - "Estado efectivo/actual"
+    - "Monto"
+    - "Descripción"
+
+  folio_detail:
+    fields:
+      - "folio_id / folio visible"
+      - "estado"
+      - "importe"
+      - "descripcion_display/concepto"
+      - "fecha_entrada_umbral"
+
+  rules:
+    - "Ordenar por importe descendente, luego folio."
+    - "Mostrar NULL de importe como Sin importe."
+    - "No permitir editar desde esta ventana."
+    - "Si ya existe navegación segura al folio, puede ofrecer Abrir folio."
+
+visual_contract:
+  theme: "Mismo dark mode del dashboard."
+
+  matrix:
+    - "Planta fija a la izquierda."
+    - "Días en horizontal."
+    - "Total mes fijo a la derecha cuando sea práctico."
+    - "Scroll horizontal para los días."
+    - "No comprimir 31 días hasta volver ilegible la tabla."
+    - "Mantener usable en móvil."
+
+  colors:
+    non_empty: "resaltado sutil azul/verde"
+    selected: "borde cian"
+    empty: "fondo neutro"
+    total_month: "azul"
+    total_day: "azul"
+
+  note: >
+    Puede aplicarse intensidad visual moderada por importe, pero no debe
+    sustituir el número exacto.
+
+security_contract:
+  - "Usar dashboardAuthMiddleware."
+  - "No ampliar acceso a folios que el usuario no pueda consultar."
+  - "Respetar restricciones actuales de planta/rol."
+  - "Respetar solo_zp_ad / privados si forman parte de la visibilidad actual."
+  - "Reutilizar filtros/autorización de folios existentes cuando aplique."
+  - "No devolver campos sensibles innecesarios."
+
+backend_contract:
+  recommended_module: "lib/igf-diario-folios-deposito-matrix.js"
+
+  recommended_endpoint: "GET /api/dashboard/igf-diario-folios-deposito"
+
+  params:
+    - "year"
+    - "month"
+    - "upload_day"
+    - "version_as_of_corte"
+
+  response_shape:
+    ok: true
+    year: 2026
+    month: 10
+    corte_ymd: "2026-10-06"
+    days: ["01", "02", "03", "..."]
+    plants:
+      - plant_code: "GT_PUEBLA"
+        empresa: "GT Puebla"
+        days:
+          "2026-10-02":
+            amount_total: 125000
+            folio_count: 2
+            missing_amount_count: 0
+            description_short: "Mantenimiento tanque +1"
+            folios:
+              - id: 123
+                folio: "F-1042"
+                estado: "DEPOSITO_CIERRE"
+                importe: 80000
+                descripcion: "Mantenimiento tanque"
+                threshold_date: "2026-10-02"
+        total_month:
+          amount_total: 125000
+          folio_count: 2
+          missing_amount_count: 0
+
+    daily_totals:
+      "2026-10-02":
+        amount_total: 125000
+        folio_count: 2
+        missing_amount_count: 0
+
+    grand_total:
+      amount_total: 125000
+      folio_count: 2
+      missing_amount_count: 0
+
+  note: >
+    La forma exacta puede ajustarse por compatibilidad, pero debe conservar
+    toda la semántica anterior.
+
+backend_query_contract:
+  requirements:
+    - "Resolver todos los folios del periodo en lote."
+    - "Resolver fecha de primera transición calificante en SQL/lote o memoria."
+    - "No una consulta por planta."
+    - "No una consulta por día."
+    - "No una consulta por folio."
+    - "No consultar detalle al pintar cada celda."
+    - "Evitar N+1."
+
+  preferred:
+    - "1 consulta/CTE principal o un número pequeño y constante de lecturas."
+    - "Agrupar en memoria después de obtener el conjunto mínimo necesario."
+
+frontend_contract:
+  recommended_component: "frontend-dashboard/components/IgfDiarioFoliosDepositoMatrix.tsx"
+
+  render_condition: >
+    igfTableMode === "igf_diario"
+    AND Planta === Todas
+
   behavior:
-    - "No se parte el 01/10."
-    - "Resultado de septiembre usa evidencia legacy existente."
-    - "Resultado de octubre usa contrato detallado."
-    - "Componentes nuevos de septiembre permanecen null."
-    - "Resultado Importe combina ambos lados."
-    - "Resultado $/kg puede derivarse directamente del Importe / Venta."
+    - "Cargar una vez al cambiar mes/corte/version."
+    - "No cargar si se selecciona planta individual."
+    - "No cargar en Forecast."
+    - "Loading independiente."
+    - "Error de esta matriz no debe tumbar la tabla IGF superior."
+    - "Click de celda abre detalle local/modal."
 
-validated_chart:
-  units:
-    venta_kg: "kg"
-    ingreso_mxn: "MXN"
-    hg_mxn: "MXN"
-    resultado_mxn: "MXN"
-    precio_kg: "$/kg"
-    costo_kg: "$/kg"
-    flete_kg: "$/kg"
-    margen_kg: "$/kg"
-    com_desc_kg: "$/kg"
-    resultado_kg: "$/kg"
+  replacement:
+    rule: >
+      El bloque inferior legacy marcado por el usuario ya no se renderiza
+      en Todas + IGF Diario.
 
-  windows:
-    - "1D"
-    - "5D"
-    - "1M"
-    - "3M"
-    - "YTD"
-    - "1A"
-    - "5A"
-    - "Todo"
+067_contract:
+  - "Planta específica + IGF Diario sigue mostrando vista semanal 067."
+  - "No modificar la lógica semanal."
+  - "No modificar gráfica 067."
+  - "No modificar semanas ISO."
 
-validated_performance:
-  - "Una llamada frontend por cambio de semana."
-  - "Una llamada por cambio de rango de gráfica."
-  - "No query por concepto."
+forecast_contract:
+  - "Forecast queda intacto."
+  - "No remover la sección legacy si Forecast todavía la usa."
+  - "No cambiar cálculos ARR/IGF Forecast."
+
+066_contract:
+  - "No modificar IGF Diario acumulado superior."
+  - "No modificar Margen."
+  - "No modificar Descuento."
+  - "No modificar Operativos."
+  - "No modificar Corporativos."
+  - "No modificar Impuestos."
+  - "No modificar HG."
+  - "No modificar Resultado Final."
+
+data_integrity_contract:
+  - "Un folio aparece como máximo una vez en toda la matriz."
+  - "Avanzar de Depósito a Comprobaciones no vuelve a sumarlo."
+  - "Avanzar de Comprobaciones a Evidencias no vuelve a sumarlo."
+  - "Cancelado se excluye."
+  - "Importe NULL nunca se vuelve cero."
+  - "Total planta = suma días."
+  - "Total día = suma plantas."
+  - "Total general coincide por ambas rutas."
+
+mandatory_tests:
+  - "Render solo en Todas + IGF Diario."
+  - "No render en planta específica."
+  - "067 sigue renderizando en planta específica."
+  - "Forecast permanece igual."
+  - "Mes proviene de Fecha de carga."
+  - "Octubre tiene 31 columnas."
+  - "Septiembre tiene 30."
+  - "Febrero leap/non-leap correcto."
+  - "Evento posterior al corte no entra."
+  - "DEPOSITO_CIERRE entra."
+  - "COMPROBACIONES entra."
+  - "EVIDENCIAS entra."
+  - "Etapas anteriores al umbral no entran."
+  - "CANCELADO no entra."
+  - "Folio que avanzó varias etapas se cuenta una vez."
+  - "Fecha usada es primera transición calificante."
+  - "No usa fecha de creación como sustituto."
+  - "Salto directo a etapa posterior usa primera transición calificante."
+  - "Importe viene de folio.importe."
+  - "No suma facturas/comprobado."
+  - "Importe NULL cuenta folio pero no suma importe."
+  - "0 explícito suma como 0 válido."
+  - "Celda agrega correctamente importe."
+  - "Celda agrega correctamente count."
+  - "Descripción 1 folio correcta."
+  - "Descripción múltiples usa mayor importe +N."
+  - "Tie-break descripción determinista."
+  - "Total mes por planta correcto."
+  - "Total día correcto."
+  - "Grand total correcto."
+  - "No duplicados."
+  - "Detalle de celda lista exactamente sus folios."
+  - "Detalle conserva estado/monto/descripción."
+  - "No acceso extra a folios restringidos."
+  - "Equivalencias de planta correctas."
+  - "No hardcodear IDs de planta."
   - "No query por día."
-  - "Schedules de gastos se arman en memoria."
-  - "Desglose/distribución se cargan una vez por mes involucrado."
-  - "No se degrada la vista Todas."
-
-validated_tests:
-  - "067 PASS 8/8."
-  - "Regresión reportada PASS 184/184."
+  - "No query por planta."
+  - "No query por folio."
+  - "067 PASS."
   - "066-R1 PASS."
   - "066 PASS."
   - "065-R1 PASS."
-  - "065 PASS."
   - "064-R1 PASS."
-  - "064 PASS."
-  - "063-R1 PASS."
-  - "063 PASS."
-  - "062 PASS."
-  - "061 PASS."
-  - "059-R1 PASS."
-  - "059 PASS."
-  - "Gráficas 054–056-R1 PASS."
-  - "Excel 036-044 relevantes PASS."
   - "frontend npm run build PASS."
   - "node --check server.js PASS."
   - "git diff --check limpio."
 
-production_validation_required:
-  ui:
-    - "Seleccionar una planta en IGF Diario."
-    - "Confirmar desaparición de Comparación IGF Forecast vs última versión."
-    - "Confirmar panel IGF Diario semanal vertical."
-    - "Confirmar Concepto/Valor semana."
-    - "Confirmar semana del corte."
-    - "Probar anterior/siguiente."
-    - "Confirmar número ISO."
-
-  same_week_excel:
-    - "Comparar Venta con fila Semana del Excel."
-    - "Comparar Precio."
-    - "Comparar Costo."
-    - "Comparar Flete."
-    - "Comparar Margen."
-    - "Comparar J/K/L."
-    - "Comparar Q/R/S/T."
-    - "Comparar HG."
-    - "Comparar C&D."
-    - "Comparar Resultado $/kg."
-    - "Comparar Resultado Importe."
-
-  cross_month:
-    - "Abrir semana 40 28/09–04/10."
-    - "Confirmar que no se divide."
-    - "Confirmar Resultado histórico cuando exista."
-    - "Confirmar componentes nuevos pre-octubre como —."
-    - "Confirmar Resultado $/kg = Resultado Importe / Venta."
-
-  chart:
-    - "Seleccionar Venta y confirmar eje kg."
-    - "Seleccionar Margen y confirmar eje $/kg."
-    - "Seleccionar Resultado Importe y confirmar eje $."
-    - "Probar 1D/5D/1M/3M/YTD/1A/5A/Todo."
-    - "Confirmar puntos históricos de Resultado."
-    - "Confirmar gaps de componentes no existentes."
-
-  forecast:
-    - "Cambiar a Forecast con planta."
-    - "Confirmar que comparación contra mes anterior continúa."
-
-pr_contract:
-  base: "main"
-  head: "fix/igf-diario-weekly-crossmonth-result-kg-067-r2"
-  title: "IMPL 067: vista semanal vertical IGF Diario por planta"
-  merge_executor: "HUMAN_APPROVER_ONLY"
-  preferred_merge: "Squash and merge"
-
-in_scope:
-  - "Verificar origin/main."
-  - "Verificar rama ahead 6 / behind 0."
-  - "Verificar todos los SHA de la cadena."
-  - "Verificar que no existan cambios de producto posteriores a 9328caef."
-  - "Crear reporte G4-PREP."
-  - "Crear PR."
-  - "STOP antes del merge."
+recommended_files:
+  - "lib/igf-diario-folios-deposito-matrix.js"
+  - "server.js"
+  - "frontend-dashboard/lib/api.ts"
+  - "frontend-dashboard/components/IgfDiarioFoliosDepositoMatrix.tsx"
+  - "frontend-dashboard/components/IgfForecastClient.tsx"
+  - "test/igf-diario-folios-deposito-matrix-068.test.js"
+  - "docs/dev-loop/CURRENT_TASK.md"
+  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-FOLIOS-DEPOSITO-MATRIX-068.md"
 
 out_of_scope:
-  - "Modificar producto."
-  - "Modificar tests."
-  - "Modificar Excel."
-  - "Modificar DB."
-  - "Rebase."
-  - "Merge."
+  - "Modificar folios."
+  - "Mover folios de etapa."
+  - "Cancelar folios."
+  - "Editar importe."
+  - "Cambiar historial."
+  - "Crear tablas nuevas salvo evidencia técnica imprescindible."
+  - "Cambiar ARR."
+  - "Cambiar Pronóstico."
+  - "Cambiar IGF mensual."
+  - "Cambiar 067."
+  - "Writes productivos."
+  - "Merge a main."
   - "Deploy."
-  - "Abrir siguiente tarea."
 
 merge_contract:
   executor: "HUMAN_APPROVER_ONLY"
@@ -224,22 +554,13 @@ merge_contract:
   deploy_authorized: false
 
 stop_conditions:
-  - "Si origin/main != d58216dd128c459df6ac9aff4a05a75f9505d8a6, STOP."
-  - "Si la rama deja de estar ahead 6 / behind 0 antes del commit G4, STOP."
-  - "Si aparecen cambios nuevos de producto después de 9328caef1f7c2a5e78b1a6988ed405a377a0317c, STOP."
-  - "Si PR no es mergeable, STOP."
-  - "No rebase."
-  - "No merge."
+  - "Si origin/main != c4f2db88784642433008b8b313ad2d60e17d896a, STOP."
+  - "Si no se puede determinar de forma autoritativa la fecha de primera transición al umbral, STOP."
+  - "Si se requiere usar created_at como aproximación, STOP."
+  - "Si el cambio obliga a modificar estados de folio, STOP."
+  - "Si la visibilidad requiere saltarse permisos existentes, STOP."
+  - "Si aparece N+1 por planta/día/folio, STOP."
 
-acceptance_criteria:
-  - "main exacto."
-  - "Rama contiene 067 + R1 + R2 completos."
-  - "Solo commit documental G4 adicional."
-  - "PR abierto."
-  - "Base/head correctos."
-  - "PR mergeable."
-  - "No merge."
-  - "No deploy."
-  - "status final DONE_PENDING_REVIEW."
+max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-WEEKLY-PLANT-VIEW-067.md"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-FOLIOS-DEPOSITO-MATRIX-068.md"
