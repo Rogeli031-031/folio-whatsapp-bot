@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fetchIgfDiarioGrafica, type ArrVentaSerieRange, type IgfDiarioGraficaResponse } from "@/lib/api";
+import { fetchIgfDiarioGrafica, fetchIgfDiarioSemanal, type ArrVentaSerieRange, type IgfDiarioGraficaResponse } from "@/lib/api";
 import ArrVentaCanalPanel from "@/components/ArrVentaCanalPanel";
 import ArrVentaGraficaModal from "@/components/ArrVentaGraficaModal";
 
@@ -39,6 +39,9 @@ type Props = {
   todas: boolean;
   scopeLabel: string;
   excelUrl: string;
+  seriesMetric?: string | null;
+  seriesLabel?: string | null;
+  seriesUnit?: "kg" | "mxn" | "per_kg" | null;
   onClose: () => void;
 };
 
@@ -174,12 +177,14 @@ function weekGridSpan(
   return { gridColumnStart: start + 1, gridColumnEnd: end + 2 };
 }
 
-function fmtYTick(value: number, metric: Metric) {
+function fmtYTick(value: number, metric: Metric | "kg") {
+  const sign = value < 0 ? "-" : "";
+  if (metric === "kg") {
+    return `${sign}${Math.round(Math.abs(value)).toLocaleString("es-MX")} kg`;
+  }
   if (metric === "per_kg") {
-    const sign = value < 0 ? "-" : "";
     return `${sign}$${Math.abs(value).toFixed(2)}`;
   }
-  const sign = value < 0 ? "-" : "";
   const abs = Math.abs(value);
   if (abs >= 1000) {
     const kilos = abs / 1000;
@@ -235,6 +240,9 @@ export default function IgfDiarioGraficaModal({
   todas,
   scopeLabel,
   excelUrl,
+  seriesMetric,
+  seriesLabel,
+  seriesUnit,
   onClose,
 }: Props) {
   const [metric, setMetric] = useState<Metric>("mxn");
@@ -248,16 +256,38 @@ export default function IgfDiarioGraficaModal({
   useEffect(() => {
     let cancel = false;
     setError(null);
-    fetchIgfDiarioGrafica({
-      token,
-      year,
-      month,
-      range,
-      uploadDay,
-      versionAsOfCorte,
-      plantCode: todas ? null : plantCode,
-      todas,
-    })
+    const request = seriesMetric
+      ? fetchIgfDiarioSemanal({
+        token,
+        year,
+        month,
+        plantCode: plantCode || "",
+        uploadDay,
+        versionAsOfCorte,
+        view: "series",
+        range,
+        metric: seriesMetric,
+      }).then((payload) => ({
+        ok: true,
+        scope: scopeLabel,
+        range: payload.range || range,
+        corte_ymd: payload.corte_ymd,
+        points: payload.points || [],
+        weeks: [],
+        new_clients_chart: [],
+        new_clients_top: [],
+      }) as GraficaData)
+      : fetchIgfDiarioGrafica({
+        token,
+        year,
+        month,
+        range,
+        uploadDay,
+        versionAsOfCorte,
+        plantCode: todas ? null : plantCode,
+        todas,
+      });
+    request
       .then((payload) => {
         if (!cancel) setData(payload);
       })
@@ -267,7 +297,7 @@ export default function IgfDiarioGraficaModal({
     return () => {
       cancel = true;
     };
-  }, [token, year, month, range, uploadDay, versionAsOfCorte, plantCode, todas]);
+  }, [token, year, month, range, uploadDay, versionAsOfCorte, plantCode, todas, seriesMetric, scopeLabel]);
 
   const chart = useMemo(() => {
     const points = data?.points || [];
@@ -277,8 +307,10 @@ export default function IgfDiarioGraficaModal({
     const padR = 16;
     const padT = 16;
     const padB = 48;
-    const valueOf = (point: IgfDiarioGraficaResponse["points"][number]) =>
-      metric === "mxn" ? point.resultado_mxn : point.resultado_per_kg;
+    const valueOf = (point: IgfDiarioGraficaResponse["points"][number] & { value?: number | null }) => {
+      if (seriesMetric) return typeof point.value === "number" ? point.value : null;
+      return metric === "mxn" ? point.resultado_mxn : point.resultado_per_kg;
+    };
     const usable = points
       .map((point, index) => ({ point, index, value: valueOf(point) }))
       .filter((item) => typeof item.value === "number");
@@ -305,8 +337,9 @@ export default function IgfDiarioGraficaModal({
     const yTicks = buildNiceYTicks(yMin, yMax, metric);
     const xTicks = buildXAxisTicks(points, range);
     return { W, H, padL, padT, padB, yOf, xOf, yMin, yMax, trend, points, valueOf, yTicks, xTicks };
-  }, [data, metric, range]);
+  }, [data, metric, range, seriesMetric]);
 
+  const axisUnit = seriesMetric ? seriesUnit : metric;
   const metricLabel = metric === "mxn" ? "$" : "$/kg";
   const weekSpans = (data?.weeks || [])
     .map((week) => ({ week, span: weekGridSpan(chart.points, week) }))
@@ -316,7 +349,7 @@ export default function IgfDiarioGraficaModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4">
       <div className="flex max-h-[96vh] w-full max-w-[1600px] flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
         <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 px-4 py-3">
-          <h2 className="text-base font-semibold text-white">Gráfica · Rentabilidad IGF Diario</h2>
+          <h2 className="text-base font-semibold text-white">{seriesMetric && seriesLabel ? `Gráfica · ${seriesLabel}` : "Gráfica · Rentabilidad IGF Diario"}</h2>
           <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 text-center">
             <div className="text-3xl font-black tracking-[0.12em] text-sky-300 sm:text-4xl">
               {scopeLabel}
@@ -342,8 +375,8 @@ export default function IgfDiarioGraficaModal({
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-2">
           <div className="flex items-center gap-2 text-xs text-slate-300">
-            <span>Métrica {metricLabel}:</span>
-            {(["mxn", "per_kg"] as Metric[]).map((id) => (
+            <span>Métrica {seriesMetric ? (seriesUnit === "kg" ? "kg" : seriesUnit === "mxn" ? "$" : "$/kg") : metricLabel}:</span>
+            {!seriesMetric && (["mxn", "per_kg"] as Metric[]).map((id) => (
               <button
                 key={id}
                 type="button"
@@ -391,7 +424,7 @@ export default function IgfDiarioGraficaModal({
                     />
                   )}
                   <text x={chart.padL - 8} y={chart.yOf(tick) + 3} textAnchor="end" fill="#94a3b8" fontSize={11}>
-                    {fmtYTick(tick, metric)}
+                    {fmtYTick(tick, axisUnit || "per_kg")}
                   </text>
                 </g>
               ))}
@@ -460,8 +493,14 @@ export default function IgfDiarioGraficaModal({
             {hover != null && chart.points[hover] && (
               <div className="mt-2 rounded border border-slate-700 bg-slate-950 p-3 text-xs text-slate-200">
                 <div className="font-medium text-white">{fmtFecha(chart.points[hover].fecha)}</div>
-                <div>Resultado: {fmtMoney(chart.points[hover].resultado_mxn)}</div>
-                <div>Resultado/kg: {fmtPerKg(chart.points[hover].resultado_per_kg)}</div>
+                {seriesMetric ? (
+                  <div>{seriesLabel}: {seriesUnit === "kg" ? fmtKg(chart.valueOf(chart.points[hover])) : seriesUnit === "mxn" ? fmtMoney(chart.valueOf(chart.points[hover])) : fmtPerKg(chart.valueOf(chart.points[hover]))}</div>
+                ) : (
+                  <>
+                    <div>Resultado: {fmtMoney(chart.points[hover].resultado_mxn)}</div>
+                    <div>Resultado/kg: {fmtPerKg(chart.points[hover].resultado_per_kg)}</div>
+                  </>
+                )}
                 <div>Venta: {fmtKg(chart.points[hover].venta_kg)}</div>
                 <div>Estado: {chart.points[hover].estado === "proyectado" ? "Proyectado" : "Real"}</div>
                 <div>Cobertura: {chart.points[hover].complete ? "Completa" : "Incompleta"}</div>

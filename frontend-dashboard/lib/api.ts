@@ -99,6 +99,91 @@ export type IgfDiarioGraficaResponse = {
   } | null;
 };
 
+export type IgfDiarioSemanalMetrics = {
+  venta_kg: number | null;
+  precio_kg: number | null;
+  ingreso_mxn: number | null;
+  costo_kg: number | null;
+  flete_kg: number | null;
+  margen_kg: number | null;
+  gasto_corporativo_kg: number | null;
+  inversiones_kg: number | null;
+  impuestos_federales_kg: number | null;
+  margen_neto_kg: number | null;
+  presupuesto_nomina_gastos_kg: number | null;
+  presupuesto_imss_sua_kg: number | null;
+  extraordinarios_kg: number | null;
+  provisiones_planta_kg: number | null;
+  sobrante_antes_hg_kg: number | null;
+  hg_mxn: number | null;
+  hg_kg: number | null;
+  sobrante_con_hg_kg: number | null;
+  com_desc_kg: number | null;
+  resultado_kg: number | null;
+  resultado_mxn: number | null;
+};
+
+export type IgfDiarioSemanalResponse = {
+  ok: boolean;
+  year: number;
+  month: number;
+  plant_code: string;
+  empresa: string;
+  corte_ymd: string | null;
+  week: {
+    iso_week_year: number;
+    iso_week: number;
+    fecha_desde: string;
+    fecha_hasta: string;
+    estado: "real" | "parcial" | "proyectada";
+    complete: boolean;
+    missing_components: string[];
+  };
+  metrics: IgfDiarioSemanalMetrics;
+  nav: {
+    prev_anchor: string;
+    next_anchor: string;
+    prev_enabled: boolean;
+    next_enabled: boolean;
+  };
+  query_count?: number;
+};
+
+export async function fetchIgfDiarioSemanal(opts: {
+  token: string;
+  year: number;
+  month: number;
+  plantCode: string;
+  weekAnchor?: string | null;
+  uploadDay?: string | null;
+  versionAsOfCorte?: boolean;
+  view?: "week" | "series";
+  range?: string;
+  metric?: string;
+}): Promise<IgfDiarioSemanalResponse & { points?: IgfDiarioGraficaPoint[]; range?: string; metric?: string }> {
+  const params = new URLSearchParams({
+    year: String(opts.year),
+    month: String(opts.month),
+    plant_code: opts.plantCode,
+  });
+  const up = (opts.uploadDay || "").trim();
+  const anchor = (opts.weekAnchor || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(up)) params.set("upload_day", up);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(anchor)) params.set("week_anchor", anchor);
+  if (opts.versionAsOfCorte && /^\d{4}-\d{2}-\d{2}$/.test(up)) params.set("version_as_of_corte", "1");
+  if (opts.view === "series") {
+    params.set("view", "series");
+    params.set("range", opts.range || "1m");
+    if (opts.metric) params.set("metric", opts.metric);
+  }
+  const res = await fetch(getApiUrl(`/api/dashboard/igf-diario-semanal?${params.toString()}`), {
+    headers: { Authorization: `Bearer ${opts.token}` },
+  });
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+  return body as IgfDiarioSemanalResponse & { points?: IgfDiarioGraficaPoint[]; range?: string; metric?: string };
+}
+
 export async function fetchIgfDiarioGrafica(opts: {
   token: string;
   year: number;

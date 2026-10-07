@@ -1,6 +1,6 @@
-﻿task_id: "G4-PREP-ARR-IGF-DIARIO-RESULT-PARITY-066-R1"
+﻿task_id: "G4-PREP-IGF-DIARIO-WEEKLY-PLANT-VIEW-067"
 
-title: "Preparar PR de paridad Resultado Final ARR / IGF Diario / AG TOTAL MES 066-R1"
+title: "Preparar PR de vista semanal vertical IGF Diario 067 + R1 + R2"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -15,189 +15,195 @@ human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-1
 g4_authorization: "G4_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-06"
 
 objective: >
-  Preparar el Pull Request de
-  FIX-ARR-IGF-DIARIO-RESULT-PARITY-066-R1
-  hacia main. No modificar producto ni tests.
+  Preparar el Pull Request de la entrega completa 067,
+  incluyendo FIX 067-R1 y FIX 067-R2, hacia main.
+  No modificar producto ni tests.
   El merge queda reservado exclusivamente al HUMAN_APPROVER.
 
-main_reference_sha: "1b7584683947d057ef49652d76399aa20a3bbafd"
+main_reference_sha: "d58216dd128c459df6ac9aff4a05a75f9505d8a6"
 
-branch: "fix/arr-igf-diario-result-parity-066-r1"
+branch: "fix/igf-diario-weekly-crossmonth-result-kg-067-r2"
 
-product_sha: "9b3bb1cac11a5efbba9d2de300c6e8ed4fc67669"
+delivery_chain:
+  impl_067_product: "d04c01ebdcb3779da1eccfb4b5642568c392e509"
+  impl_067_final: "940cc0907fc1aab6a23708cc49f192aa42f2b24a"
 
-validated_source_sha: "c2320239adbd84c972f80ee25abc7f790834e7cd"
+  fix_067_r1_product: "c4c806b19683a4153d2724b772cf4ce68807f82c"
+  fix_067_r1_final: "0dd2bb5847ed328fe5b73dec0d25297fb275f568"
+
+  fix_067_r2_product: "39b1236880a14a194ba41bfbaf330e79ff1aa8d2"
+  validated_source_sha: "9328caef1f7c2a5e78b1a6988ed405a377a0317c"
 
 target_branch: "main"
 
 validated_scope:
-  - "Corrección aplica únicamente desde octubre 2026."
-  - "Septiembre 2026 y anteriores permanecen legacy."
-  - "Venta financiera octubre+ usa financials.ventaTon."
-  - "financials.ventaTon equivale a B TOTAL MES / 1000."
-  - "No fallback a row.ventaTon legacy en octubre+."
-  - "La misma venta alimenta ingreso."
-  - "La misma venta alimenta Impuestos $/kg."
-  - "La misma venta llega a IGF Diario acumulado."
-  - "La misma venta llega a ARR."
-  - "Zona Provincia suma la Venta TOTAL MES de las plantas."
-  - "Corporativos permanece J+K."
-  - "Impuestos Federales L permanece fuera de Corporativos."
-  - "Gasto visible permanece Operativos + Corporativos."
-  - "Impuestos visible permanece L / B."
-  - "Resultado Final resta Impuestos Federales exactamente una vez."
-  - "Resultado Final = Ingreso - Operativos - Corporativos - Impuestos Federales."
-  - "No se resta impuesto_kg además del importe mensual."
-  - "Util. Operación permanece Ingreso - Operativos."
-  - "ARR obtiene venta desde miniRow.ventaTon."
-  - "ARR obtiene rentabilidad desde miniRow.resultadoFinalImporte."
-  - "ArrClient.tsx no requirió modificación."
-  - "applyDesgloseTotals conserva la resta de Impuestos Federales."
-  - "El desglose posterior no revierte la corrección."
-  - "Zona suma Resultado Final corregido."
-  - "Un null de resultado no se convierte en 0 en zona."
-  - "0 explícito de Impuestos Federales es válido."
-  - "Impuesto faltante produce resultado null."
-  - "Venta faltante produce resultado null."
-  - "Operativos faltantes producen resultado null."
-  - "Corporativos faltantes producen resultado null."
-  - "Excel no fue modificado."
-  - "No hay hardcode de Puebla."
-  - "No hay hardcode de -201192."
-  - "No hay hardcode de fila 48."
-  - "No hay parsing XLSX."
-  - "No hay query nueva ni N+1."
+  - "Planta seleccionada + IGF Diario muestra panel semanal vertical."
+  - "Planta seleccionada + IGF Diario deja de mostrar comparación contra mes anterior."
+  - "No se carga mes anterior cuando no se usa."
+  - "Modo Forecast conserva comparación legacy."
+  - "Planta Todas conserva vista actual."
+  - "Semana ISO lunes-domingo."
+  - "Número real de semana ISO."
+  - "Semana puede cruzar meses."
+  - "Corte 06/10/2026 abre 05/10–11/10."
+  - "Anterior/Siguiente desplaza exactamente 7 días."
+  - "Cambio de planta/mes/corte vuelve a semana del corte."
+  - "Estados REAL/PARCIAL/PROYECTADA."
+  - "Tabla vertical sin scroll horizontal."
+  - "Venta = suma B."
+  - "Ingreso = suma D."
+  - "Precio = ingreso / venta."
+  - "Costo/Flete ponderados."
+  - "Margen = Precio - Costo - Flete."
+  - "J/K/L/Q/R/S/T usan schedules diarios 064-R1."
+  - "Overrides diarios 064-R1 fluyen a la semana."
+  - "Overrides C/F/G 065-R1 fluyen a la semana."
+  - "Margen Neto/Sobrantes siguen semántica Excel."
+  - "HG importe suma días."
+  - "C&D preserva signo."
+  - "Resultado Importe suma resultado diario con precisión completa."
+  - "Resultado $/kg de semana detallada conserva fórmula normal."
+  - "Resultado histórico legacy pre-octubre se preserva cuando existe."
+  - "No se inventa desglose J/K/L/Q/R/S/T pre-octubre."
+  - "Semana mixta Sep/Oct conserva Resultado legacy + detallado."
+  - "Semana mixta deriva Resultado $/kg = Resultado Importe / Venta cuando la cadena detallada no existe."
+  - "resultado_kg * venta_kg = resultado_mxn en semana mixta."
+  - "Sin Resultado Importe, Resultado $/kg queda null."
+  - "Con Venta 0, Resultado $/kg queda null."
+  - "Gráfica abre la métrica seleccionada."
+  - "Venta usa eje kg."
+  - "Ingreso/HG/Resultado importe usan eje MXN."
+  - "Métricas por kilo usan eje $/kg."
+  - "Título de serie es Gráfica · {métrica}."
+  - "Modal legacy conserva título Rentabilidad IGF Diario."
+  - "Ventanas 1D/5D/1M/3M/YTD/1A/5A/Todo permanecen."
+  - "Real/proyectado/tendencia permanecen."
+  - "Histórico detallado inexistente conserva gaps."
+  - "Resultado histórico existente no se borra."
+  - "No parsing XLSX."
+  - "No hardcode de semanas/filas/importes."
+  - "No query por día."
+  - "No query por concepto."
+  - "No N+1 por planta."
 
-validated_formula:
-  venta_october: "financials.ventaTon"
+validated_week_40:
+  range: "2026-09-28/2026-10-04"
+  iso_week: 40
+  behavior:
+    - "No se parte el 01/10."
+    - "Resultado de septiembre usa evidencia legacy existente."
+    - "Resultado de octubre usa contrato detallado."
+    - "Componentes nuevos de septiembre permanecen null."
+    - "Resultado Importe combina ambos lados."
+    - "Resultado $/kg puede derivarse directamente del Importe / Venta."
 
-  ingreso: >
-    (margenKg + comDescKg - hgKg) *
-    ventaTon * 1000
+validated_chart:
+  units:
+    venta_kg: "kg"
+    ingreso_mxn: "MXN"
+    hg_mxn: "MXN"
+    resultado_mxn: "MXN"
+    precio_kg: "$/kg"
+    costo_kg: "$/kg"
+    flete_kg: "$/kg"
+    margen_kg: "$/kg"
+    com_desc_kg: "$/kg"
+    resultado_kg: "$/kg"
 
-  utilidad_operacion: >
-    ingreso - operativos
+  windows:
+    - "1D"
+    - "5D"
+    - "1M"
+    - "3M"
+    - "YTD"
+    - "1A"
+    - "5A"
+    - "Todo"
 
-  resultado_final: >
-    utilidad_operacion
-    - corporativos
-    - impuestos_federales
-
-  expanded: >
-    ingreso
-    - operativos
-    - corporativos
-    - impuestos_federales
-
-excel_equivalence:
-  daily_chain:
-    - "M = J + K + L"
-    - "O = H - M"
-    - "W = O - U"
-    - "AB = W - Z"
-    - "AF = AB + AD"
-    - "AG = AF * B"
-
-  dashboard_classification:
-    corporativos: "J + K"
-    impuestos: "L / B"
-    gasto_visible: "Operativos + Corporativos"
-
-  result_rule: >
-    Aunque L se presenta separado de Corporativos en el dashboard,
-    Resultado Final debe cargar económicamente J+K+L una sola vez,
-    igual que AG del Excel.
-
-validated_files:
-  product:
-    - "frontend-dashboard/lib/igf-october-mini.js"
-    - "frontend-dashboard/components/IgfForecastClient.tsx"
-
-  tests:
-    - "test/arr-igf-diario-result-parity-066-r1.test.js"
-    - "test/arr-igf-diario-financial-sources-066.test.js"
-
-  documentation:
-    - "docs/dev-loop/CURRENT_TASK.md"
-    - "docs/dev-loop/reports/FIX-ARR-IGF-DIARIO-RESULT-PARITY-066-R1.md"
+validated_performance:
+  - "Una llamada frontend por cambio de semana."
+  - "Una llamada por cambio de rango de gráfica."
+  - "No query por concepto."
+  - "No query por día."
+  - "Schedules de gastos se arman en memoria."
+  - "Desglose/distribución se cargan una vez por mes involucrado."
+  - "No se degrada la vista Todas."
 
 validated_tests:
-  - "066-R1 PASS 5/5."
-  - "066 PASS 10/10."
-  - "059 PASS."
-  - "059-R1 PASS."
-  - "061 PASS."
-  - "062 PASS."
-  - "063 PASS."
-  - "063-R1 PASS."
-  - "064 PASS."
-  - "064-R1 PASS."
-  - "065 PASS."
+  - "067 PASS 8/8."
+  - "Regresión reportada PASS 184/184."
+  - "066-R1 PASS."
+  - "066 PASS."
   - "065-R1 PASS."
-  - "Excel 036-044 PASS."
-  - "100/100 regresiones reportadas."
+  - "065 PASS."
+  - "064-R1 PASS."
+  - "064 PASS."
+  - "063-R1 PASS."
+  - "063 PASS."
+  - "062 PASS."
+  - "061 PASS."
+  - "059-R1 PASS."
+  - "059 PASS."
+  - "Gráficas 054–056-R1 PASS."
+  - "Excel 036-044 relevantes PASS."
   - "frontend npm run build PASS."
   - "node --check server.js PASS."
   - "git diff --check limpio."
 
 production_validation_required:
-  same_cut:
-    rule: >
-      Comparar dashboard y Excel usando exactamente la misma planta,
-      mes y fecha de corte.
+  ui:
+    - "Seleccionar una planta en IGF Diario."
+    - "Confirmar desaparición de Comparación IGF Forecast vs última versión."
+    - "Confirmar panel IGF Diario semanal vertical."
+    - "Confirmar Concepto/Valor semana."
+    - "Confirmar semana del corte."
+    - "Probar anterior/siguiente."
+    - "Confirmar número ISO."
 
-  puebla:
-    - "Excel B TOTAL MES / 1000 = Venta IGF Diario acumulado."
-    - "Excel B TOTAL MES / 1000 = Venta ARR."
-    - "Excel H TOTAL MES = Margen dashboard."
-    - "Excel AD TOTAL MES = Com. y Desc. dashboard/ARR."
-    - "Corporativos dashboard = J + K."
-    - "Impuestos dashboard = L / B."
-    - "Gasto dashboard = Operativos + Corporativos."
-    - "Excel AG TOTAL MES = Resultado Final - Importe del acumulado."
-    - "Excel AG TOTAL MES = Rentabilidad ARR sin simulación."
+  same_week_excel:
+    - "Comparar Venta con fila Semana del Excel."
+    - "Comparar Precio."
+    - "Comparar Costo."
+    - "Comparar Flete."
+    - "Comparar Margen."
+    - "Comparar J/K/L."
+    - "Comparar Q/R/S/T."
+    - "Comparar HG."
+    - "Comparar C&D."
+    - "Comparar Resultado $/kg."
+    - "Comparar Resultado Importe."
 
-  current_evidence_reference:
-    note: "Solo referencia de validación; no hardcode."
-    previous_dashboard_result: 225470
-    expected_excel_ag_approx: -201192
-    previous_dashboard_venta_ton: 1166.76
-    excel_b_total_ton_approx: 1164.953
+  cross_month:
+    - "Abrir semana 40 28/09–04/10."
+    - "Confirmar que no se divide."
+    - "Confirmar Resultado histórico cuando exista."
+    - "Confirmar componentes nuevos pre-octubre como —."
+    - "Confirmar Resultado $/kg = Resultado Importe / Venta."
 
-  all_plants:
-    - "GT Puebla"
-    - "Tehuacan"
-    - "Acapulco"
-    - "GTM Queretaro"
-    - "GTM San Luis"
-    - "Morelos"
+  chart:
+    - "Seleccionar Venta y confirmar eje kg."
+    - "Seleccionar Margen y confirmar eje $/kg."
+    - "Seleccionar Resultado Importe y confirmar eje $."
+    - "Probar 1D/5D/1M/3M/YTD/1A/5A/Todo."
+    - "Confirmar puntos históricos de Resultado."
+    - "Confirmar gaps de componentes no existentes."
 
-  historical:
-    - "Abrir septiembre 2026."
-    - "Confirmar Venta legacy intacta."
-    - "Confirmar Rentabilidad legacy intacta."
-    - "Confirmar comparación Octubre - Septiembre."
-
-  regressions:
-    - "Pronóstico permanece intacto."
-    - "Desc. PROY permanece alineado con AD."
-    - "Margen H permanece intacto."
-    - "HG/HG$ permanecen intactos."
-    - "065-R1 permanece intacto."
-    - "064-R1 permanece intacto."
+  forecast:
+    - "Cambiar a Forecast con planta."
+    - "Confirmar que comparación contra mes anterior continúa."
 
 pr_contract:
   base: "main"
-  head: "fix/arr-igf-diario-result-parity-066-r1"
-  title: "FIX 066-R1: alinear Venta y Resultado Final con AG TOTAL MES"
+  head: "fix/igf-diario-weekly-crossmonth-result-kg-067-r2"
+  title: "IMPL 067: vista semanal vertical IGF Diario por planta"
   merge_executor: "HUMAN_APPROVER_ONLY"
   preferred_merge: "Squash and merge"
 
 in_scope:
   - "Verificar origin/main."
-  - "Verificar rama ahead 2 / behind 0."
-  - "Verificar product SHA."
-  - "Verificar source SHA."
+  - "Verificar rama ahead 6 / behind 0."
+  - "Verificar todos los SHA de la cadena."
+  - "Verificar que no existan cambios de producto posteriores a 9328caef."
   - "Crear reporte G4-PREP."
   - "Crear PR."
   - "STOP antes del merge."
@@ -205,9 +211,9 @@ in_scope:
 out_of_scope:
   - "Modificar producto."
   - "Modificar tests."
-  - "Modificar fórmulas."
   - "Modificar Excel."
   - "Modificar DB."
+  - "Rebase."
   - "Merge."
   - "Deploy."
   - "Abrir siguiente tarea."
@@ -218,22 +224,22 @@ merge_contract:
   deploy_authorized: false
 
 stop_conditions:
-  - "Si origin/main != 1b7584683947d057ef49652d76399aa20a3bbafd, STOP."
-  - "Si la rama deja de estar basada exactamente en ese main, STOP."
-  - "Si aparecen cambios nuevos de producto posteriores a c2320239adbd84c972f80ee25abc7f790834e7cd, STOP."
-  - "Si el PR no es mergeable, STOP."
+  - "Si origin/main != d58216dd128c459df6ac9aff4a05a75f9505d8a6, STOP."
+  - "Si la rama deja de estar ahead 6 / behind 0 antes del commit G4, STOP."
+  - "Si aparecen cambios nuevos de producto después de 9328caef1f7c2a5e78b1a6988ed405a377a0317c, STOP."
+  - "Si PR no es mergeable, STOP."
   - "No rebase."
   - "No merge."
 
 acceptance_criteria:
   - "main exacto."
-  - "ahead 2 / behind 0 antes del commit G4."
+  - "Rama contiene 067 + R1 + R2 completos."
   - "Solo commit documental G4 adicional."
   - "PR abierto."
-  - "PR base/head correctos."
+  - "Base/head correctos."
   - "PR mergeable."
   - "No merge."
   - "No deploy."
   - "status final DONE_PENDING_REVIEW."
 
-result_report_path: "docs/dev-loop/reports/G4-PREP-ARR-IGF-DIARIO-RESULT-PARITY-066-R1.md"
+result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-WEEKLY-PLANT-VIEW-067.md"
