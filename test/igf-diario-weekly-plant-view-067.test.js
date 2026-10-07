@@ -14,6 +14,7 @@ const ROOT = path.join(__dirname, "..");
 const WEEKLY = fs.readFileSync(path.join(ROOT, "lib", "igf-diario-weekly-plant.js"), "utf8");
 const CLIENT = fs.readFileSync(path.join(ROOT, "frontend-dashboard", "components", "IgfForecastClient.tsx"), "utf8");
 const PANEL = fs.readFileSync(path.join(ROOT, "frontend-dashboard", "components", "IgfDiarioWeeklyPlantPanel.tsx"), "utf8");
+const ROWS = fs.readFileSync(path.join(ROOT, "frontend-dashboard", "lib", "igf-diario-weekly-rows.ts"), "utf8");
 const MODAL = fs.readFileSync(path.join(ROOT, "frontend-dashboard", "components", "IgfDiarioGraficaModal.tsx"), "utf8");
 const SERVER = fs.readFileSync(path.join(ROOT, "server.js"), "utf8");
 
@@ -40,25 +41,30 @@ function day(fecha, extra) {
   };
 }
 
-test("la semana ISO cruza de mes y el corte 06/10 abre 05/10–11/10", () => {
-  assert.equal(weekly.mondayOfIsoWeekContainingDate("2026-09-28"), "2026-09-28");
-  assert.equal(weekly.sundayOfIsoWeekContainingDate("2026-09-28"), "2026-10-04");
-  assert.equal(weekly.isoWeek("2026-09-28"), 40);
-  assert.equal(weekly.isoWeekYear("2026-09-28"), 2026);
+test("la semana domingo-sábado cruza de mes y el corte 06/10 abre 04/10–10/10", () => {
+  assert.equal(weekly.sundayOfWeekContainingDate("2026-10-06"), "2026-10-04");
+  assert.equal(weekly.saturdayOfWeekContainingDate("2026-10-06"), "2026-10-10");
+  assert.equal(weekly.weekNumber("2026-10-04"), 41);
+  assert.equal(weekly.weekYear("2026-10-04"), 2026);
   const opened = weekly.weekOf("2026-10-06");
-  assert.equal(opened.fecha_desde, "2026-10-05");
-  assert.equal(opened.fecha_hasta, "2026-10-11");
-  assert.equal(opened.iso_week, weekly.isoWeek("2026-10-05"));
-  assert.equal(weekly.addWeeks(opened.fecha_desde, -1), "2026-09-28");
-  assert.equal(weekly.addWeeks(opened.fecha_desde, 1), "2026-10-12");
-  assert.equal(weekly.addDays("2026-10-05", -7), "2026-09-28");
-  assert.equal(weekly.addDays("2026-10-05", 7), "2026-10-12");
+  assert.equal(opened.fecha_desde, "2026-10-04");
+  assert.equal(opened.fecha_hasta, "2026-10-10");
+  assert.equal(opened.week_number, 41);
+  assert.equal(opened.week_year, 2026);
+  assert.equal(weekly.addWeeks(opened.fecha_desde, -1), "2026-09-27");
+  assert.equal(weekly.addWeeks(opened.fecha_desde, 1), "2026-10-11");
+  assert.equal(weekly.addDays("2026-10-04", -7), "2026-09-27");
+  assert.equal(weekly.addDays("2026-10-04", 7), "2026-10-11");
   const nav = weekly.navigationFor("2026-10-06", 2026, 10);
   assert.equal(nav.prev_enabled, true);
   assert.equal(nav.next_enabled, true);
+  assert.equal(nav.prev_anchor, "2026-09-27");
+  assert.equal(nav.next_anchor, "2026-10-11");
   assert.equal(weekly.navigationFor("2026-09-28", 2026, 10).prev_enabled, false);
   assert.equal(weekly.weekIntersectsMonth("2026-09-28", 2026, 10), true);
   assert.equal(weekly.weekIntersectsMonth("2026-09-21", 2026, 10), false);
+  assert.equal(weekly.weekOf("2026-10-01").fecha_desde, "2026-09-27");
+  assert.equal(weekly.weekOf("2026-10-01").fecha_hasta, "2026-10-03");
 });
 
 test("el estado sigue al corte y la fórmula semanal equivale a la fila de semana", () => {
@@ -189,11 +195,13 @@ test("el panel vive solo en IGF Diario y no pide el mes anterior ni el Excel", (
   assert.match(CLIENT, /igfTableMode === "forecast" && igfForecast/);
   assert.match(CLIENT, /Comparación IGF Forecast vs última versión del mes anterior/);
   assert.match(CLIENT, /igfTableMode === "igf_diario"\) \{\s*setIgfMesAnterior\(null\)/);
-  assert.match(PANEL, /Venta en kilos/);
-  assert.match(PANEL, /RESULTADO \(Importe\)/);
-  assert.match(PANEL, /SEMANA ISO/);
+  assert.match(ROWS, /Venta en Kilos/);
+  assert.match(ROWS, /Margen Bruto/);
+  assert.match(ROWS, /RESULTADO \(Importe\)/);
+  assert.doesNotMatch(PANEL, /SEMANA ISO/);
+  assert.doesNotMatch(ROWS, /SEMANA ISO/);
   assert.match(PANEL, /seriesMetric=\{selectedRow.key\}/);
-  assert.match(PANEL, /grid-cols-\[minmax\(0,1fr\)_auto\]/);
+  assert.match(PANEL, />Semana</);
   for (const label of ["1D", "5D", "1M", "3M", "YTD", "1A", "5A", "Todo"]) {
     assert.match(MODAL, new RegExp(label));
   }
@@ -235,8 +243,6 @@ test("el bundle transporta el resultado legacy y la semana 40 no inventa gastos"
   assert.equal(oct.get("2026-10-01").expenses.gasto_corporativo, 2);
   const days = [...sepFechas, ...octFechas].map((fecha) => sep.get(fecha) || oct.get(fecha));
   const pack = weekly.aggregateWeek(days, "2026-10-06");
-  assert.equal(weekly.isoWeek("2026-09-28"), 40);
-  assert.equal(weekly.sundayOfIsoWeekContainingDate("2026-09-28"), "2026-10-04");
   assert.equal(pack.metrics.gasto_corporativo_kg, null);
   assert.equal(pack.metrics.inversiones_kg, null);
   assert.equal(pack.metrics.impuestos_federales_kg, null);
@@ -302,11 +308,11 @@ test("el eje usa la unidad de la serie y el título no se duplica", () => {
   assert.match(MODAL, /kg`/);
   assert.match(MODAL, /Gráfica · Rentabilidad IGF Diario/);
   assert.match(MODAL, /seriesMetric && seriesLabel \? `Gráfica · \$\{seriesLabel\}` : "Gráfica · Rentabilidad IGF Diario"/);
-  assert.match(PANEL, /key: "venta_kg", label: "Venta en kilos", unit: "kg"/);
-  assert.match(PANEL, /key: "margen_kg", label: "Margen", unit: "per_kg"/);
-  assert.match(PANEL, /key: "ingreso_mxn", label: "Ingreso generado", unit: "mxn"/);
-  assert.match(PANEL, /key: "hg_mxn", label: "HG", unit: "mxn"/);
-  assert.match(PANEL, /key: "resultado_mxn", label: "RESULTADO \(Importe\)", unit: "mxn"/);
-  assert.match(PANEL, /key: "com_desc_kg", label: "Comisiones y Descuentos", unit: "per_kg"/);
-  assert.match(PANEL, /key: "resultado_kg", label: "RESULTADO \(\$\/kg\)", unit: "per_kg"/);
+  assert.match(ROWS, /key: "venta_kg", label: "Venta en Kilos", unit: "kg"/);
+  assert.match(ROWS, /key: "margen_kg", label: "Margen Bruto", unit: "per_kg"/);
+  assert.match(ROWS, /key: "ingreso_mxn", label: "Ingreso Generado", unit: "mxn"/);
+  assert.match(ROWS, /key: "hg_mxn", label: "HG", unit: "mxn"/);
+  assert.match(ROWS, /key: "resultado_mxn", label: "RESULTADO \(Importe\)", unit: "mxn"/);
+  assert.match(ROWS, /key: "com_desc_kg", label: "Comisiones y Descuentos", unit: "per_kg"/);
+  assert.match(ROWS, /key: "resultado_kg", label: "RESULTADO \(\$\/kg\)", unit: "per_kg"/);
 });

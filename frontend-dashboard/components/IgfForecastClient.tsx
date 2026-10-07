@@ -21,6 +21,7 @@ import {
 } from "@/lib/igf-october-mini";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
 import IgfDiarioWeeklyPlantPanel from "@/components/IgfDiarioWeeklyPlantPanel";
+import IgfDiarioWeeklyAllPlantsPanel from "@/components/IgfDiarioWeeklyAllPlantsPanel";
 import IgfDiarioFoliosDepositoMatrix from "@/components/IgfDiarioFoliosDepositoMatrix";
 import {
   fetchIgfForecast,
@@ -2703,6 +2704,15 @@ export function IgfForecastContent() {
             </>
           )}
         </section>
+        {!plantaFilter && igfTableMode === "igf_diario" && token && igfForecast && (
+          <IgfDiarioWeeklyAllPlantsPanel
+            token={token}
+            year={igfForecast.year}
+            month={igfForecast.month}
+            uploadDay={uploadDay}
+            versionAsOfCorte={versionAsOfCorte}
+          />
+        )}
         {!plantaFilter && igfTableMode === "igf_diario" && token && igfForecast && (
           <IgfDiarioFoliosDepositoMatrix
             token={token}

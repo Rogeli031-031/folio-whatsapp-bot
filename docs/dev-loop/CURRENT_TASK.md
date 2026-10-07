@@ -1,6 +1,6 @@
-﻿task_id: "G4-PREP-IGF-DIARIO-068-R1-R2"
+﻿task_id: "G4-PREP-IGF-DIARIO-WEEKLY-SUNSAT-MULTIPLANT-069"
 
-title: "Preparar integración de detalle de folios y precio inicial IGF Diario 068-R1/R2"
+title: "Preparar PR de IGF Diario semanal domingo-sábado y comparativo por plantas 069"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -12,153 +12,235 @@ authorized_at: "2026-10-07"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-07"
 
+g4_authorization: "G4_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-07"
+
 objective: >
-  Preparar el Pull Request hacia main de la cadena
-  FIX-IGF-DIARIO-DETAIL-UX-AND-OPENING-PRICE-068-R1
-  y FIX-IGF-DIARIO-FOLIO-DRAWER-ROLE-GUARD-068-R2.
+  Preparar el Pull Request de
+  IMPL-IGF-DIARIO-WEEKLY-SUNSAT-MULTIPLANT-069
+  hacia main.
 
   No modificar producto ni tests.
   No hacer merge ni deploy.
-  El merge queda reservado exclusivamente al HUMAN_APPROVER.
+  El merge queda reservado al HUMAN_APPROVER.
 
-main_reference_sha: "4adab4643e91e10c97d6f492044398f710d0608d"
+main_reference_sha: "8ceb0d4657256999746d09905ec1d43373c02faf"
 
-branch: "fix/igf-diario-folio-drawer-role-guard-068-r2"
+branch: "implementation/igf-diario-weekly-sunsat-multiplant-069"
 
-delivery_chain:
-  r1_product: "2ddcdfd613a2c492cd1e8b8d6ff614e97207cb58"
-  r1_final: "577e7c59b4196192fcf875d93c9365835cb4b73b"
-  r2_product: "f550670d279264f75a57743072efc0003fc09439"
-  r2_final: "e87a4237bf76b081e562e2fe45f9f21fc670ca43"
+product_sha: "7b2fa3340a65bef44119b9583355ff33a73bbcd1"
+
+validated_source_sha: "843423bd5b2f4364f1a4fdee83734abe28e9e9d0"
 
 expected_branch_state:
-  ahead: 4
+  ahead: 2
   behind: 0
-  merge_base: "4adab4643e91e10c97d6f492044398f710d0608d"
+  merge_base: "8ceb0d4657256999746d09905ec1d43373c02faf"
 
-validated_scope:
-  folio_detail:
-    - "Detalle diario de 068 ya no usa tabla comprimida."
-    - "Cada folio aparece en tarjeta independiente."
-    - "Código de folio visible."
-    - "Monto destacado."
-    - "Estado visible como badge."
-    - "Descripción usa ancho completo."
-    - "Abrir folio → disponible."
-    - "Click en código abre el mismo folio."
-    - "Se reutiliza FolioDrawer existente."
-    - "Cerrar FolioDrawer conserva el modal diario."
-    - "FolioDrawer queda visualmente encima del modal."
-    - "FolioDrawer.tsx no fue modificado."
+validated_calendar:
+  convention: "domingo-sábado"
 
-  security:
-    - "El role sale de getRoleFromDashboardToken."
-    - "No existe fallback GG/AD/ZP."
-    - "No se pasa role vacío a FolioDrawer."
-    - "Sin rol resuelto no se monta FolioDrawer."
-    - "Se muestra aviso de rol no validado."
-    - "Backend continúa siendo autoridad final."
+  example:
+    anchor: "2026-10-06"
+    week_number: 41
+    from: "2026-10-04"
+    to: "2026-10-10"
 
-  opening_price:
-    - "loadPrecioDiario conserva precio mensual."
-    - "Se consulta un último precio válido anterior al primer día del mes."
-    - "precio debe ser numérico y > 0."
-    - "No se restringe al mes inmediatamente anterior."
-    - "No hay future backfill."
-    - "Precio propio del día reemplaza al antecedente."
-    - "Huecos posteriores arrastran último precio válido vigente."
-    - "Sin antecedente válido, inicio permanece vacío."
-    - "0/null previos no califican."
-    - "Alias Querétaro/Queretaro y Tehuacán/Tehuacan se conservan."
-    - "Código exacto mantiene precedencia en la fecha seleccionada."
-    - "Morelos no está hardcodeado."
-    - "Enero puede tomar antecedente del año anterior."
-    - "Se conserva precisión completa."
-    - "Override manual 065-R1 mantiene prioridad."
+  previous:
+    from: "2026-09-27"
+    to: "2026-10-03"
 
-  morelos:
-    example_fixture:
-      prior: "2026-09-30 = 19.95"
-      "01-06": "19.95"
-      "07": "20.05"
-      "08": "20.05"
+  next:
+    from: "2026-10-11"
+    to: "2026-10-17"
 
-    required_effect:
-      - "PRECIO C deja de estar vacío cuando existe antecedente."
-      - "INGRESO D = C × B."
-      - "MARGEN H = C - F - G."
-      - "La rentabilidad downstream vuelve a tener cobertura."
-      - "No se modifican fórmulas financieras."
+  confirmed:
+    - "No usa SEMANA ISO."
+    - "sundayOfWeekContainingDate define inicio."
+    - "saturdayOfWeekContainingDate define fin."
+    - "weekNumber/weekYear reemplazan semántica ISO."
+    - "Semana puede cruzar mes."
+    - "01/10/2026 pertenece a 27/09–03/10."
+    - "Cruce de año cubierto."
 
-  database:
-    - "No writes."
-    - "arr.precio_diario no se modifica."
-    - "Consulta mensual + una consulta constante de antecedente."
-    - "Sin query por día."
+validated_single_plant:
+  columns:
+    - "Concepto"
+    - "Semana"
+    - "Dom"
+    - "Lun"
+    - "Mar"
+    - "Mié"
+    - "Jue"
+    - "Vie"
+    - "Sáb"
+
+  confirmed:
+    - "Semana es la primera columna numérica."
+    - "Semana usa agregado de los siete días."
+    - "Cada día usa aggregateWeek([day])."
+    - "Exactly 7 days."
+    - "NULL permanece —."
+    - "Días proyectados se distinguen visualmente."
+    - "Gráfica permanece."
+    - "Selección de renglón sigue controlando la métrica de gráfica."
+
+validated_all_plants:
+  condition: "IGF Diario + Planta Todas"
+
+  placement:
+    - "Tabla superior IGF Diario."
+    - "IGF Diario semanal · Todas."
+    - "Folios en Depósito y Cierre."
+
+  columns:
+    - "Concepto"
+    - "GT Puebla"
+    - "Tehuacan"
+    - "Acapulco"
+    - "GTM Queretaro"
+    - "GTM San Luis"
+    - "Morelos"
+
+  confirmed:
+    - "Zona Provincia no se agrega."
+    - "Frontend realiza una sola request semanal."
+    - "GET /api/dashboard/igf-diario-semanal?todas=1."
+    - "Backend usa catálogo existente."
+    - "No hardcode de IDs."
+    - "Se filtran plantas por autorización existente."
+    - "Se reutiliza comprasCache."
+    - "No query por día."
+    - "No query por concepto."
+    - "Forecast no monta vista multi-planta."
+
+validated_rows:
+  highlighted:
+    - "Venta en Kilos"
+    - "Precio de Venta al Público"
+    - "Ingreso Generado"
+    - "Margen Bruto"
+    - "Margen Neto"
+    - "Sobrante de Operación antes del HG"
+    - "Sobrante de Operación con el HG"
+    - "RESULTADO ($/kg)"
+    - "RESULTADO (Importe)"
+
+  visual:
+    - "Separadores gruesos entre bloques."
+    - "Marcador ámbar."
+    - "RESULTADO (Importe) tiene mayor jerarquía."
+    - "Negativos rojos."
+    - "Resultados positivos verdes."
+    - "Concepto sticky."
+    - "Scroll horizontal."
+    - "No se insertan filas falsas."
+
+validated_financial_contract:
+  - "Venta semanal suma kg."
+  - "Ingreso suma ingreso diario."
+  - "Precio = Ingreso/Venta."
+  - "Costo ponderado."
+  - "Flete ponderado."
+  - "Margen Bruto = Precio-Costo-Flete."
+  - "064/064-R1 permanece."
+  - "065/065-R1 permanece."
+  - "Precio inicial 068-R1/R2 fluye al semanal."
+  - "HG permanece."
+  - "C&D conserva signo."
+  - "Resultado $/kg permanece."
+  - "Resultado Importe conserva precisión."
+  - "No se calcula desde valores visualmente redondeados."
+  - "Legacy pre-octubre no inventa gastos nuevos."
+
+validated_security:
+  - "dashboardAuthMiddleware permanece."
+  - "GV permanece bloqueado por contrato existente."
+  - "assertPlantaPermitidaDashboard se aplica a plantas."
+  - "Planta individual conserva autorización existente."
+  - "Todas no amplía el catálogo visible."
+
+validated_performance:
+  frontend_requests_all_plants: 1
+
+  backend:
+    - "Carga por planta/mes, no por día."
+    - "No iteración de queries por métrica."
+    - "comprasCache compartido."
+    - "query_count reportado."
 
 validated_tests:
-  - "068-R2 PASS 2/2."
-  - "068-R1 PASS 6/6."
+  - "069 + regresiones reportadas PASS 89/89."
+  - "067 actualizado PASS."
+  - "068-R2 PASS."
+  - "068-R1 PASS."
   - "068 PASS."
-  - "067 PASS."
   - "066-R1 PASS."
-  - "065 PASS."
+  - "066 PASS."
   - "065-R1 PASS."
+  - "065 PASS."
+  - "064-R1 PASS."
+  - "064 PASS."
   - "node --check server.js PASS."
   - "frontend npm run build PASS."
   - "git diff --check limpio."
 
 production_validation_required:
-  folio_ui:
-    - "Abrir IGF Diario acumulado con Planta=Todas."
-    - "Seleccionar una celda diaria con varios folios."
-    - "Confirmar tarjetas separadas y legibles."
-    - "Confirmar importe, estado y descripción."
-    - "Click en código."
-    - "Confirmar apertura del folio correcto."
-    - "Cerrar FolioDrawer y confirmar que vuelve a la lista diaria."
-    - "Probar Abrir folio →."
+  calendar:
+    - "Corte 06/10/2026 debe abrir 04/10–10/10."
+    - "Confirmar domingo como primera columna."
+    - "Confirmar sábado como última."
+    - "Confirmar SEMANA 41 sin palabra ISO."
+    - "Probar Semana anterior/siguiente."
 
-  morelos:
-    - "Descargar/abrir IGF Diario Morelos octubre 2026."
-    - "Revisar 01/10 al 06/10."
-    - "Confirmar que PRECIO ya está presente si existe antecedente histórico."
-    - "Confirmar que no se utilizó hacia atrás el precio del 07/10."
-    - "Confirmar INGRESO."
-    - "Confirmar MARGEN."
-    - "Confirmar rentabilidad downstream."
-    - "Comparar el antecedente con arr.precio_diario si es necesario."
+  all_plants:
+    - "Seleccionar IGF Diario + Todas."
+    - "Confirmar tabla semanal entre acumulado y Folios."
+    - "Confirmar seis columnas de plantas."
+    - "Confirmar orden de plantas."
+    - "Comparar al menos dos plantas contra sus vistas individuales."
+
+  single_plant:
+    - "Seleccionar Acapulco."
+    - "Confirmar Concepto | Semana | Dom…Sáb."
+    - "Confirmar Semana antes de días."
+    - "Comparar suma/ponderación semanal contra los siete días."
+    - "Confirmar filas resaltadas."
+    - "Confirmar separaciones visuales."
+
+  precision:
+    - "Resultado Importe no debe provenir de números redondeados visibles."
+    - "Resultado $/kg debe conservar identidad con Venta cuando exista evidencia."
 
   regression:
-    - "07/10 conserva su precio propio."
-    - "Días posteriores sin precio arrastran el último válido."
-    - "Overrides manuales siguen prevaleciendo."
-    - "068 matriz mantiene importes/totales."
-    - "067 semanal permanece."
-    - "066 acumulado permanece."
+    - "Gráfica funciona."
+    - "1D/5D/1M/3M/YTD/1A/5A/Todo permanecen."
+    - "Forecast permanece sin cambios."
+    - "Folios 068 permanece."
+    - "Precio Morelos 068-R1/R2 permanece."
 
 pr_contract:
   base: "main"
-  head: "fix/igf-diario-folio-drawer-role-guard-068-r2"
-  title: "FIX 068-R1/R2: detalle de folios y precio inicial IGF Diario"
+  head: "implementation/igf-diario-weekly-sunsat-multiplant-069"
+  title: "IMPL 069: IGF Diario semanal domingo-sábado y comparativo por plantas"
   preferred_merge: "Squash and merge"
   merge_executor: "HUMAN_APPROVER_ONLY"
 
 in_scope:
   - "Verificar main exacto."
-  - "Verificar rama ahead 4 / behind 0."
+  - "Verificar ahead 2 / behind 0."
   - "Crear reporte G4-PREP."
-  - "Crear Pull Request."
-  - "Commit únicamente documental G4."
-  - "Push a la rama."
+  - "Crear PR."
+  - "Hacer únicamente commit documental G4."
+  - "Push a rama 069."
   - "STOP."
 
 out_of_scope:
   - "Modificar producto."
   - "Modificar tests."
-  - "Modificar SQL."
-  - "Modificar FolioDrawer."
-  - "Modificar precio."
+  - "Modificar semana."
+  - "Modificar fórmulas."
+  - "Modificar Forecast."
+  - "Modificar Folios."
   - "Modificar DB."
   - "Rebase."
   - "Merge."
@@ -170,12 +252,12 @@ merge_contract:
   deploy_authorized: false
 
 stop_conditions:
-  - "Si origin/main != 4adab4643e91e10c97d6f492044398f710d0608d, STOP."
-  - "Si la rama deja de estar ahead 4 / behind 0 antes del commit G4, STOP."
-  - "Si aparece cualquier cambio de producto posterior a e87a4237bf76b081e562e2fe45f9f21fc670ca43, STOP."
+  - "Si origin/main != 8ceb0d4657256999746d09905ec1d43373c02faf, STOP."
+  - "Si antes del commit G4 la rama no está ahead 2 / behind 0, STOP."
+  - "Si aparece cambio de producto posterior a 843423bd5b2f4364f1a4fdee83734abe28e9e9d0, STOP."
   - "Si el PR no es mergeable, STOP."
   - "No rebase."
   - "No merge."
   - "No deploy."
 
-result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-068-R1-R2.md"
+result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-WEEKLY-SUNSAT-MULTIPLANT-069.md"

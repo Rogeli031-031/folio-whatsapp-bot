@@ -123,29 +123,62 @@ export type IgfDiarioSemanalMetrics = {
   resultado_mxn: number | null;
 };
 
+export type IgfDiarioSemanalWeek = {
+  week_year: number;
+  week_number: number;
+  fecha_desde: string;
+  fecha_hasta: string;
+  estado: "real" | "parcial" | "proyectada";
+  complete?: boolean;
+  missing_components?: string[];
+};
+
+export type IgfDiarioSemanalDay = {
+  fecha: string;
+  weekday: string;
+  estado: "real" | "parcial" | "proyectada";
+  metrics: IgfDiarioSemanalMetrics;
+};
+
+export type IgfDiarioSemanalNav = {
+  prev_anchor: string;
+  next_anchor: string;
+  prev_enabled: boolean;
+  next_enabled: boolean;
+};
+
 export type IgfDiarioSemanalResponse = {
   ok: boolean;
+  scope?: "plant";
   year: number;
   month: number;
   plant_code: string;
   empresa: string;
   corte_ymd: string | null;
-  week: {
-    iso_week_year: number;
-    iso_week: number;
-    fecha_desde: string;
-    fecha_hasta: string;
-    estado: "real" | "parcial" | "proyectada";
-    complete: boolean;
-    missing_components: string[];
-  };
+  week: IgfDiarioSemanalWeek;
   metrics: IgfDiarioSemanalMetrics;
-  nav: {
-    prev_anchor: string;
-    next_anchor: string;
-    prev_enabled: boolean;
-    next_enabled: boolean;
-  };
+  days?: IgfDiarioSemanalDay[];
+  nav: IgfDiarioSemanalNav;
+  query_count?: number;
+};
+
+export type IgfDiarioSemanalPlantColumn = {
+  plant_code: string;
+  empresa: string;
+  metrics: IgfDiarioSemanalMetrics;
+  complete: boolean;
+  missing_components: string[];
+};
+
+export type IgfDiarioSemanalAllResponse = {
+  ok: boolean;
+  scope: "all";
+  year: number;
+  month: number;
+  corte_ymd: string | null;
+  week: IgfDiarioSemanalWeek;
+  plants: IgfDiarioSemanalPlantColumn[];
+  nav: IgfDiarioSemanalNav;
   query_count?: number;
 };
 
@@ -153,19 +186,21 @@ export async function fetchIgfDiarioSemanal(opts: {
   token: string;
   year: number;
   month: number;
-  plantCode: string;
+  plantCode?: string;
+  todas?: boolean;
   weekAnchor?: string | null;
   uploadDay?: string | null;
   versionAsOfCorte?: boolean;
   view?: "week" | "series";
   range?: string;
   metric?: string;
-}): Promise<IgfDiarioSemanalResponse & { points?: IgfDiarioGraficaPoint[]; range?: string; metric?: string }> {
+}): Promise<(IgfDiarioSemanalResponse | IgfDiarioSemanalAllResponse) & { points?: IgfDiarioGraficaPoint[]; range?: string; metric?: string }> {
   const params = new URLSearchParams({
     year: String(opts.year),
     month: String(opts.month),
-    plant_code: opts.plantCode,
   });
+  if (opts.todas) params.set("todas", "1");
+  else if (opts.plantCode) params.set("plant_code", opts.plantCode);
   const up = (opts.uploadDay || "").trim();
   const anchor = (opts.weekAnchor || "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(up)) params.set("upload_day", up);
@@ -181,7 +216,7 @@ export async function fetchIgfDiarioSemanal(opts: {
   });
   const body = await res.json().catch(() => ({ error: res.statusText }));
   if (!res.ok) throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
-  return body as IgfDiarioSemanalResponse & { points?: IgfDiarioGraficaPoint[]; range?: string; metric?: string };
+  return body as (IgfDiarioSemanalResponse | IgfDiarioSemanalAllResponse) & { points?: IgfDiarioGraficaPoint[]; range?: string; metric?: string };
 }
 
 export type IgfDiarioFolioDepositoItem = {
