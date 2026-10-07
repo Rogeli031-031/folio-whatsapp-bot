@@ -1,10 +1,10 @@
-﻿task_id: "G4-PREP-IGF-DIARIO-FOLIOS-DEPOSITO-MATRIX-068"
+﻿task_id: "FIX-IGF-DIARIO-DETAIL-UX-AND-OPENING-PRICE-068-R1"
 
-title: "Preparar PR de matriz diaria de folios en Depósito y Cierre 068"
+title: "Mejorar detalle diario de folios y completar precio inicial de IGF Diario"
 
 status: "DONE_PENDING_REVIEW"
 
-mode: "INTEGRATION"
+mode: "IMPLEMENTATION"
 
 authorized_by: "HUMAN_APPROVER"
 
@@ -12,246 +12,420 @@ authorized_at: "2026-10-07"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-07"
 
-g4_authorization: "G4_AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-07"
-
 objective: >
-  Preparar el Pull Request de
-  IMPL-IGF-DIARIO-FOLIOS-DEPOSITO-MATRIX-068
-  hacia main. No modificar producto ni tests.
-  El merge queda reservado exclusivamente al HUMAN_APPROVER.
+  Aplicar dos correcciones delimitadas sobre la base productiva de 068:
 
-main_reference_sha: "c4f2db88784642433008b8b313ad2d60e17d896a"
+  A) Mejorar la ventana de detalle diario de folios de la matriz 068 para
+  que los registros sean legibles y permitan abrir directamente el folio
+  existente mediante FolioDrawer.
 
-branch: "implementation/igf-diario-folios-deposito-matrix-068"
+  B) Corregir el precio inicial de IGF Diario cuando los primeros días del
+  mes no tienen un precio propio en arr.precio_diario. En esos días debe
+  usarse el último precio válido anterior al inicio del mes para la misma
+  planta, hasta que aparezca el primer precio válido propio del mes.
 
-product_sha: "3c31b205db5a800f06e5b2d62175a6c816074679"
+  El caso visible es Morelos octubre 2026, donde los días 01–06 tienen
+  Venta, Costo y Flete pero carecen de Precio e Ingreso.
 
-validated_source_sha: "61c2fa899df6783142d19776c33c525b96c7a690"
+base_sha: "4adab4643e91e10c97d6f492044398f710d0608d"
 
-target_branch: "main"
+branch: "fix/igf-diario-detail-ux-opening-price-068-r1"
 
-validated_scope:
-  - "Todas + IGF Diario sustituye la tabla inferior legacy por matriz 068."
-  - "Tabla superior IGF Diario acumulado permanece."
-  - "Planta específica + IGF Diario conserva panel semanal 067."
-  - "Forecast conserva comportamiento existente."
-  - "Filas = plantas."
-  - "Columnas = días calendario del mes del corte."
-  - "Última columna = Total mes."
-  - "Última fila = Total día."
-  - "Esquina inferior = Total general."
-  - "Cada celda muestra importe, número de folios y descripción corta."
-  - "Click en celda muestra detalle de folios."
-  - "Monto usa public.folios.importe."
-  - "No usa facturas ni comprobado."
-  - "NULL de importe cuenta folio pero no suma dinero."
-  - "0 explícito es válido."
-  - "Descripción usa descripcion/concepto y Sin descripción como fallback."
-  - "Con varios folios usa descripción del mayor importe +N."
-  - "Empate se resuelve de forma determinista."
-  - "Primera transición calificante fija el día."
-  - "No usa fecha de creación del folio."
-  - "No usa mes_cargo como fecha del evento."
-  - "Un folio se cuenta máximo una vez."
-  - "PAGADO/CERRADO equivalen a DEPOSITO_CIERRE."
-  - "COMPROBACIONES entra."
-  - "EVIDENCIAS entra."
-  - "CHEQUE_GENERADO y anteriores no entran."
-  - "CANCELADO queda fuera."
-  - "Evento posterior al corte no entra."
-  - "Salto directo a etapa posterior usa esa primera transición."
-  - "Estado efectivo se determina con historial hasta el corte."
-  - "Zona horaria de fecha histórica = America/Mexico_City."
-  - "No hardcode de IDs de planta."
-  - "Equivalencias IGF existentes se reutilizan."
-  - "dashboardAuthMiddleware permanece."
-  - "GV permanece bloqueado."
-  - "buildDashboardWhere conserva visibilidad por rol/planta/solo_zp_ad."
-  - "No query por planta."
-  - "No query por día."
-  - "No query por folio."
-  - "Detalle usa los datos ya cargados."
-  - "query_count reportado = 3."
+###############################################################################
+# A. DETALLE DE FOLIOS 068-R1
+###############################################################################
 
-canonical_status_mapping:
-  module: "lib/folio-etapa-visual.js"
+folio_detail_scope:
+  source_component: "frontend-dashboard/components/IgfDiarioFoliosDepositoMatrix.tsx"
 
-  stages:
-    - "PENDIENTE_APROB_PLANTA"
-    - "APROB_DIRECTOR_ZP"
-    - "CARRO_COMPRA"
-    - "CUENTA_FONDOS"
-    - "CHEQUE_GENERADO"
-    - "DEPOSITO_CIERRE"
-    - "COMPROBACIONES"
-    - "EVIDENCIAS"
-    - "CANCELADO"
+  problem: >
+    El detalle actual usa una tabla Folio/Estado/Monto/Descripción.
+    Las columnas quedan demasiado juntas y las descripciones largas hacen
+    difícil distinguir un folio de otro, especialmente en resoluciones
+    pequeñas.
 
-  threshold:
-    - "PAGADO -> DEPOSITO_CIERRE"
-    - "CERRADO -> DEPOSITO_CIERRE"
-    - "COMPROBACIONES -> COMPROBACIONES"
-    - "EVIDENCIAS -> EVIDENCIAS"
+  replace_table_with_cards: true
 
-  excluded:
-    - "CANCELADO"
+folio_detail_header:
+  display:
+    - "Planta · fecha"
+    - "Importe total de la celda"
+    - "Número de folios"
 
-validated_date_contract:
-  source: "public.folio_historial.creado_en"
+  example:
+    - "GT - Puebla · 04/09/2026"
+    - "$104,635"
+    - "6 folios"
 
-  timezone: "America/Mexico_City"
+folio_card_contract:
+  each_folio:
+    line_1:
+      left: "Número/código de folio"
+      right: "Monto"
+
+    line_2:
+      left: "Badge de estado"
+      right: "Abrir folio →"
+
+    body:
+      - "Descripción ocupando el ancho disponible."
+      - "Texto legible y separado del siguiente folio."
+
+  example:
+    folio: "F-202609-228"
+    estado: "Depósito y cierre"
+    importe: "$34,000"
+    descripcion: "EMPLACAMIENTO DE UNIDADES DE TLAXCALA..."
+    action: "Abrir folio →"
+
+visual_contract:
+  - "Cada folio debe ser visualmente independiente."
+  - "Usar borde o separación clara entre tarjetas."
+  - "Monto alineado y destacado."
+  - "Folio claramente identificable."
+  - "Estado como badge compacto."
+  - "Descripción debajo, no comprimida en una columna angosta."
+  - "Descripción puede ocupar 2–3 líneas."
+  - "No crear horizontal overflow por la descripción."
+  - "Mismo dark mode del dashboard."
+  - "Responsive en celular."
+  - "Targets táctiles adecuados."
+
+status_labels:
+  DEPOSITO_CIERRE: "Depósito y cierre"
+  COMPROBACIONES: "Comprobaciones"
+  EVIDENCIAS: "Evidencias"
+
+open_folio_contract:
+  component: "frontend-dashboard/components/FolioDrawer.tsx"
 
   rule: >
-    El día de la celda es la primera transición histórica, hasta el corte,
-    cuyo estado ya cumple DEPOSITO_CIERRE o adelante.
+    Reutilizar FolioDrawer existente. No crear una segunda ficha del folio
+    y no navegar a una pantalla paralela.
 
-  deduplication:
-    - "Depósito -> Comprobaciones -> Evidencias permanece en el primer día."
-    - "No vuelve a sumar importe."
-    - "No vuelve a incrementar count."
+  source_id: >
+    Usar folio.id que ya viene en cada detalle de la matriz 068.
 
-validated_amount_contract:
-  source: "public.folios.importe"
+  triggers:
+    - "Click/tap en el número de folio."
+    - "Click/tap en Abrir folio →."
 
-  missing:
-    - "NULL no suma dinero."
-    - "NULL sí cuenta como folio."
-    - "missing_amount_count lo identifica."
+  behavior:
+    - "La lista diaria permanece abierta debajo."
+    - "FolioDrawer se abre por encima."
+    - "Cerrar FolioDrawer regresa a la misma lista diaria."
+    - "Cerrar FolioDrawer no debe cerrar la celda seleccionada."
+    - "No perder scroll/selección de la lista."
 
-  zero:
-    - "0 explícito es importe válido."
+  auth:
+    - "Usar el mismo token actual."
+    - "Resolver role con getRoleFromDashboardToken."
+    - "No asumir GG si no puede determinarse el rol."
+    - "Backend sigue siendo autoridad final."
+    - "No ampliar permisos de edición."
 
-validated_totals:
-  - "Total mes planta = suma de sus celdas."
-  - "Total día = suma de plantas."
-  - "Grand total = suma de Totales mes."
-  - "Grand total = suma de Totales día."
-  - "Conteos cumplen las mismas identidades."
+  layering:
+    rule: >
+      El FolioDrawer debe tener prioridad visual sobre el modal/lista de la
+      celda. Ajustar z-index/orden de render si es necesario sin modificar
+      FolioDrawer global de forma riesgosa.
 
-validated_ui:
-  component: "frontend-dashboard/components/IgfDiarioFoliosDepositoMatrix.tsx"
+folio_detail_out_of_scope:
+  - "Cambiar monto de folio."
+  - "Cambiar estado."
+  - "Cambiar fecha threshold."
+  - "Cambiar agregación 068."
+  - "Cambiar permisos backend."
+  - "Duplicar FolioDrawer."
 
-  cell_example:
-    - "$250,000"
-    - "4 folios"
-    - "Mantenimiento tanque +3"
+###############################################################################
+# B. PRECIO INICIAL IGF DIARIO / MORELOS
+###############################################################################
 
-  detail:
-    columns:
-      - "Folio"
-      - "Estado"
-      - "Monto"
-      - "Descripción"
+morelos_evidence:
+  month: "2026-10"
 
-  layout:
-    - "Planta sticky izquierda."
-    - "Días en scroll horizontal."
-    - "Total mes sticky derecha."
-    - "Celdas no vacías clicables."
-    - "Sin folios se muestra —."
-    - "Sin importe se muestra Sin importe."
+  observed:
+    - "01/10 tiene Venta pero Precio vacío."
+    - "02/10 tiene Venta pero Precio vacío."
+    - "03/10 tiene Venta pero Precio vacío."
+    - "04/10 tiene Venta pero Precio vacío."
+    - "05/10 tiene Venta pero Precio vacío."
+    - "06/10 tiene Venta pero Precio vacío."
+    - "Costo y Flete sí están disponibles."
+    - "Precio visible aparece posteriormente en el mes."
 
-validated_endpoint:
-  path: "GET /api/dashboard/igf-diario-folios-deposito"
+  consequence:
+    - "Ingreso D queda vacío porque depende de C × B."
+    - "Margen H queda vacío porque depende de C - F - G."
+    - "Margen Neto/Sobrantes/Resultado pierden cobertura."
 
-  middleware:
-    - "dashboardAuthMiddleware"
-    - "dashboardBlockGVForbidden"
+root_cause:
+  module: "lib/dashboard-arr-forecast.js"
 
-  visibility:
-    - "buildDashboardWhere"
-    - "ventanaDefault=false"
-    - "solo_zp_ad"
-    - "plantas permitidas"
+  functions:
+    - "loadPrecioDiario"
+    - "resolvePrecioDailySeries"
+    - "appendPrecioWorksheet"
 
-  queries:
-    resolver_plantas: 2
-    lote_historial: 1
-    total: 3
+  current_behavior: >
+    loadPrecioDiario lee únicamente fechas dentro del mes solicitado.
+    resolvePrecioDailySeries empieza lastValidPrecio=null.
+    Por tanto, antes del primer precio válido del mes no existe fallback.
 
-validated_tests:
-  - "068 PASS 8/8."
-  - "067 PASS."
-  - "066-R1 PASS."
-  - "066 PASS."
-  - "065-R1 PASS."
-  - "064-R1 PASS."
-  - "064 PASS."
-  - "Regresión reportada 61/61 PASS."
-  - "frontend npm run build PASS."
-  - "node --check server.js PASS."
-  - "git diff --check limpio."
+  legacy_contract: "IMPL-IGF-DIARIO-PRECIO-CARRY-FORWARD-029"
 
-production_validation_required:
-  render:
-    - "Entrar a IGF Diario acumulado con Planta=Todas."
-    - "Confirmar que desapareció tabla inferior legacy."
-    - "Confirmar matriz Folios en Depósito y Cierre (o adelante)."
-    - "Confirmar 6 plantas visibles."
-    - "Confirmar días correctos del mes."
-    - "Confirmar Total mes y Total día."
+opening_price_contract:
+  general_rule: >
+    Para cada planta, resolver el último precio válido estrictamente anterior
+    al primer día del mes solicitado.
 
-  known_folio:
-    - "Elegir al menos un folio real que haya pasado a Depósito y Cierre."
-    - "Verificar fecha contra timeline del folio."
-    - "Confirmar que aparece exactamente en esa fecha."
-    - "Confirmar importe contra Importe del FolioDrawer."
-    - "Confirmar descripción."
-    - "Confirmar que si avanzó a Comprobaciones/Evidencias no se duplica."
+  previous_valid_definition:
+    source: "arr.precio_diario"
+    condition:
+      - "fecha < primer día del mes"
+      - "precio numérico"
+      - "precio > 0"
+      - "misma identidad/equivalencia de planta"
 
-  canceled:
-    - "Elegir un folio cancelado que hubiera alcanzado el umbral."
-    - "Confirmar que no aparece."
+    order: "fecha DESC"
+    result: "el registro válido más reciente"
 
-  cutoff:
-    - "Seleccionar un corte anterior."
-    - "Confirmar que eventos posteriores al corte no aparecen."
+  important:
+    - "No limitar necesariamente al mes calendario anterior."
+    - "Usar el último precio válido histórico disponible anterior al mes."
+    - "No usar un precio futuro para rellenar días anteriores."
+    - "No inventar precio si no existe antecedente válido."
 
-  totals:
-    - "Abrir una celda con múltiples folios."
-    - "Sumar importes del detalle."
-    - "Confirmar igualdad con importe de celda."
-    - "Confirmar count."
-    - "Confirmar Total mes."
-    - "Confirmar Total día."
-    - "Confirmar Total general."
+daily_resolution:
+  initial_value: "previous_valid_price"
 
-  permissions:
-    - "Validar con usuario de alcance restringido si está disponible."
-    - "Confirmar que no aparecen plantas/folios fuera de alcance."
+  for_each_day:
+    own_valid_price:
+      rule: >
+        Si el día tiene precio propio numérico > 0, usarlo y convertirlo
+        en el nuevo precio vigente.
+
+    no_own_price:
+      rule: >
+        Usar el último precio válido vigente: inicialmente el antecedente
+        previo al mes y después cualquier precio propio válido aparecido
+        dentro del mes.
+
+  example:
+    prior_valid: 19.95
+    current_month:
+      "01": null
+      "02": null
+      "03": null
+      "04": null
+      "05": null
+      "06": null
+      "07": 20.05
+
+    expected:
+      "01": 19.95
+      "02": 19.95
+      "03": 19.95
+      "04": 19.95
+      "05": 19.95
+      "06": 19.95
+      "07": 20.05
+      "08+": "20.05 hasta el siguiente precio propio"
+
+  note: >
+    19.95 es únicamente un ejemplo contractual. No usar ese número literal.
+    El valor real debe venir de arr.precio_diario.
+
+plant_identity_contract:
+  - "No hardcodear Morelos."
+  - "La corrección debe servir para todas las plantas."
+  - "Respetar canonicalForecastPlantKey."
+  - "Respetar precioLookupCodes."
+  - "Respetar aliases Querétaro/Queretaro."
+  - "Respetar aliases Tehuacán/Tehuacan."
+  - "Morelos debe resolver Morelos."
+  - "Si coexisten códigos equivalentes, conservar precedencia exacta vigente."
+
+prior_alias_precedence:
+  rule: >
+    Para buscar el último precio previo, aplicar la misma identidad de
+    planta y precedencia usada para el precio mensual. No tomar el precio
+    de otra planta ni elegir arbitrariamente un alias.
+
+  exact_code:
+    preference: "preferido cuando existe precio válido en la fecha ganadora"
+
+  equivalent_code:
+    fallback: true
+
+no_future_backfill:
+  critical_rule: >
+    Si el primer precio propio de octubre es 07/10, NO usar ese precio para
+    rellenar 01–06. Esos días deben usar exclusivamente el último precio
+    válido anterior al 01/10. Si ese antecedente no existe, permanecen vacíos.
+
+manual_override_contract:
+  rule: >
+    Los overrides manuales de PRECIO de 065-R1 conservan prioridad sobre
+    cualquier precio automático heredado.
+
+  priority:
+    - "override manual"
+    - "precio propio del día"
+    - "último precio válido vigente"
+    - "vacío"
+
+excel_contract:
+  sheet: "IGF Diario {planta}"
+
+  columns:
+    B: "Venta KG"
+    C: "Precio"
+    D: "Ingreso"
+    F: "Costo"
+    G: "Flete"
+    H: "Margen"
+
+  formulas:
+    D: "C × B"
+    H: "C - F - G"
+
+  required_effect: >
+    Cuando B, F y G ya tienen valores y existe precio previo válido,
+    C debe tener precio y por tanto D/H y la cadena de rentabilidad deben
+    poder calcularse.
+
+downstream_contract:
+  verify:
+    - "Margen Neto."
+    - "Sobrante antes HG."
+    - "HG."
+    - "Sobrante con HG."
+    - "C&D."
+    - "Resultado $/kg."
+    - "Resultado importe."
+    - "Acumulado mensual 066/066-R1."
+    - "Vista semanal 067."
+
+  rule: >
+    No introducir una fórmula paralela. El nuevo precio inicial debe entrar
+    en la fuente diaria que ya consumen los cálculos existentes.
+
+support_price_sheet:
+  rule: >
+    La hoja PRECIO generada debe mostrar también el precio inicial heredado
+    en los primeros días cuando exista antecedente válido.
+
+  precision:
+    - "Conservar precisión completa del valor almacenado."
+    - "No redondear el dato fuente a 2 decimales."
+    - "El formato visual puede seguir el contrato existente."
+
+missing_prior:
+  rule: >
+    Si no existe ningún precio válido anterior y tampoco hay precio propio
+    todavía, mantener vacío. No usar 0 y no inventar valor.
+
+###############################################################################
+# PERFORMANCE / DB
+###############################################################################
+
+price_query_contract:
+  preferred:
+    - "Carga mensual actual + una lectura constante del último precio previo."
+    - "O una sola query capaz de traer periodo + antecedente."
+
+  forbidden:
+    - "Query por día."
+    - "Query por fila."
+    - "N+1."
+    - "Buscar precio previo separadamente para cada fecha."
+
+writes:
+  - "No escribir arr.precio_diario."
+  - "No corregir datos productivos manualmente."
+  - "Solo lectura."
+
+###############################################################################
+# TESTS
+###############################################################################
+
+mandatory_tests:
+  folio_ux:
+    - "Detalle diario ya no usa tabla comprimida."
+    - "Cada folio tiene bloque/tarjeta independiente."
+    - "Monto visible y separado."
+    - "Estado visible."
+    - "Descripción ocupa ancho útil."
+    - "Botón Abrir folio existe."
+    - "Número de folio es clicable."
+    - "Abre FolioDrawer con el id correcto."
+    - "Cerrar drawer conserva lista diaria."
+    - "Token/role se reutilizan."
+    - "No modifica cálculo de celda 068."
+
+  price:
+    - "Precio previo válido alimenta días iniciales vacíos."
+    - "Primer precio propio del mes reemplaza antecedente desde ese día."
+    - "Huecos posteriores arrastran el último precio vigente."
+    - "No future backfill."
+    - "Sin antecedente válido deja vacío."
+    - "Precio 0 no es antecedente válido."
+    - "Precio null no es antecedente válido."
+    - "Alias exactos conservan precedencia."
+    - "Morelos no está hardcodeado."
+    - "Enero resuelve antecedente de diciembre del año anterior."
+    - "Cambio de año correcto."
+    - "Precisión completa."
+    - "Override manual gana."
+    - "Ingreso se calcula si Venta+Precio existen."
+    - "Margen se calcula si Precio+Costo+Flete existen."
 
   regression:
-    - "Seleccionar una planta y confirmar 067."
-    - "Cambiar a Forecast y confirmar comportamiento anterior."
-    - "Confirmar que tabla superior IGF no cambió."
+    - "068 PASS."
+    - "067 PASS."
+    - "066-R1 PASS."
+    - "066 PASS."
+    - "065-R1 PASS."
+    - "065 PASS."
+    - "064-R1 PASS."
+    - "064 PASS."
+    - "029 actualizado a nueva regla."
+    - "027 PASS o actualizado justificadamente."
+    - "033 aliases PASS."
+    - "052 costo día 1 PASS."
+    - "frontend npm run build PASS."
+    - "node --check server.js PASS."
+    - "git diff --check limpio."
 
-pr_contract:
-  base: "main"
-  head: "implementation/igf-diario-folios-deposito-matrix-068"
-  title: "IMPL 068: matriz diaria de folios en Depósito y Cierre por planta"
-  merge_executor: "HUMAN_APPROVER_ONLY"
-  preferred_merge: "Squash and merge"
-
-in_scope:
-  - "Verificar origin/main exacto."
-  - "Verificar rama ahead 2 / behind 0."
-  - "Verificar product SHA."
-  - "Verificar source SHA."
-  - "Crear reporte G4-PREP."
-  - "Crear PR."
-  - "STOP antes del merge."
+recommended_files:
+  - "frontend-dashboard/components/IgfDiarioFoliosDepositoMatrix.tsx"
+  - "frontend-dashboard/components/FolioDrawer.tsx solo si fuera estrictamente necesario"
+  - "frontend-dashboard/lib/auth.ts solo si fuera estrictamente necesario"
+  - "lib/dashboard-arr-forecast.js"
+  - "server.js si se requiere propagar precio anterior"
+  - "test/igf-diario-folios-deposito-matrix-068.test.js"
+  - "test/igf-diario-precio-carry-forward-029.test.js"
+  - "test/igf-diario-precio-sheet-027.test.js"
+  - "test/igf-diario-precio-plant-aliases-033.test.js"
+  - "test/fix-igf-diario-detail-ux-opening-price-068-r1.test.js"
+  - "docs/dev-loop/CURRENT_TASK.md"
+  - "docs/dev-loop/reports/FIX-IGF-DIARIO-DETAIL-UX-AND-OPENING-PRICE-068-R1.md"
 
 out_of_scope:
-  - "Modificar producto."
-  - "Modificar tests."
-  - "Modificar folios."
-  - "Modificar historial."
-  - "Modificar estados."
-  - "Modificar DB."
-  - "Rebase."
-  - "Merge."
+  - "Cambiar ventas de Morelos."
+  - "Cambiar costos."
+  - "Cambiar fletes."
+  - "Editar arr.precio_diario."
+  - "Crear precios artificiales."
+  - "Modificar fórmulas financieras 066."
+  - "Modificar distribución 064."
+  - "Modificar matriz/fechas/importe de folios 068."
+  - "Cambiar estados de folios."
+  - "Cambiar base de datos."
+  - "Merge a main."
   - "Deploy."
-  - "Abrir siguiente tarea."
 
 merge_contract:
   executor: "HUMAN_APPROVER_ONLY"
@@ -259,21 +433,14 @@ merge_contract:
   deploy_authorized: false
 
 stop_conditions:
-  - "Si origin/main != c4f2db88784642433008b8b313ad2d60e17d896a, STOP."
-  - "Si la rama deja de estar ahead 2 / behind 0 antes del commit G4, STOP."
-  - "Si aparecen cambios nuevos de producto después de 61c2fa899df6783142d19776c33c525b96c7a690, STOP."
-  - "Si PR no es mergeable, STOP."
-  - "No rebase."
-  - "No merge."
+  - "Si origin/main != 4adab4643e91e10c97d6f492044398f710d0608d, STOP."
+  - "Si para Morelos no existe antecedente de precio válido y se pretende usar 07/10 hacia atrás, STOP."
+  - "Si se necesita inventar un precio, STOP."
+  - "Si abrir FolioDrawer requiere ampliar permisos, STOP."
+  - "Si el cambio genera N+1, STOP."
+  - "Si se modifica arr.precio_diario, STOP."
+  - "Si 068 cambia sus agregaciones o threshold dates, STOP."
 
-acceptance_criteria:
-  - "main exacto."
-  - "Solo commit documental G4 adicional."
-  - "PR abierto."
-  - "Base/head correctos."
-  - "PR mergeable."
-  - "No merge."
-  - "No deploy."
-  - "status final DONE_PENDING_REVIEW."
+max_attempts: 1
 
-result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-FOLIOS-DEPOSITO-MATRIX-068.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-DETAIL-UX-AND-OPENING-PRICE-068-R1.md"
