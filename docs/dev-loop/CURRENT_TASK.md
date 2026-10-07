@@ -1,10 +1,10 @@
-﻿task_id: "FIX-IGF-DIARIO-FOLIO-DRAWER-ROLE-GUARD-068-R2"
+﻿task_id: "G4-PREP-IGF-DIARIO-068-R1-R2"
 
-title: "Cerrar fallback de permisos al abrir FolioDrawer desde matriz 068"
+title: "Preparar integración de detalle de folios y precio inicial IGF Diario 068-R1/R2"
 
 status: "DONE_PENDING_REVIEW"
 
-mode: "IMPLEMENTATION"
+mode: "INTEGRATION"
 
 authorized_by: "HUMAN_APPROVER"
 
@@ -13,185 +13,169 @@ authorized_at: "2026-10-07"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-07"
 
 objective: >
-  Corregir exclusivamente el guard de rol/permisos al abrir FolioDrawer
-  desde la matriz diaria 068-R1.
+  Preparar el Pull Request hacia main de la cadena
+  FIX-IGF-DIARIO-DETAIL-UX-AND-OPENING-PRICE-068-R1
+  y FIX-IGF-DIARIO-FOLIO-DRAWER-ROLE-GUARD-068-R2.
 
-  La UX de tarjetas y la corrección de precio inicial de Morelos implementada
-  en 068-R1 deben permanecer intactas.
+  No modificar producto ni tests.
+  No hacer merge ni deploy.
+  El merge queda reservado exclusivamente al HUMAN_APPROVER.
 
-base_sha: "577e7c59b4196192fcf875d93c9365835cb4b73b"
+main_reference_sha: "4adab4643e91e10c97d6f492044398f710d0608d"
 
 branch: "fix/igf-diario-folio-drawer-role-guard-068-r2"
 
-parent_chain:
-  main: "4adab4643e91e10c97d6f492044398f710d0608d"
+delivery_chain:
   r1_product: "2ddcdfd613a2c492cd1e8b8d6ff614e97207cb58"
   r1_final: "577e7c59b4196192fcf875d93c9365835cb4b73b"
+  r2_product: "f550670d279264f75a57743072efc0003fc09439"
+  r2_final: "e87a4237bf76b081e562e2fe45f9f21fc670ca43"
 
-problem:
-  component: "frontend-dashboard/components/IgfDiarioFoliosDepositoMatrix.tsx"
+expected_branch_state:
+  ahead: 4
+  behind: 0
+  merge_base: "4adab4643e91e10c97d6f492044398f710d0608d"
 
-  current_behavior: >
-    La matriz obtiene el rol con getRoleFromDashboardToken(token).
-    Si no puede resolverlo, actualmente pasa role="" a FolioDrawer.
-
-  downstream_risk: >
-    FolioDrawer usa varios permisos con fallback basado en roleUpper.
-    Un role vacío no pertenece a CF_CDMX ni GA, por lo que
-    soloLecturaBase=false y ciertos fallbacks pueden resultar permisivos
-    cuando el token tampoco contiene permisos explícitos.
-
-  example:
-    code: >
-      perm("acceso_aprobar_folios", !soloLecturaBase)
-
-    unknown_role_effect: >
-      role="" => soloLecturaBase=false => fallback=true.
-
-security_contract:
-  primary_rule: >
-    Un rol desconocido/no decodificable nunca debe obtener más acciones
-    que un rol conocido.
-
-  fail_closed: true
-
-  backend:
-    - "El backend continúa siendo autoridad final."
-    - "No modificar permisos backend."
-    - "No modificar endpoints de folios."
-
-preferred_solution:
-  rule: >
-    No abrir FolioDrawer desde la matriz hasta tener un role válido
-    decodificado del token.
-
-  behavior_if_role_known:
-    - "Abrir FolioDrawer normalmente."
-    - "Pasar el role real."
-    - "Conservar permisos existentes del rol."
-    - "Conservar permisos explícitos del token."
-
-  behavior_if_role_unknown:
-    - "No pasar role vacío a FolioDrawer."
-    - "No asumir GG."
-    - "No asumir AD."
-    - "No asumir ZP."
-    - "No ofrecer acciones con fallback permisivo."
-    - "Mostrar un mensaje discreto: No se pudo validar el rol para abrir el folio."
-    - "La lista diaria permanece abierta."
-
-alternative_solution:
-  allowed_only_if_proven_safe: >
-    Se puede adaptar FolioDrawer para aceptar explícitamente un modo
-    readOnly/failClosed, pero únicamente si el cambio es pequeño,
-    no altera el comportamiento normal del Dashboard y queda cubierto
-    por regresión.
-
-  preferred_over_global_change: false
-
-known_role_contract:
-  source: "getRoleFromDashboardToken(token)"
-
-  examples:
-    - "GG"
-    - "GA"
-    - "ZP"
-    - "AD"
-    - "CF_CDMX"
-
-  rule: >
-    No mantener una lista rígida si el helper/token ya define el rol.
-    Solo requerir que exista un string no vacío válido antes de abrir.
-
-folio_ux_contract:
-  preserve:
-    - "Tarjetas individuales."
-    - "Código del folio clicable."
+validated_scope:
+  folio_detail:
+    - "Detalle diario de 068 ya no usa tabla comprimida."
+    - "Cada folio aparece en tarjeta independiente."
+    - "Código de folio visible."
     - "Monto destacado."
-    - "Badge de estado."
-    - "Descripción de hasta tres líneas."
-    - "Abrir folio →."
-    - "Modal diario permanece abierto detrás."
-    - "Cerrar drawer regresa al mismo detalle."
-    - "z-index actual."
+    - "Estado visible como badge."
+    - "Descripción usa ancho completo."
+    - "Abrir folio → disponible."
+    - "Click en código abre el mismo folio."
+    - "Se reutiliza FolioDrawer existente."
+    - "Cerrar FolioDrawer conserva el modal diario."
+    - "FolioDrawer queda visualmente encima del modal."
+    - "FolioDrawer.tsx no fue modificado."
 
-price_contract:
-  preserve_exactly:
-    - "Último precio válido anterior al mes."
-    - "No future backfill."
-    - "Precio propio reemplaza antecedente."
-    - "Carry forward posterior."
-    - "Aliases actuales."
-    - "Override manual 065-R1."
-    - "Precisión completa."
-    - "Morelos 01–06 recibe antecedente solo si existe."
-    - "No modificar arr.precio_diario."
-
-out_of_scope:
-  - "Cambiar SQL de precio."
-  - "Cambiar cálculo financiero."
-  - "Cambiar ventas."
-  - "Cambiar costos."
-  - "Cambiar fletes."
-  - "Cambiar agregación 068."
-  - "Cambiar backend de autorización."
-  - "Cambiar estados."
-  - "Cambiar DB."
-  - "Merge."
-  - "Deploy."
-
-mandatory_tests:
   security:
-    - "Role conocido abre FolioDrawer."
-    - "Se pasa exactamente el role del token."
-    - "Role desconocido no abre FolioDrawer con role vacío."
-    - "Role desconocido no asume GG."
-    - "Role desconocido no asume AD/ZP."
-    - "Role desconocido no expone acciones por fallback."
-    - "La lista diaria permanece abierta."
-    - "Se muestra mensaje discreto si no se puede resolver rol."
+    - "El role sale de getRoleFromDashboardToken."
+    - "No existe fallback GG/AD/ZP."
+    - "No se pasa role vacío a FolioDrawer."
+    - "Sin rol resuelto no se monta FolioDrawer."
+    - "Se muestra aviso de rol no validado."
+    - "Backend continúa siendo autoridad final."
 
-  ux:
-    - "Click en código abre folio con role válido."
-    - "Abrir folio → abre folio con role válido."
-    - "Cerrar drawer conserva modal diario."
-    - "Tarjetas 068-R1 permanecen."
+  opening_price:
+    - "loadPrecioDiario conserva precio mensual."
+    - "Se consulta un último precio válido anterior al primer día del mes."
+    - "precio debe ser numérico y > 0."
+    - "No se restringe al mes inmediatamente anterior."
+    - "No hay future backfill."
+    - "Precio propio del día reemplaza al antecedente."
+    - "Huecos posteriores arrastran último precio válido vigente."
+    - "Sin antecedente válido, inicio permanece vacío."
+    - "0/null previos no califican."
+    - "Alias Querétaro/Queretaro y Tehuacán/Tehuacan se conservan."
+    - "Código exacto mantiene precedencia en la fecha seleccionada."
+    - "Morelos no está hardcodeado."
+    - "Enero puede tomar antecedente del año anterior."
+    - "Se conserva precisión completa."
+    - "Override manual 065-R1 mantiene prioridad."
 
-  price:
-    - "Suite 068-R1 de precio PASS sin modificación."
-    - "Morelos fixture 01–08 sigue igual."
-    - "No future backfill sigue cubierto."
+  morelos:
+    example_fixture:
+      prior: "2026-09-30 = 19.95"
+      "01-06": "19.95"
+      "07": "20.05"
+      "08": "20.05"
+
+    required_effect:
+      - "PRECIO C deja de estar vacío cuando existe antecedente."
+      - "INGRESO D = C × B."
+      - "MARGEN H = C - F - G."
+      - "La rentabilidad downstream vuelve a tener cobertura."
+      - "No se modifican fórmulas financieras."
+
+  database:
+    - "No writes."
+    - "arr.precio_diario no se modifica."
+    - "Consulta mensual + una consulta constante de antecedente."
+    - "Sin query por día."
+
+validated_tests:
+  - "068-R2 PASS 2/2."
+  - "068-R1 PASS 6/6."
+  - "068 PASS."
+  - "067 PASS."
+  - "066-R1 PASS."
+  - "065 PASS."
+  - "065-R1 PASS."
+  - "node --check server.js PASS."
+  - "frontend npm run build PASS."
+  - "git diff --check limpio."
+
+production_validation_required:
+  folio_ui:
+    - "Abrir IGF Diario acumulado con Planta=Todas."
+    - "Seleccionar una celda diaria con varios folios."
+    - "Confirmar tarjetas separadas y legibles."
+    - "Confirmar importe, estado y descripción."
+    - "Click en código."
+    - "Confirmar apertura del folio correcto."
+    - "Cerrar FolioDrawer y confirmar que vuelve a la lista diaria."
+    - "Probar Abrir folio →."
+
+  morelos:
+    - "Descargar/abrir IGF Diario Morelos octubre 2026."
+    - "Revisar 01/10 al 06/10."
+    - "Confirmar que PRECIO ya está presente si existe antecedente histórico."
+    - "Confirmar que no se utilizó hacia atrás el precio del 07/10."
+    - "Confirmar INGRESO."
+    - "Confirmar MARGEN."
+    - "Confirmar rentabilidad downstream."
+    - "Comparar el antecedente con arr.precio_diario si es necesario."
 
   regression:
-    - "068 PASS."
-    - "068-R1 PASS."
-    - "067 PASS."
-    - "066-R1 PASS."
-    - "065-R1 PASS."
-    - "frontend npm run build PASS."
-    - "git diff --check limpio."
+    - "07/10 conserva su precio propio."
+    - "Días posteriores sin precio arrastran el último válido."
+    - "Overrides manuales siguen prevaleciendo."
+    - "068 matriz mantiene importes/totales."
+    - "067 semanal permanece."
+    - "066 acumulado permanece."
 
-recommended_files:
-  - "frontend-dashboard/components/IgfDiarioFoliosDepositoMatrix.tsx"
-  - "test/fix-igf-diario-folio-drawer-role-guard-068-r2.test.js"
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/FIX-IGF-DIARIO-FOLIO-DRAWER-ROLE-GUARD-068-R2.md"
+pr_contract:
+  base: "main"
+  head: "fix/igf-diario-folio-drawer-role-guard-068-r2"
+  title: "FIX 068-R1/R2: detalle de folios y precio inicial IGF Diario"
+  preferred_merge: "Squash and merge"
+  merge_executor: "HUMAN_APPROVER_ONLY"
 
-avoid_if_possible:
-  - "frontend-dashboard/components/FolioDrawer.tsx"
+in_scope:
+  - "Verificar main exacto."
+  - "Verificar rama ahead 4 / behind 0."
+  - "Crear reporte G4-PREP."
+  - "Crear Pull Request."
+  - "Commit únicamente documental G4."
+  - "Push a la rama."
+  - "STOP."
 
-stop_conditions:
-  - "Si origin/main != 4adab4643e91e10c97d6f492044398f710d0608d, STOP."
-  - "Si la rama padre no contiene 577e7c59b4196192fcf875d93c9365835cb4b73b, STOP."
-  - "Si para resolver esto se requiere ampliar permisos, STOP."
-  - "Si cambia la lógica de precio 068-R1, STOP."
-  - "Si cambia la agregación 068, STOP."
+out_of_scope:
+  - "Modificar producto."
+  - "Modificar tests."
+  - "Modificar SQL."
+  - "Modificar FolioDrawer."
+  - "Modificar precio."
+  - "Modificar DB."
+  - "Rebase."
+  - "Merge."
+  - "Deploy."
 
 merge_contract:
   executor: "HUMAN_APPROVER_ONLY"
   merge_authorized: false
   deploy_authorized: false
 
-max_attempts: 1
+stop_conditions:
+  - "Si origin/main != 4adab4643e91e10c97d6f492044398f710d0608d, STOP."
+  - "Si la rama deja de estar ahead 4 / behind 0 antes del commit G4, STOP."
+  - "Si aparece cualquier cambio de producto posterior a e87a4237bf76b081e562e2fe45f9f21fc670ca43, STOP."
+  - "Si el PR no es mergeable, STOP."
+  - "No rebase."
+  - "No merge."
+  - "No deploy."
 
-result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-FOLIO-DRAWER-ROLE-GUARD-068-R2.md"
+result_report_path: "docs/dev-loop/reports/G4-PREP-IGF-DIARIO-068-R1-R2.md"
