@@ -1,6 +1,6 @@
-﻿task_id: "FIX-IGF-DIARIO-WEEKLY-HISTORY-CHART-UNITS-067-R1"
+﻿task_id: "FIX-IGF-DIARIO-WEEKLY-CROSSMONTH-RESULT-KG-067-R2"
 
-title: "Corregir histórico de Resultado y unidades de gráfica semanal 067-R1"
+title: "Completar Resultado $/kg en semanas mixtas con evidencia directa"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -13,188 +13,114 @@ authorized_at: "2026-10-06"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-06"
 
 objective: >
-  Corregir dos defectos encontrados en la revisión de 067 antes de G4:
-  1) preservar Resultado histórico legacy en semanas y gráficas anteriores
-  a octubre 2026 cuando existe evidencia;
-  2) formatear correctamente el eje Y de las gráficas por métrica usando
-  kg, MXN o $/kg según seriesUnit.
+  Completar Resultado ($/kg) en semanas ISO que mezclan meses legacy y
+  detallados, cuando Resultado Importe y Venta KG ya tienen evidencia
+  completa. No inventar desglose histórico.
 
-base_sha: "940cc0907fc1aab6a23708cc49f192aa42f2b24a"
+base_sha: "0dd2bb5847ed328fe5b73dec0d25297fb275f568"
 
-branch: "fix/igf-diario-weekly-history-chart-units-067-r1"
+branch: "fix/igf-diario-weekly-crossmonth-result-kg-067-r2"
 
-source_task: "IMPL-IGF-DIARIO-WEEKLY-PLANT-VIEW-067"
+source_product_sha: "c4c806b19683a4153d2724b772cf4ce68807f82c"
 
-problem_1_history:
-  evidence:
-    file: "lib/igf-diario-weekly-plant.js"
-    current_behavior: >
-      loadMonthBundle asigna legacyResultadoMxn: null a todos los días.
+problem:
+  example_week: "2026-09-28/2026-10-04"
 
-  consequence:
-    - "Resultado semanal pre-octubre queda null aunque exista resultado IGF legacy."
-    - "Semana 28/09–04/10 pierde el Resultado correspondiente a septiembre."
-    - "Gráfica Resultado en 1A/5A/Todo produce gaps artificiales pre-octubre."
+  current:
+    resultado_mxn: "calculable"
+    resultado_kg: null
 
-  required:
-    - >
-      Reutilizar resultado_mxn diario ya materializado por la lógica legacy
-      existente del IGF cuando esté disponible.
-    - >
-      Relacionar built.points/resultados legacy con financial_days por fecha
-      sin reconstruir fórmulas nuevas.
-    - "No inventar J/K/L/Q/R/S/T históricos."
-    - >
-      Que el desglose nuevo quede null no obliga a borrar Resultado histórico
-      si existe evidencia directa del Resultado.
-    - "Preservar null cuando realmente no exista evidencia."
+  cause: >
+    resultado_kg depende actualmente de sobrante_con_hg + com_desc.
+    En semana mixta, el desglose J/K/L/Q/R/S/T de septiembre queda
+    correctamente null, por lo que sobrante_con_hg no puede calcularse.
+
+contract:
+  primary_formula:
+    rule: >
+      Cuando la cadena financiera detallada está completa,
+      conservar resultado_kg = sobrante_con_hg_kg + com_desc_kg.
+
+  direct_evidence_fallback:
+    conditions:
+      - "resultado_kg primario es null."
+      - "resultado_mxn es numérico."
+      - "venta_kg es numérico y distinto de 0."
+
+    formula: >
+      resultado_kg = resultado_mxn / venta_kg
+
+    rationale: >
+      Resultado monetario y Venta son evidencia directa suficiente.
+      No se clasifican ni inventan gastos históricos.
+
+  missing:
+    - "Si resultado_mxn es null, resultado_kg permanece null."
+    - "Si venta_kg es null o 0, resultado_kg permanece null."
 
 cross_month_acceptance:
-  week: "2026-09-28/2026-10-04"
+  week: "Semana ISO 40 · 28/09/2026–04/10/2026"
 
   expected:
-    - "La semana sigue siendo ISO 40."
-    - "No se parte al 01/10."
-    - "J/K/L/Q/R/S/T pueden quedar — por cobertura incompleta."
-    - >
-      Resultado (Importe) usa los resultados diarios disponibles de ambos
-      lados cuando existe evidencia suficiente.
-    - >
-      No sustituir Resultado histórico por una clasificación inventada de gastos.
+    - "Resultado Importe suma días legacy + detallados."
+    - "Resultado $/kg = Resultado Importe / Venta KG semanal."
+    - "J/K/L de septiembre siguen null."
+    - "Q/R/S/T de septiembre siguen null."
+    - "Margen Neto y sobrantes detallados pueden seguir null."
+    - "No inventar clasificación histórica."
 
-historical_chart:
-  result_metric:
-    rule: >
-      resultado_mxn y resultado_kg deben conservar puntos históricos donde
-      el IGF legacy ya tenía resultado calculable.
-
-  detailed_metrics:
-    rule: >
-      Gasto Corporativo, Inversiones, Impuestos Federales y componentes
-      operativos nuevos sí deben conservar gap antes de octubre cuando
-      no exista clasificación.
-
-  forbidden:
-    - "Convertir todos los históricos en 0."
-    - "Inventar componentes 064 antes de octubre."
-    - "Borrar Resultado legacy solo porque no existe desglose 064."
-
-problem_2_chart_units:
-  file: "frontend-dashboard/components/IgfDiarioGraficaModal.tsx"
-
-  current_problem: >
-    En modo seriesMetric, el tooltip utiliza seriesUnit pero el eje Y
-    sigue usando metric, cuyo default es mxn.
-
-  required_axis_unit:
-    kg:
-      metrics:
-        - "venta_kg"
-      format: "kg"
-
-    mxn:
-      metrics:
-        - "ingreso_mxn"
-        - "hg_mxn"
-        - "resultado_mxn"
-      format: "$"
-
-    per_kg:
-      metrics:
-        - "precio_kg"
-        - "costo_kg"
-        - "flete_kg"
-        - "margen_kg"
-        - "gasto_corporativo_kg"
-        - "inversiones_kg"
-        - "impuestos_federales_kg"
-        - "margen_neto_kg"
-        - "presupuesto_nomina_gastos_kg"
-        - "presupuesto_imss_sua_kg"
-        - "extraordinarios_kg"
-        - "provisiones_planta_kg"
-        - "sobrante_antes_hg_kg"
-        - "hg_kg"
-        - "sobrante_con_hg_kg"
-        - "com_desc_kg"
-        - "resultado_kg"
-      format: "$/kg"
-
-  implementation:
-    - >
-      Derivar una unidad efectiva:
-      seriesMetric ? seriesUnit : metric.
-    - "Usar esa unidad efectiva en ticks del eje Y."
-    - "Usar esa unidad efectiva donde el modal formatea la serie seleccionada."
-    - "No romper el modo original de Rentabilidad IGF Diario."
-
-chart_title:
-  requirement: >
-    Cuando seriesMetric está activo, el encabezado principal debe identificar
-    claramente la métrica seleccionada y no generar una lectura contradictoria
-    de 'Rentabilidad IGF Diario' frente a 'Gráfica · Margen'.
-  acceptable:
-    - "Gráfica · Margen"
-    - "Gráfica · Venta en kilos"
-  legacy:
-    - "Sin seriesMetric conservar título actual."
+daily_series:
+  rule: >
+    No modificar la serie diaria legacy ya corregida por 067-R1.
+    resultado_kg diario pre-octubre sigue tomando resultado_per_kg directo
+    cuando existe.
 
 unchanged:
-  - "Panel vertical 067."
-  - "ISO week."
-  - "Prev/Next."
-  - "REAL/PARCIAL/PROYECTADA."
+  - "067 panel vertical."
+  - "067 semana ISO."
+  - "067 navegación."
+  - "067 gráfica."
+  - "067-R1 Resultado histórico."
+  - "067-R1 unidades de eje."
   - "064-R1."
   - "065-R1."
   - "066-R1."
-  - "Forecast comparison."
-  - "No fetch de mes anterior en IGF Diario."
+  - "Excel."
   - "ARR."
   - "Pronóstico."
-  - "Excel."
 
 recommended_files:
   - "lib/igf-diario-weekly-plant.js"
-  - "frontend-dashboard/components/IgfDiarioGraficaModal.tsx"
   - "test/igf-diario-weekly-plant-view-067.test.js"
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-HISTORY-CHART-UNITS-067-R1.md"
+  - "docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-CROSSMONTH-RESULT-KG-067-R2.md"
 
 mandatory_tests:
-  - "Semana 40 sigue 28/09–04/10."
-  - "Resultado legacy de septiembre se conserva cuando existe."
-  - "Resultado cross-month suma evidencia disponible correctamente."
-  - "J/K/L pre-octubre siguen null."
-  - "Q/R/S/T pre-octubre siguen null."
-  - "Resultado histórico no se vuelve 0."
-  - "Resultado sin evidencia sigue null."
-  - "Serie resultado_mxn pre-octubre contiene punto legacy."
-  - "Serie componente 064 pre-octubre conserva gap."
-  - "Venta usa eje kg."
-  - "Ingreso usa eje $."
-  - "HG importe usa eje $."
-  - "Resultado importe usa eje $."
-  - "Margen usa eje $/kg."
-  - "C&D usa eje $/kg."
-  - "Resultado $/kg usa eje $/kg."
-  - "Modal legacy sin seriesMetric permanece igual."
+  - "Semana 40 conserva Resultado Importe."
+  - "Semana 40 obtiene Resultado $/kg = Resultado Importe / Venta KG."
+  - "La identidad resultado_kg * venta_kg = resultado_mxn se cumple."
+  - "J/K/L septiembre permanecen null."
+  - "Q/R/S/T septiembre permanecen null."
+  - "resultado_mxn null => resultado_kg null."
+  - "venta 0 => resultado_kg null."
+  - "Semana octubre completa sigue usando la cadena detallada normal."
+  - "Resultado diario legacy permanece."
+  - "067-R1 PASS."
   - "067 PASS."
   - "066-R1 PASS."
-  - "066 PASS."
   - "065-R1 PASS."
   - "064-R1 PASS."
-  - "Gráficas 054–055 PASS."
   - "frontend build PASS."
   - "node --check server.js PASS."
   - "git diff --check limpio."
 
 out_of_scope:
-  - "Cambiar diseño semanal."
-  - "Cambiar fórmulas Excel."
-  - "Inventar desglose histórico."
+  - "Inventar desglose pre-octubre."
+  - "Cambiar gráfica."
+  - "Cambiar unidades."
+  - "Cambiar Excel."
   - "Cambiar ARR."
   - "Cambiar Pronóstico."
-  - "Writes productivos."
   - "Merge."
   - "Deploy."
 
@@ -203,10 +129,4 @@ merge_contract:
   merge_authorized: false
   deploy_authorized: false
 
-stop_conditions:
-  - "Si la rama deja de contener exactamente 067 revisado, STOP."
-  - "Si origin/main cambia, reportar antes de integrar."
-  - "Si para recuperar Resultado legacy se requiere inventar gastos históricos, STOP."
-  - "Si se necesita modificar Excel, STOP."
-
-result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-HISTORY-CHART-UNITS-067-R1.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-CROSSMONTH-RESULT-KG-067-R2.md"
