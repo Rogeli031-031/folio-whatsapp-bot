@@ -111,6 +111,7 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
   const [selected, setSelected] = useState<{ empresa: string; fecha: string } | null>(null);
   const [openFolioId, setOpenFolioId] = useState<number | null>(null);
   const [dashboardRole, setDashboardRole] = useState<string | null>(null);
+  const [roleNotice, setRoleNotice] = useState<string | null>(null);
   const corte = props.uploadDay.trim();
   const ready = /^\d{4}-\d{2}-\d{2}$/.test(corte);
 
@@ -125,6 +126,7 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
     setError(null);
     setSelected(null);
     setOpenFolioId(null);
+    setRoleNotice(null);
     setDashboardRole(getRoleFromDashboardToken(props.token));
     fetchIgfDiarioFoliosDeposito({
       token: props.token,
@@ -151,6 +153,17 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
   const selectedCell = selected && data
     ? data.plants.find((plant) => plant.empresa === selected.empresa)?.days[selected.fecha] || null
     : null;
+  const resolvedRole = dashboardRole && dashboardRole.trim() ? dashboardRole.trim() : "";
+
+  const handleOpenFolio = (id: number) => {
+    if (!resolvedRole) {
+      setOpenFolioId(null);
+      setRoleNotice("No se pudo validar el rol para abrir el folio.");
+      return;
+    }
+    setRoleNotice(null);
+    setOpenFolioId(id);
+  };
 
   return (
     <section className="mt-6 rounded-lg border border-slate-700 bg-slate-900/70 p-4">
@@ -194,6 +207,7 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
                             }`}
                             onClick={() => {
                               setOpenFolioId(null);
+                              setRoleNotice(null);
                               setSelected({ empresa: plant.empresa, fecha });
                             }}
                           >
@@ -237,15 +251,17 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
             <p className="text-sm text-slate-300">{countText(selectedCell.folio_count)}</p>
             <div className="mt-4 space-y-3">
               {(selectedCell.folios || []).map((folio) => (
-                <FolioCard key={folio.id} folio={folio} onOpen={setOpenFolioId} />
+                <FolioCard key={folio.id} folio={folio} onOpen={handleOpenFolio} />
               ))}
             </div>
+            {roleNotice ? <p className="mt-3 text-sm text-amber-200" role="status">{roleNotice}</p> : null}
             <div className="mt-4 flex justify-end">
               <button
                 type="button"
                 className="min-h-11 rounded bg-slate-700 px-3 py-2"
                 onClick={() => {
                   setOpenFolioId(null);
+                  setRoleNotice(null);
                   setSelected(null);
                 }}
               >
@@ -255,12 +271,14 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
           </div>
         </div>
       )}
-      <FolioDrawer
-        folioId={openFolioId}
-        token={props.token}
-        role={dashboardRole || ""}
-        onClose={() => setOpenFolioId(null)}
-      />
+      {openFolioId != null && resolvedRole ? (
+        <FolioDrawer
+          folioId={openFolioId}
+          token={props.token}
+          role={resolvedRole}
+          onClose={() => setOpenFolioId(null)}
+        />
+      ) : null}
     </section>
   );
 }

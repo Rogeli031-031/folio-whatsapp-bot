@@ -248,7 +248,9 @@ test("el detalle diario usa tarjetas y abre FolioDrawer sin cerrar la lista", ()
   assert.match(UI, /folio\.folio/);
   assert.match(UI, /money\.format\(folio\.importe\)/);
   assert.match(UI, /getRoleFromDashboardToken\(props\.token\)/);
-  assert.match(UI, /role=\{dashboardRole \|\| ""\}/);
+  assert.match(UI, /const handleOpenFolio/);
+  assert.match(UI, /role=\{resolvedRole\}/);
+  assert.doesNotMatch(UI, /role=\{dashboardRole \|\| ""\}|role=""/);
   assert.doesNotMatch(UI, /role="GG"|role=\{"GG"\}/);
   assert.match(UI, /onClose=\{\(\) => setOpenFolioId\(null\)\}/);
   assert.match(UI, /z-30/);
