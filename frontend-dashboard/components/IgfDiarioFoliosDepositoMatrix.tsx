@@ -1,11 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import FolioDrawer from "@/components/FolioDrawer";
 import {
   fetchIgfDiarioFoliosDeposito,
   type IgfDiarioFolioDepositoCell,
+  type IgfDiarioFolioDepositoItem,
   type IgfDiarioFoliosDepositoResponse,
 } from "@/lib/api";
+import { getRoleFromDashboardToken } from "@/lib/auth";
+
+const ESTADO_LABEL: Record<string, string> = {
+  DEPOSITO_CIERRE: "Depósito y cierre",
+  COMPROBACIONES: "Comprobaciones",
+  EVIDENCIAS: "Evidencias",
+};
 
 const money = new Intl.NumberFormat("es-MX", {
   style: "currency",
@@ -22,6 +31,51 @@ function moneyText(amount: number | null, count: number) {
 function countText(count: number) {
   if (count === 1) return "1 folio";
   return `${count} folios`;
+}
+
+function fechaVisible(fecha: string) {
+  const [year, month, day] = fecha.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function estadoVisible(estado: string) {
+  return ESTADO_LABEL[estado] || estado;
+}
+
+function FolioCard(props: { folio: IgfDiarioFolioDepositoItem; onOpen: (id: number) => void }) {
+  const folio = props.folio;
+  const open = () => props.onOpen(folio.id);
+  return (
+    <article className="rounded-lg border border-slate-700 bg-slate-950/70 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <button
+          type="button"
+          className="min-h-11 text-left text-base font-semibold text-cyan-200 underline-offset-2 hover:underline"
+          onClick={open}
+        >
+          {folio.folio}
+        </button>
+        <span className="shrink-0 pt-2 text-base font-semibold text-slate-50">
+          {folio.importe == null ? "Sin importe" : money.format(folio.importe)}
+        </span>
+      </div>
+      <div className="mt-1 flex items-center justify-between gap-3">
+        <span className="rounded-full border border-emerald-800 bg-emerald-950 px-2 py-1 text-xs text-emerald-100">
+          {estadoVisible(folio.estado)}
+        </span>
+        <button
+          type="button"
+          className="min-h-11 shrink-0 px-2 text-sm font-medium text-cyan-300"
+          onClick={open}
+        >
+          Abrir folio →
+        </button>
+      </div>
+      <p className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-sm leading-5 text-slate-200" title={folio.descripcion}>
+        {folio.descripcion}
+      </p>
+    </article>
+  );
 }
 
 function CellLines(props: { cell: IgfDiarioFolioDepositoCell | null; emphasize?: boolean }) {
@@ -55,6 +109,8 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<{ empresa: string; fecha: string } | null>(null);
+  const [openFolioId, setOpenFolioId] = useState<number | null>(null);
+  const [dashboardRole, setDashboardRole] = useState<string | null>(null);
   const corte = props.uploadDay.trim();
   const ready = /^\d{4}-\d{2}-\d{2}$/.test(corte);
 
@@ -68,6 +124,8 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
     setLoading(true);
     setError(null);
     setSelected(null);
+    setOpenFolioId(null);
+    setDashboardRole(getRoleFromDashboardToken(props.token));
     fetchIgfDiarioFoliosDeposito({
       token: props.token,
       uploadDay: corte,
@@ -134,7 +192,10 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
                             className={`w-full rounded px-1 py-1 text-left ${
                               active ? "border border-cyan-400 bg-sky-950/70" : "border border-transparent bg-emerald-950/40"
                             }`}
-                            onClick={() => setSelected({ empresa: plant.empresa, fecha })}
+                            onClick={() => {
+                              setOpenFolioId(null);
+                              setSelected({ empresa: plant.empresa, fecha });
+                            }}
                           >
                             <CellLines cell={cell} />
                           </button>
@@ -167,38 +228,39 @@ export default function IgfDiarioFoliosDepositoMatrix(props: {
         </div>
       )}
       {selected && selectedCell && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4" role="dialog" aria-label="Detalle de folios">
-          <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded border border-slate-600 bg-slate-900 p-4 text-slate-100">
-            <h4 className="text-lg font-semibold">{selected.empresa} · {selected.fecha.slice(8, 10)}/{selected.fecha.slice(5, 7)}/{selected.fecha.slice(0, 4)}</h4>
-            <p className="mb-3 text-sm text-slate-300">
-              {moneyText(selectedCell.amount_total, selectedCell.folio_count)} · {countText(selectedCell.folio_count)}
+        <div className="fixed inset-0 z-30 flex items-end justify-center bg-slate-950/70 p-3 sm:items-center sm:p-4" role="dialog" aria-label="Detalle de folios">
+          <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-lg border border-slate-600 bg-slate-900 p-4 text-slate-100">
+            <h4 className="text-lg font-semibold">{selected.empresa} · {fechaVisible(selected.fecha)}</h4>
+            <p className="mt-2 text-2xl font-semibold text-slate-50">
+              {moneyText(selectedCell.amount_total, selectedCell.folio_count)}
             </p>
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-slate-700 text-left text-slate-300">
-                  <th className="py-1">Folio</th>
-                  <th className="py-1">Estado</th>
-                  <th className="py-1 text-right">Monto</th>
-                  <th className="py-1">Descripción</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(selectedCell.folios || []).map((folio) => (
-                  <tr key={folio.id} className="border-b border-slate-800">
-                    <td className="py-1">{folio.folio}</td>
-                    <td className="py-1">{folio.estado}</td>
-                    <td className="py-1 text-right">{folio.importe == null ? "Sin importe" : money.format(folio.importe)}</td>
-                    <td className="py-1">{folio.descripcion}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <p className="text-sm text-slate-300">{countText(selectedCell.folio_count)}</p>
+            <div className="mt-4 space-y-3">
+              {(selectedCell.folios || []).map((folio) => (
+                <FolioCard key={folio.id} folio={folio} onOpen={setOpenFolioId} />
+              ))}
+            </div>
             <div className="mt-4 flex justify-end">
-              <button type="button" className="rounded bg-slate-700 px-3 py-1" onClick={() => setSelected(null)}>Cerrar</button>
+              <button
+                type="button"
+                className="min-h-11 rounded bg-slate-700 px-3 py-2"
+                onClick={() => {
+                  setOpenFolioId(null);
+                  setSelected(null);
+                }}
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>
       )}
+      <FolioDrawer
+        folioId={openFolioId}
+        token={props.token}
+        role={dashboardRole || ""}
+        onClose={() => setOpenFolioId(null)}
+      />
     </section>
   );
 }
