@@ -15845,8 +15845,12 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
   if (dashboardBlockGVForbidden(req, res)) return;
   const todasBlock = igfDiarioTodasRequestBlock(req);
   if (todasBlock) return res.status(todasBlock.status).json({ error: todasBlock.error });
+  const todas = /^(1|true|yes)$/i.test(String((req.query && req.query.todas) || "").trim());
   const plantCodeRaw = ((req.query && req.query.plant_code) || "").toString().trim();
-  if (!plantCodeRaw) return res.status(400).json({ error: "Selecciona una planta." });
+  if (todas && plantCodeRaw) {
+    return res.status(400).json({ error: "IGF Diario semanal Todas no puede combinarse con una planta individual." });
+  }
+  if (!todas && !plantCodeRaw) return res.status(400).json({ error: "Selecciona una planta." });
   const year = parseInt(req.query.year, 10);
   const month = parseInt(req.query.month, 10);
   if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
@@ -15855,10 +15859,41 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
   const uploadDay = ((req.query.upload_day || "").toString().trim().slice(0, 10)) || null;
   const versionAsOfCorte = /^(1|true|yes)$/i.test(String(req.query.version_as_of_corte || "").trim());
   const view = String(req.query.view || "week");
+  if (todas && view === "series") return res.status(400).json({ error: "La serie semanal requiere una planta." });
   const weekAnchor = String(req.query.week_anchor || uploadDay || "").slice(0, 10);
   const metric = String(req.query.metric || "resultado_mxn");
   const client = await pool.connect();
   try {
+    if (todas) {
+      const catalog = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
+      const plants = catalog.filter((plant) => {
+        const name = String((plant && (plant.nombre || plant.canon)) || "");
+        if (/zona\s+provincia/i.test(name)) return false;
+        return !assertPlantaPermitidaDashboard(req, plant && plant.plantaId);
+      });
+      if (!plants.length) return res.status(403).json({ error: "Sin permiso para las plantas de IGF Diario." });
+      let projection = null;
+      try {
+        projection = await dashboardArrForecast.buildPronosticoProjectionContext(client, year, month, uploadDay);
+      } catch (error) {
+        console.error("[igf-diario-semanal] pronostico", error && error.message ? error.message : error);
+      }
+      const weekly = require("./lib/igf-diario-weekly-plant");
+      const comprasCache = new Map();
+      const payload = await weekly.loadWeeklyAll(client, {
+        plants,
+        year,
+        month,
+        weekAnchor,
+        corteYmd: uploadDay,
+        versionAsOfCorte,
+        projection,
+        comprasCache,
+        loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
+        labelPlant: (plant) => dashboardArrForecast.igfLabelForForecastPlant(plant.nombre || plant.canon),
+      });
+      return res.json(payload);
+    }
     const resolvedPlant = await dashboardArrForecast.resolveForecastExportPlant(client, plantCodeRaw);
     if (!resolvedPlant) return res.status(400).json({ error: "Planta no reconocida para exportar el Excel Forecast." });
     const deniedPlant = assertPlantaPermitidaDashboard(req, resolvedPlant.plantaId);

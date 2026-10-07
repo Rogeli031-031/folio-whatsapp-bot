@@ -3,50 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchIgfDiarioSemanal, type IgfDiarioSemanalMetrics, type IgfDiarioSemanalResponse } from "@/lib/api";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
-
-type Unit = "kg" | "mxn" | "per_kg";
-
-const ROWS: { key: keyof IgfDiarioSemanalMetrics; label: string; unit: Unit }[] = [
-  { key: "venta_kg", label: "Venta en kilos", unit: "kg" },
-  { key: "precio_kg", label: "Precio de venta al público", unit: "per_kg" },
-  { key: "ingreso_mxn", label: "Ingreso generado", unit: "mxn" },
-  { key: "costo_kg", label: "Costo del Gas LP", unit: "per_kg" },
-  { key: "flete_kg", label: "Flete terrestre", unit: "per_kg" },
-  { key: "margen_kg", label: "Margen", unit: "per_kg" },
-  { key: "gasto_corporativo_kg", label: "Gasto Corporativo", unit: "per_kg" },
-  { key: "inversiones_kg", label: "Inversiones", unit: "per_kg" },
-  { key: "impuestos_federales_kg", label: "Impuestos Federales", unit: "per_kg" },
-  { key: "margen_neto_kg", label: "Margen Neto", unit: "per_kg" },
-  { key: "presupuesto_nomina_gastos_kg", label: "Presupuesto Nómina/Gastos", unit: "per_kg" },
-  { key: "presupuesto_imss_sua_kg", label: "Presupuesto IMSS/SUA", unit: "per_kg" },
-  { key: "extraordinarios_kg", label: "Extraordinarios", unit: "per_kg" },
-  { key: "provisiones_planta_kg", label: "Provisiones de la Planta", unit: "per_kg" },
-  { key: "sobrante_antes_hg_kg", label: "Sobrante de Operación antes de HG", unit: "per_kg" },
-  { key: "hg_mxn", label: "HG", unit: "mxn" },
-  { key: "sobrante_con_hg_kg", label: "Sobrante de Operación con HG", unit: "per_kg" },
-  { key: "com_desc_kg", label: "Comisiones y Descuentos", unit: "per_kg" },
-  { key: "resultado_kg", label: "RESULTADO ($/kg)", unit: "per_kg" },
-  { key: "resultado_mxn", label: "RESULTADO (Importe)", unit: "mxn" },
-];
-
-function fmtFecha(value: string): string {
-  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return value;
-  return `${match[3]}/${match[2]}/${match[1]}`;
-}
-
-function fmtValue(value: number | null, unit: Unit): string {
-  if (value == null || !Number.isFinite(value)) return "—";
-  if (unit === "kg") return value.toLocaleString("es-MX", { maximumFractionDigits: 0 });
-  return value.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function tone(key: string, value: number | null): string {
-  if (value == null) return "text-slate-500";
-  if (value < 0) return "text-red-400";
-  if ((key === "resultado_kg" || key === "resultado_mxn") && value > 0) return "text-emerald-300";
-  return "text-slate-100";
-}
+import { WEEKLY_ROWS, dayHeader, fmtValue, tone, weekLabel } from "@/lib/igf-diario-weekly-rows";
 
 export default function IgfDiarioWeeklyPlantPanel({
   token,
@@ -93,7 +50,7 @@ export default function IgfDiarioWeeklyPlantPanel({
       versionAsOfCorte,
     })
       .then((payload) => {
-        if (!cancel) setData(payload);
+        if (!cancel && payload && "metrics" in payload) setData(payload);
       })
       .catch((err: Error) => {
         if (!cancel) setError(err.message || "No se pudo cargar la semana");
@@ -106,8 +63,9 @@ export default function IgfDiarioWeeklyPlantPanel({
     };
   }, [token, year, month, plantCode, anchor, uploadDay, versionAsOfCorte]);
 
-  const selectedRow = ROWS.find((row) => row.key === selected) || ROWS[ROWS.length - 1];
+  const selectedRow = WEEKLY_ROWS.find((row) => row.key === selected) || WEEKLY_ROWS[WEEKLY_ROWS.length - 1];
   const estado = data?.week.estado === "proyectada" ? "PROYECTADA" : data?.week.estado === "parcial" ? "PARCIAL" : "REAL";
+  const days = data?.days || [];
 
   return (
     <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4">
@@ -115,7 +73,7 @@ export default function IgfDiarioWeeklyPlantPanel({
         <h3 className="text-base font-medium text-slate-100">IGF Diario semanal · {data?.empresa || empresa}</h3>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {data && <span className="rounded bg-slate-700 px-2 py-1 font-semibold text-slate-100">{estado}</span>}
-          {data && !data.week.complete && (
+          {data && data.week.complete === false && (
             <span className="rounded bg-amber-900/60 px-2 py-1 font-semibold text-amber-200">INCOMPLETA</span>
           )}
         </div>
@@ -130,9 +88,7 @@ export default function IgfDiarioWeeklyPlantPanel({
           ◀ Semana anterior
         </button>
         <div className="min-w-0 text-sm font-medium text-slate-100">
-          {data
-            ? `SEMANA ISO ${data.week.iso_week} · ${fmtFecha(data.week.fecha_desde)}–${fmtFecha(data.week.fecha_hasta)}`
-            : "Semana"}
+          {data ? weekLabel(data.week.week_number, data.week.fecha_desde, data.week.fecha_hasta) : "Semana"}
         </div>
         <button
           type="button"
@@ -152,29 +108,68 @@ export default function IgfDiarioWeeklyPlantPanel({
       </div>
       {loading && <p className="text-sm text-slate-400">Cargando semana…</p>}
       {error && <p className="text-sm text-red-300">{error}</p>}
-      {data && data.week.missing_components.length > 0 && (
-        <p className="mb-2 text-xs text-amber-200">Faltantes: {data.week.missing_components.join(", ")}</p>
+      {data && (data.week.missing_components || []).length > 0 && (
+        <p className="mb-2 text-xs text-amber-200">Faltantes: {(data.week.missing_components || []).join(", ")}</p>
       )}
-      <div className="overflow-hidden rounded border border-slate-700">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] bg-slate-900/80 text-xs font-semibold text-slate-300">
-          <div className="px-3 py-2">Concepto</div>
-          <div className="px-3 py-2 text-right">Valor semana</div>
-        </div>
-        {ROWS.map((row) => {
-          const value = data ? data.metrics[row.key] : null;
-          const active = row.key === selected;
-          return (
-            <button
-              key={row.key}
-              type="button"
-              onClick={() => setSelected(row.key)}
-              className={`grid w-full grid-cols-[minmax(0,1fr)_auto] border-t border-slate-700 text-left text-sm ${active ? "bg-sky-950/70" : "bg-transparent"}`}
-            >
-              <span className="px-3 py-2 text-slate-200">{row.label}</span>
-              <span className={`px-3 py-2 text-right tabular-nums ${tone(row.key, value)}`}>{fmtValue(value, row.unit)}</span>
-            </button>
-          );
-        })}
+      <div className="overflow-x-auto rounded border border-slate-700">
+        <table className="w-full min-w-[980px] border-separate border-spacing-0 text-sm">
+          <thead>
+            <tr className="bg-slate-900/80 text-xs font-semibold text-slate-300">
+              <th className="sticky left-0 z-20 min-w-[220px] bg-slate-900 px-3 py-2 text-left">Concepto</th>
+              <th className="sticky left-[220px] z-20 min-w-[108px] bg-slate-900 px-3 py-2 text-right">Semana</th>
+              {days.map((day) => (
+                <th
+                  key={day.fecha}
+                  className={`min-w-[96px] px-3 py-2 text-right ${day.estado === "proyectada" ? "bg-slate-950/70 text-slate-400 weekly-day-proyectado" : ""}`}
+                >
+                  {dayHeader(day.fecha)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {WEEKLY_ROWS.map((row) => {
+              const value = data ? data.metrics[row.key] : null;
+              const active = row.key === selected;
+              const band = row.strongest
+                ? "bg-amber-900/30"
+                : row.highlight
+                  ? "bg-amber-950/25"
+                  : "";
+              return (
+                <tr
+                  key={row.key}
+                  data-row-key={row.key}
+                  data-highlight={row.highlight ? "1" : "0"}
+                  data-strongest={row.strongest ? "1" : "0"}
+                  data-separator={row.separatorBefore ? "1" : "0"}
+                  onClick={() => setSelected(row.key)}
+                  className={`cursor-pointer ${band} ${active ? "ring-1 ring-inset ring-sky-500" : ""}`}
+                >
+                  <th
+                    className={`sticky left-0 z-10 px-3 text-left font-medium text-slate-100 ${row.separatorBefore ? "border-t-4 border-slate-400 py-3" : "border-t border-slate-700 py-2"} ${row.strongest ? "bg-amber-800/50" : row.highlight ? "bg-amber-900/45" : "bg-slate-800"}`}
+                  >
+                    {row.label}
+                  </th>
+                  <td className={`sticky left-[220px] z-10 bg-slate-900 px-3 text-right tabular-nums ${row.separatorBefore ? "border-t-4 border-slate-400 py-3" : "border-t border-slate-700 py-2"} ${tone(row.key, value)} ${row.strongest ? "text-base font-semibold" : ""}`}>
+                    {fmtValue(value, row.unit)}
+                  </td>
+                  {days.map((day) => {
+                    const dayValue = day.metrics[row.key];
+                    return (
+                      <td
+                        key={`${row.key}-${day.fecha}`}
+                        className={`px-3 text-right tabular-nums ${row.separatorBefore ? "border-t-4 border-slate-400 py-3" : "border-t border-slate-700 py-2"} ${tone(row.key, dayValue)} ${day.estado === "proyectada" ? "bg-slate-950/40 weekly-day-proyectado" : ""} ${row.strongest ? "text-base font-semibold" : ""}`}
+                      >
+                        {fmtValue(dayValue, row.unit)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
       {chartOpen && (
         <IgfDiarioGraficaModal
