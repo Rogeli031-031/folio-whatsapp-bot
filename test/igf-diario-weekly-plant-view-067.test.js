@@ -239,16 +239,47 @@ test("el bundle transporta el resultado legacy y la semana 40 no inventa gastos"
   assert.equal(weekly.sundayOfIsoWeekContainingDate("2026-09-28"), "2026-10-04");
   assert.equal(pack.metrics.gasto_corporativo_kg, null);
   assert.equal(pack.metrics.inversiones_kg, null);
+  assert.equal(pack.metrics.impuestos_federales_kg, null);
   assert.equal(pack.metrics.presupuesto_nomina_gastos_kg, null);
+  assert.equal(pack.metrics.presupuesto_imss_sua_kg, null);
+  assert.equal(pack.metrics.extraordinarios_kg, null);
+  assert.equal(pack.metrics.provisiones_planta_kg, null);
+  assert.equal(pack.metrics.margen_neto_kg, null);
+  assert.equal(pack.metrics.sobrante_antes_hg_kg, null);
+  assert.equal(pack.metrics.sobrante_con_hg_kg, null);
   const octResult = weekly.dayResultMxn(oct.get("2026-10-01"));
   assert.equal(pack.metrics.resultado_mxn, 40 * 3 + octResult * 4);
-  assert.notEqual(pack.metrics.resultado_mxn, 0);
+  assert.notEqual(pack.metrics.resultado_mxn, null);
+  assert.ok(pack.metrics.venta_kg > 0);
+  assert.equal(pack.metrics.venta_kg, 700);
+  assert.equal(pack.metrics.resultado_kg, pack.metrics.resultado_mxn / pack.metrics.venta_kg);
+  assert.ok(Math.abs(pack.metrics.resultado_kg * pack.metrics.venta_kg - pack.metrics.resultado_mxn) < 1e-9);
   const missing = weekly.daysFromBuilt({
     financial_days: [base("2026-09-28")],
     points: [{ fecha: "2026-09-28", resultado_mxn: null, resultado_per_kg: null }],
   }, null);
   assert.equal(missing.get("2026-09-28").legacyResultadoMxn, null);
-  assert.equal(weekly.aggregateWeek([missing.get("2026-09-28")], "2026-10-06").metrics.resultado_mxn, null);
+  const missingPack = weekly.aggregateWeek([missing.get("2026-09-28")], "2026-10-06");
+  assert.equal(missingPack.metrics.resultado_mxn, null);
+  assert.equal(missingPack.metrics.resultado_kg, null);
+  const zeroVenta = weekly.aggregateWeek([
+    day("2026-10-05", { ventaKg: 0 }),
+  ], "2026-10-06");
+  assert.equal(zeroVenta.metrics.venta_kg, 0);
+  assert.notEqual(zeroVenta.metrics.resultado_mxn, null);
+  assert.equal(zeroVenta.metrics.resultado_kg, null);
+  const detailed = weekly.aggregateWeek([
+    day("2026-10-05"),
+    day("2026-10-06"),
+    day("2026-10-07"),
+    day("2026-10-08"),
+    day("2026-10-09"),
+    day("2026-10-10"),
+    day("2026-10-11"),
+  ], "2026-10-06");
+  assert.notEqual(detailed.metrics.sobrante_con_hg_kg, null);
+  assert.notEqual(detailed.metrics.com_desc_kg, null);
+  assert.equal(detailed.metrics.resultado_kg, detailed.metrics.sobrante_con_hg_kg + detailed.metrics.com_desc_kg);
   const resultSeries = weekly.seriesPoints(days, "resultado_mxn", "2026-10-06");
   const expenseSeries = weekly.seriesPoints(days, "gasto_corporativo_kg", "2026-10-06");
   assert.equal(resultSeries[0].value, 40);
