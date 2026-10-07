@@ -20,6 +20,7 @@ import {
   zonaFromPlantRows,
 } from "@/lib/igf-october-mini";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
+import IgfDiarioWeeklyPlantPanel from "@/components/IgfDiarioWeeklyPlantPanel";
 import {
   fetchIgfForecast,
   fetchIgfForecastMini,
@@ -1303,8 +1304,9 @@ export function IgfForecastContent() {
   }, [token, igfForecast?.year, igfForecast?.month, isGAPageBlocked, isGVPageBlocked, uploadDay]);
 
   useEffect(() => {
-    if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast || !plantaFilter) {
+    if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast || !plantaFilter || igfTableMode === "igf_diario") {
       setIgfMesAnterior(null);
+      setIgfMesAnteriorLoading(false);
       return;
     }
     const y = igfForecast.year;
@@ -1316,7 +1318,7 @@ export function IgfForecastContent() {
       .then(setIgfMesAnterior)
       .catch(() => setIgfMesAnterior(null))
       .finally(() => setIgfMesAnteriorLoading(false));
-  }, [token, plantaFilter, igfForecast?.year, igfForecast?.month, isGAPageBlocked, isGVPageBlocked]);
+  }, [token, plantaFilter, igfTableMode, igfForecast?.year, igfForecast?.month, isGAPageBlocked, isGVPageBlocked]);
 
   const openPronosticoMiniRow = async (row: IgfForecastMiniRow) => {
     const forecast = igfForecast;
@@ -2698,7 +2700,19 @@ export function IgfForecastContent() {
             </>
           )}
         </section>
-        {plantaFilter && igfForecast && (
+        {plantaFilter && igfTableMode === "igf_diario" && token && igfForecast && (
+          <IgfDiarioWeeklyPlantPanel
+            token={token}
+            year={igfForecast.year}
+            month={igfForecast.month}
+            plantCode={plantaFilter}
+            empresa={plantaFilter}
+            uploadDay={uploadDay}
+            versionAsOfCorte={versionAsOfCorte}
+            excelUrl={igfExcelUrl || ""}
+          />
+        )}
+        {plantaFilter && igfTableMode === "forecast" && igfForecast && (
           <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4 flex-shrink-0">
             <h3 className="text-base font-medium text-slate-200 mb-2">Comparación IGF Forecast vs última versión del mes anterior</h3>
             {igfMesAnteriorLoading && <p className="text-sm text-slate-400">Cargando mes anterior…</p>}

@@ -15860,6 +15860,71 @@ app.get("/api/dashboard/igf-diario-grafica", dashboardAuthMiddleware, async (req
   }
 });
 
+app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const todasBlock = igfDiarioTodasRequestBlock(req);
+  if (todasBlock) return res.status(todasBlock.status).json({ error: todasBlock.error });
+  const plantCodeRaw = ((req.query && req.query.plant_code) || "").toString().trim();
+  if (!plantCodeRaw) return res.status(400).json({ error: "Selecciona una planta." });
+  const year = parseInt(req.query.year, 10);
+  const month = parseInt(req.query.month, 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Faltan year y month válidos en query" });
+  }
+  const uploadDay = ((req.query.upload_day || "").toString().trim().slice(0, 10)) || null;
+  const versionAsOfCorte = /^(1|true|yes)$/i.test(String(req.query.version_as_of_corte || "").trim());
+  const view = String(req.query.view || "week");
+  const weekAnchor = String(req.query.week_anchor || uploadDay || "").slice(0, 10);
+  const metric = String(req.query.metric || "resultado_mxn");
+  const client = await pool.connect();
+  try {
+    const resolvedPlant = await dashboardArrForecast.resolveForecastExportPlant(client, plantCodeRaw);
+    if (!resolvedPlant) return res.status(400).json({ error: "Planta no reconocida para exportar el Excel Forecast." });
+    const deniedPlant = assertPlantaPermitidaDashboard(req, resolvedPlant.plantaId);
+    if (deniedPlant) return res.status(403).json({ error: deniedPlant });
+    let projection = null;
+    try {
+      projection = await dashboardArrForecast.buildPronosticoProjectionContext(client, year, month, uploadDay);
+    } catch (error) {
+      console.error("[igf-diario-semanal] pronostico", error && error.message ? error.message : error);
+    }
+    const weekly = require("./lib/igf-diario-weekly-plant");
+    const known = weekly.METRICS.some((item) => item[0] === metric);
+    if (view === "series" && !known) return res.status(400).json({ error: "Métrica semanal no reconocida." });
+    const payload = view === "series"
+      ? await weekly.loadWeeklySeries(client, {
+        plant: resolvedPlant,
+        year,
+        month,
+        range: String(req.query.range || "1m"),
+        metric,
+        corteYmd: uploadDay,
+        versionAsOfCorte,
+        projection,
+        comprasCache: new Map(),
+        loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
+      })
+      : await weekly.loadWeeklyPlant(client, {
+        plant: resolvedPlant,
+        year,
+        month,
+        weekAnchor,
+        corteYmd: uploadDay,
+        versionAsOfCorte,
+        projection,
+        comprasCache: new Map(),
+        loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
+      });
+    res.json(payload);
+  } catch (error) {
+    console.error("[igf-diario-semanal]", error && error.message ? error.message : error);
+    res.status(error.status || 500).json({ error: error.status ? error.message : "No se pudo armar la semana IGF Diario" });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;
