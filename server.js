@@ -15914,6 +15914,7 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
         month,
         range: String(req.query.range || "1m"),
         metric,
+        weekAnchor,
         corteYmd: uploadDay,
         versionAsOfCorte,
         projection,
@@ -16136,6 +16137,35 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       proyeccionCatSubForecast,
       fechaCorte: uploadDay || proyeccionHasta || null,
     };
+    if (plantCode && resolvedPlant) {
+      const weekly = require("./lib/igf-diario-weekly-plant");
+      const rawAnchor = String((req.query && req.query.week_anchor) || "").trim().slice(0, 10);
+      const weekAnchor = /^\d{4}-\d{2}-\d{2}$/.test(rawAnchor) ? rawAnchor : String(uploadDay || "").slice(0, 10);
+      const rawMetric = String((req.query && req.query.summary_metric) || "").trim();
+      const summaryMetric = weekly.METRICS.some((item) => item[0] === rawMetric) ? rawMetric : "resultado_mxn";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(weekAnchor)) {
+        let projection = null;
+        try {
+          projection = await dashboardArrForecast.buildPronosticoProjectionContext(client, year, month, uploadDay);
+        } catch (error) {
+          console.error("[dashboard-excel] pronostico", error && error.message ? error.message : error);
+        }
+        forecastOpts.pronosticoProjection = projection;
+        forecastOpts.igfWeeklySummary = await weekly.loadWeeklyPlant(client, {
+          plant: resolvedPlant,
+          year,
+          month,
+          weekAnchor,
+          corteYmd: uploadDay,
+          versionAsOfCorte: versionAsOfCorteExcel,
+          projection,
+          comprasCache: new Map(),
+          loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
+        });
+        forecastOpts.igfWeeklySummaryMetric = summaryMetric;
+        forecastOpts.igfWeeklyQueryCount = forecastOpts.igfWeeklySummary.query_count;
+      }
+    }
     const importeArrMini = (value) => {
       if (value == null || value === "") return null;
       const n = Number(value);

@@ -272,7 +272,7 @@ test("el bundle transporta el resultado legacy y la semana 40 no inventa gastos"
     day("2026-10-05", { ventaKg: 0 }),
   ], "2026-10-06");
   assert.equal(zeroVenta.metrics.venta_kg, 0);
-  assert.notEqual(zeroVenta.metrics.resultado_mxn, null);
+  assert.equal(zeroVenta.metrics.resultado_mxn, null);
   assert.equal(zeroVenta.metrics.resultado_kg, null);
   const detailed = weekly.aggregateWeek([
     day("2026-10-05"),
@@ -285,7 +285,8 @@ test("el bundle transporta el resultado legacy y la semana 40 no inventa gastos"
   ], "2026-10-06");
   assert.notEqual(detailed.metrics.sobrante_con_hg_kg, null);
   assert.notEqual(detailed.metrics.com_desc_kg, null);
-  assert.equal(detailed.metrics.resultado_kg, detailed.metrics.sobrante_con_hg_kg + detailed.metrics.com_desc_kg);
+  assert.equal(detailed.metrics.resultado_kg, detailed.metrics.resultado_mxn / detailed.metrics.venta_kg);
+  assert.ok(Math.abs(detailed.metrics.resultado_kg - (detailed.metrics.sobrante_con_hg_kg + detailed.metrics.com_desc_kg)) < 1e-6);
   const resultSeries = weekly.seriesPoints(days, "resultado_mxn", "2026-10-06");
   const expenseSeries = weekly.seriesPoints(days, "gasto_corporativo_kg", "2026-10-06");
   assert.equal(resultSeries[0].value, 40);
