@@ -21,6 +21,7 @@ import {
 } from "@/lib/igf-october-mini";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
 import IgfDiarioWeeklyPlantPanel from "@/components/IgfDiarioWeeklyPlantPanel";
+import IgfDiarioFoliosDepositoMatrix from "@/components/IgfDiarioFoliosDepositoMatrix";
 import {
   fetchIgfForecast,
   fetchIgfForecastMini,
@@ -2413,6 +2414,7 @@ export function IgfForecastContent() {
                 </div>
               </div>
             ) : null}
+            {igfTableMode === "igf_diario" && !plantaFilter ? null : (
             <div className={`overflow-x-auto ${plantaFilter ? "max-h-[55vh] overflow-y-auto" : ""}`}>
               <table className="w-full border-collapse text-sm">
                 <thead>
@@ -2697,9 +2699,17 @@ export function IgfForecastContent() {
                 <p className="text-sm text-slate-500 py-4">No hay datos IGF para este mes.</p>
               )}
             </div>
+            )}
             </>
           )}
         </section>
+        {!plantaFilter && igfTableMode === "igf_diario" && token && igfForecast && (
+          <IgfDiarioFoliosDepositoMatrix
+            token={token}
+            uploadDay={uploadDay}
+            versionAsOfCorte={versionAsOfCorte}
+          />
+        )}
         {plantaFilter && igfTableMode === "igf_diario" && token && igfForecast && (
           <IgfDiarioWeeklyPlantPanel
             token={token}

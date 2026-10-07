@@ -71,6 +71,7 @@ const { embedExcelEvidencePhoto } = require("./lib/excel-image-compress");
 const { isDirectorZPForDashboard } = require("./lib/dashboard-es-zp");
 const igfFinancialFinal = require("./lib/igf-financial-final");
 const folioDuplicados = require("./lib/folio-duplicados");
+const folioEtapaVisual = require("./lib/folio-etapa-visual");
 const { syncDetalleLineasPrincipalBeneficiario } = require("./lib/folio-detalle-lineas-principal-beneficiario");
 const { loadFoliosParaDuplicados } = require("./lib/folio-duplicados-load");
 const clasificacionApoyosExcel = require("./lib/clasificacion-apoyos-excel");
@@ -5274,18 +5275,7 @@ const ETAPAS_VISUAL_ORDER = [
 
 /** Estatus técnico → etapa visual (una columna por etapa visual). */
 function estatusToEtapaVisual(estatus) {
-  const s = String(estatus || "").trim().toUpperCase();
-  if (!s) return ETAPA_VISUAL.PENDIENTE_APROB_PLANTA;
-  if (s === ESTADOS.CANCELADO) return ETAPA_VISUAL.CANCELADO;
-  if (s === ESTADOS.CANCELACION_SOLICITADA) return ETAPA_VISUAL.APROB_DIRECTOR_ZP;
-  if (s === ESTADOS.EVIDENCIAS) return ETAPA_VISUAL.EVIDENCIAS;
-  if (s === ESTADOS.COMPROBACIONES) return ETAPA_VISUAL.COMPROBACIONES;
-  if ([ESTADOS.PAGADO, ESTADOS.CERRADO].includes(s)) return ETAPA_VISUAL.DEPOSITO_CIERRE;
-  if (ESTADOS_CHEQUE_GENERADO.includes(s)) return ETAPA_VISUAL.CHEQUE_GENERADO;
-  if (s === ESTADOS.CUENTA_FONDOS) return ETAPA_VISUAL.CUENTA_FONDOS;
-  if (ESTADOS_CARRO_COMPRA.includes(s)) return ETAPA_VISUAL.CARRO_COMPRA;
-  if ([ESTADOS.PENDIENTE_APROB_ZP].includes(s) || /RECHAZADO_ZP/.test(s)) return ETAPA_VISUAL.APROB_DIRECTOR_ZP;
-  return ETAPA_VISUAL.PENDIENTE_APROB_PLANTA;
+  return folioEtapaVisual.estatusToEtapaVisual(estatus);
 }
 
 /** Labels e íconos para WhatsApp y dashboard. */
@@ -5308,17 +5298,7 @@ function getEtapaVisibleLabel(estatus) {
 
 /** Para filtros: etapa visual → lista de estatus técnicos. */
 function etapaVisualToEstatusTecnicos(etapaVisual) {
-  const ev = String(etapaVisual || "").trim().toUpperCase();
-  if (ev === ETAPA_VISUAL.PENDIENTE_APROB_PLANTA) return [ESTADOS.GENERADO, ESTADOS.PENDIENTE_APROB_PLANTA, ESTADOS.APROB_PLANTA];
-  if (ev === ETAPA_VISUAL.APROB_DIRECTOR_ZP) return [ESTADOS.PENDIENTE_APROB_ZP, ESTADOS.CANCELACION_SOLICITADA];
-  if (ev === ETAPA_VISUAL.CARRO_COMPRA) return [...ESTADOS_CARRO_COMPRA];
-  if (ev === ETAPA_VISUAL.CUENTA_FONDOS) return [ESTADOS.CUENTA_FONDOS];
-  if (ev === ETAPA_VISUAL.CHEQUE_GENERADO) return [...ESTADOS_CHEQUE_GENERADO];
-  if (ev === ETAPA_VISUAL.DEPOSITO_CIERRE) return [ESTADOS.PAGADO, ESTADOS.CERRADO];
-  if (ev === ETAPA_VISUAL.COMPROBACIONES) return [ESTADOS.COMPROBACIONES];
-  if (ev === ETAPA_VISUAL.EVIDENCIAS) return [ESTADOS.EVIDENCIAS];
-  if (ev === ETAPA_VISUAL.CANCELADO) return [ESTADOS.CANCELADO];
-  return [ev];
+  return folioEtapaVisual.etapaVisualToEstatusTecnicos(etapaVisual);
 }
 
 /** Estatus técnico canónico al soltar un folio en una etapa visual (drag & drop AD/ZP). */
@@ -15920,6 +15900,53 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
   } catch (error) {
     console.error("[igf-diario-semanal]", error && error.message ? error.message : error);
     res.status(error.status || 500).json({ error: error.status ? error.message : "No se pudo armar la semana IGF Diario" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/dashboard/igf-diario-folios-deposito", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const uploadDay = String((req.query && req.query.upload_day) || "").trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(uploadDay)) {
+    return res.status(400).json({ error: "La matriz usa la fecha de carga como corte." });
+  }
+  const year = Number(uploadDay.slice(0, 4));
+  const month = Number(uploadDay.slice(5, 7));
+  if (req.query.year != null && String(req.query.year).trim() !== "" && Number(req.query.year) !== year) {
+    return res.status(400).json({ error: "El mes de la matriz sale de la fecha de carga." });
+  }
+  if (req.query.month != null && String(req.query.month).trim() !== "" && Number(req.query.month) !== month) {
+    return res.status(400).json({ error: "El mes de la matriz sale de la fecha de carga." });
+  }
+  const versionAsOfCorte = /^(1|true|yes)$/i.test(String((req.query && req.query.version_as_of_corte) || "").trim());
+  const client = await pool.connect();
+  try {
+    const resolved = await loadIgfEmpresaPlantaResolver(client);
+    const igfDiarioFoliosDeposito = require("./lib/igf-diario-folios-deposito-matrix");
+    const plants = igfDiarioFoliosDeposito.plantsFromResolver(
+      Object.keys(EMPRESA_IGF_A_PLANTA_KEYS),
+      resolved.resolvePlantaIdsForRow
+    );
+    const visibility = buildDashboardWhere(req.dashboardAuth, { ventanaDefault: false }, {
+      authCanVerFoliosSoloZpAd,
+      getEquivalentIds: getPlantaIdsEquivalentesForPendientes,
+      etapaVisualToEstatusTecnicos,
+      ETAPAS_VISUAL_ORDER,
+      getMesActualYAnteriorMx,
+    });
+    const payload = await igfDiarioFoliosDeposito.loadDepositoMatrix(client, {
+      plants,
+      corteYmd: uploadDay,
+      visibility,
+      candidateStatuses: folioEtapaVisual.candidateHistorialStatuses(),
+      plantQueryCount: 2,
+      versionAsOfCorte,
+    });
+    res.json(payload);
+  } catch (error) {
+    console.error("[igf-diario-folios-deposito]", error && error.message ? error.message : error);
+    res.status(500).json({ error: "No se pudo armar la matriz de folios en depósito." });
   } finally {
     client.release();
   }
