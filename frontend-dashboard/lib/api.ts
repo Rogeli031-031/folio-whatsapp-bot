@@ -184,6 +184,56 @@ export async function fetchIgfDiarioSemanal(opts: {
   return body as IgfDiarioSemanalResponse & { points?: IgfDiarioGraficaPoint[]; range?: string; metric?: string };
 }
 
+export type IgfDiarioFolioDepositoItem = {
+  id: number;
+  folio: string;
+  estado: string;
+  importe: number | null;
+  descripcion: string;
+  threshold_date: string;
+};
+
+export type IgfDiarioFolioDepositoCell = {
+  amount_total: number | null;
+  folio_count: number;
+  missing_amount_count: number;
+  description_short?: string;
+  folios?: IgfDiarioFolioDepositoItem[];
+};
+
+export type IgfDiarioFoliosDepositoResponse = {
+  ok: boolean;
+  year: number;
+  month: number;
+  corte_ymd: string;
+  days: string[];
+  plants: Array<{
+    plant_code: string;
+    empresa: string;
+    days: Record<string, IgfDiarioFolioDepositoCell>;
+    total_month: IgfDiarioFolioDepositoCell;
+  }>;
+  daily_totals: Record<string, IgfDiarioFolioDepositoCell>;
+  grand_total: IgfDiarioFolioDepositoCell;
+  query_count?: number;
+  unclassified_count?: number;
+};
+
+export async function fetchIgfDiarioFoliosDeposito(opts: {
+  token: string;
+  uploadDay: string;
+  versionAsOfCorte?: boolean;
+}): Promise<IgfDiarioFoliosDepositoResponse> {
+  const params = new URLSearchParams({ upload_day: opts.uploadDay });
+  if (opts.versionAsOfCorte) params.set("version_as_of_corte", "1");
+  const res = await fetch(getApiUrl(`/api/dashboard/igf-diario-folios-deposito?${params.toString()}`), {
+    headers: { Authorization: `Bearer ${opts.token}` },
+  });
+  const body = await res.json().catch(() => ({ error: res.statusText }));
+  if (!res.ok) throw new Error((body as { error?: string }).error || `HTTP ${res.status}`);
+  return body as IgfDiarioFoliosDepositoResponse;
+}
+
 export async function fetchIgfDiarioGrafica(opts: {
   token: string;
   year: number;
