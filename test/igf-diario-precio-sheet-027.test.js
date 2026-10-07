@@ -121,8 +121,12 @@ test("P–S) la planta es exacta y el libro global no agrega PRECIO", async () =
   });
   assert.equal(sawAcapulco, false);
   assert.equal(acapulco[0].precio, 99.12345678);
-  assert.equal(calls[0].params[0], "Puebla");
-  assert.equal(calls[1].params[0], "Acapulco");
+  const monthCalls = calls.filter((call) => String(call.sql).includes("fecha >= $2"));
+  const priorCalls = calls.filter((call) => String(call.sql).includes("fecha < $2"));
+  assert.equal(monthCalls.length, 2);
+  assert.equal(priorCalls.length, 2);
+  assert.equal(monthCalls[0].params[0], "Puebla");
+  assert.equal(monthCalls[1].params[0], "Acapulco");
   assert.equal(calls[0].sql.includes("LIKE"), false);
 
   const comprasOnly = forecast.renderProvinciaDiariaSheets(grid("Puebla"));

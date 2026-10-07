@@ -61,7 +61,7 @@ test("F–G) cero y null no reemplazan el último válido", () => {
   assert.equal(price(wb, 26), 19.76902713);
 });
 
-test("H) el inicio de mes sin valor previo queda vacío", () => {
+test("H) el inicio de mes sin antecedente válido queda vacío", () => {
   const wb = sheet([
     { fecha: "2026-09-03", precio: 19.76902713 },
   ]);
@@ -81,6 +81,18 @@ test("I–J) el valor conserva precisión y el formato de 8 decimales", () => {
   assert.equal(wb.getCell(24, 2).value, 19.76902713);
   assert.equal(wb.getCell(24, 2).numFmt, "0.00000000");
   assert.equal(wb.getCell(31, 2).value, 19.76902713);
+});
+
+test("L) un precio anterior al mes llena el inicio y el del mes no retrocede", () => {
+  const wb = sheet([
+    { fecha: "2026-08-31", precio: 19.95 },
+    { fecha: "2026-09-07", precio: 20.05 },
+  ]);
+  assert.equal(price(wb, 1), 19.95);
+  assert.equal(price(wb, 6), 19.95);
+  assert.equal(price(wb, 7), 20.05);
+  assert.equal(price(wb, 8), 20.05);
+  assert.notEqual(price(wb, 1), 20.05);
 });
 
 test("K) PRECIO sigue tercera y CONTROL DE COMPRAS cuarta", () => {
