@@ -211,3 +211,71 @@ test("el panel vive solo en IGF Diario y no pide el mes anterior ni el Excel", (
   assert.doesNotMatch(WEEKLY, /xlsx|exceljs|H48|AD48|201192/);
   assert.doesNotMatch(PANEL, /201192|H48|xlsx/);
 });
+
+test("el bundle transporta el resultado legacy y la semana 40 no inventa gastos", () => {
+  const sepFechas = ["2026-09-28", "2026-09-29", "2026-09-30"];
+  const octFechas = ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"];
+  const base = (fecha) => ({ fecha, ventaKg: 100, precio: 10, costoKg: 4, fleteKg: 1, hgImporte: 10, cdKg: -0.2 });
+  const sep = weekly.daysFromBuilt({
+    financial_days: sepFechas.map(base),
+    points: sepFechas.map((fecha) => ({ fecha, resultado_mxn: 40, resultado_per_kg: 0.4 })),
+  }, null);
+  const schedules = {};
+  for (const key of weekly.EXPENSE_KEYS) {
+    schedules[key] = Object.fromEntries(octFechas.map((fecha) => [fecha, 2]));
+  }
+  const oct = weekly.daysFromBuilt({
+    financial_days: octFechas.map(base),
+    points: octFechas.map((fecha) => ({ fecha, resultado_mxn: 999, resultado_per_kg: 9 })),
+  }, schedules);
+  assert.equal(sep.get("2026-09-30").legacyResultadoMxn, 40);
+  assert.equal(sep.get("2026-09-30").legacyResultadoKg, 0.4);
+  assert.equal(sep.get("2026-09-30").expenses, null);
+  assert.equal(oct.get("2026-10-01").legacyResultadoMxn, null);
+  assert.equal(oct.get("2026-10-01").expenses.gasto_corporativo, 2);
+  const days = [...sepFechas, ...octFechas].map((fecha) => sep.get(fecha) || oct.get(fecha));
+  const pack = weekly.aggregateWeek(days, "2026-10-06");
+  assert.equal(weekly.isoWeek("2026-09-28"), 40);
+  assert.equal(weekly.sundayOfIsoWeekContainingDate("2026-09-28"), "2026-10-04");
+  assert.equal(pack.metrics.gasto_corporativo_kg, null);
+  assert.equal(pack.metrics.inversiones_kg, null);
+  assert.equal(pack.metrics.presupuesto_nomina_gastos_kg, null);
+  const octResult = weekly.dayResultMxn(oct.get("2026-10-01"));
+  assert.equal(pack.metrics.resultado_mxn, 40 * 3 + octResult * 4);
+  assert.notEqual(pack.metrics.resultado_mxn, 0);
+  const missing = weekly.daysFromBuilt({
+    financial_days: [base("2026-09-28")],
+    points: [{ fecha: "2026-09-28", resultado_mxn: null, resultado_per_kg: null }],
+  }, null);
+  assert.equal(missing.get("2026-09-28").legacyResultadoMxn, null);
+  assert.equal(weekly.aggregateWeek([missing.get("2026-09-28")], "2026-10-06").metrics.resultado_mxn, null);
+  const resultSeries = weekly.seriesPoints(days, "resultado_mxn", "2026-10-06");
+  const expenseSeries = weekly.seriesPoints(days, "gasto_corporativo_kg", "2026-10-06");
+  assert.equal(resultSeries[0].value, 40);
+  assert.equal(resultSeries[0].complete, true);
+  assert.equal(expenseSeries[0].value, null);
+  assert.equal(expenseSeries[0].complete, false);
+  assert.equal(weekly.dailyMetric(sep.get("2026-09-30"), "resultado_kg"), 0.4);
+  const bundle = WEEKLY.slice(WEEKLY.indexOf("async function loadMonthBundle"), WEEKLY.indexOf("function daysFromBuilt"));
+  assert.match(bundle, /return daysFromBuilt\(built, schedules\)/);
+  assert.doesNotMatch(bundle, /legacyResultadoMxn: null/);
+  const join = WEEKLY.slice(WEEKLY.indexOf("function daysFromBuilt"), WEEKLY.indexOf("function stitchWeek"));
+  assert.match(join, /point\.resultado_mxn/);
+  assert.match(join, /point\.resultado_per_kg/);
+});
+
+test("el eje usa la unidad de la serie y el título no se duplica", () => {
+  assert.match(MODAL, /const axisUnit = seriesMetric \? seriesUnit : metric/);
+  assert.match(MODAL, /fmtYTick\(tick, axisUnit/);
+  assert.match(MODAL, /metric === "kg"/);
+  assert.match(MODAL, /kg`/);
+  assert.match(MODAL, /Gráfica · Rentabilidad IGF Diario/);
+  assert.match(MODAL, /seriesMetric && seriesLabel \? `Gráfica · \$\{seriesLabel\}` : "Gráfica · Rentabilidad IGF Diario"/);
+  assert.match(PANEL, /key: "venta_kg", label: "Venta en kilos", unit: "kg"/);
+  assert.match(PANEL, /key: "margen_kg", label: "Margen", unit: "per_kg"/);
+  assert.match(PANEL, /key: "ingreso_mxn", label: "Ingreso generado", unit: "mxn"/);
+  assert.match(PANEL, /key: "hg_mxn", label: "HG", unit: "mxn"/);
+  assert.match(PANEL, /key: "resultado_mxn", label: "RESULTADO \(Importe\)", unit: "mxn"/);
+  assert.match(PANEL, /key: "com_desc_kg", label: "Comisiones y Descuentos", unit: "per_kg"/);
+  assert.match(PANEL, /key: "resultado_kg", label: "RESULTADO \(\$\/kg\)", unit: "per_kg"/);
+});
