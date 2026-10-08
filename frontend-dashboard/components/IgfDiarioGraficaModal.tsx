@@ -42,8 +42,19 @@ type Props = {
   seriesMetric?: string | null;
   seriesLabel?: string | null;
   seriesUnit?: "kg" | "mxn" | "per_kg" | null;
+  weekAnchor?: string | null;
   onClose: () => void;
 };
+
+function excelDownloadHref(excelUrl: string, weekAnchor?: string | null, metric?: string | null): string {
+  const base = typeof window !== "undefined" ? window.location.origin : "http://local";
+  const url = new URL(excelUrl, base);
+  const anchor = String(weekAnchor || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(anchor)) url.searchParams.set("week_anchor", anchor);
+  url.searchParams.set("summary_metric", String(metric || "").trim() || "resultado_mxn");
+  if (/^https?:/i.test(excelUrl)) return url.toString();
+  return `${url.pathname}${url.search}${url.hash}`;
+}
 
 function linearTrendIndexed(pairs: { x: number; y: number }[]): { a: number; b: number; xFirst: number; xLast: number } | null {
   const usable = pairs.filter((pair) => Number.isFinite(pair.x) && Number.isFinite(pair.y));
@@ -243,6 +254,7 @@ export default function IgfDiarioGraficaModal({
   seriesMetric,
   seriesLabel,
   seriesUnit,
+  weekAnchor,
   onClose,
 }: Props) {
   const [metric, setMetric] = useState<Metric>("mxn");
@@ -264,6 +276,7 @@ export default function IgfDiarioGraficaModal({
         plantCode: plantCode || "",
         uploadDay,
         versionAsOfCorte,
+        weekAnchor,
         view: "series",
         range,
         metric: seriesMetric,
@@ -297,7 +310,7 @@ export default function IgfDiarioGraficaModal({
     return () => {
       cancel = true;
     };
-  }, [token, year, month, range, uploadDay, versionAsOfCorte, plantCode, todas, seriesMetric, scopeLabel]);
+  }, [token, year, month, range, uploadDay, versionAsOfCorte, plantCode, todas, seriesMetric, scopeLabel, weekAnchor]);
 
   const chart = useMemo(() => {
     const points = data?.points || [];
@@ -358,7 +371,7 @@ export default function IgfDiarioGraficaModal({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => window.open(excelUrl, "_blank", "noopener,noreferrer")}
+              onClick={() => window.open(excelDownloadHref(excelUrl, weekAnchor, seriesMetric), "_blank", "noopener,noreferrer")}
               className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
             >
               Descargar Excel

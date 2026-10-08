@@ -93,7 +93,7 @@ test("la planta individual devuelve Semana y exactamente siete días con la mism
   records.forEach((record, index) => {
     const alone = weekly.aggregateWeek([days[index]], "2026-10-08");
     assert.equal(record.metrics.venta_kg, days[index].ventaKg);
-    assert.equal(record.metrics.precio_kg, alone.metrics.precio_kg);
+    assert.equal(record.metrics.precio_kg, days[index].precio);
     assert.equal(record.metrics.resultado_kg, alone.metrics.resultado_kg);
     assert.equal(record.metrics.resultado_mxn, alone.metrics.resultado_mxn);
   });
@@ -109,8 +109,9 @@ test("la planta individual devuelve Semana y exactamente siete días con la mism
   assert.ok(PANEL.indexOf(">Concepto<") < PANEL.indexOf(">Semana<"));
   assert.match(PANEL, /dayHeader\(day\.fecha\)/);
   assert.equal(headers[1], "Semana");
-  const dayFn = WEEKLY.slice(WEEKLY.indexOf("function weekDayRecords"), WEEKLY.indexOf("function seriesPoints"));
-  assert.match(dayFn, /aggregateWeek\(\[day\], corteYmd\)/);
+  const dayFn = WEEKLY.slice(WEEKLY.indexOf("function weekDayRecords"), WEEKLY.indexOf("function fiveDayWindow"));
+  assert.match(dayFn, /dayMetrics\(day\)/);
+  assert.doesNotMatch(dayFn, /aggregateWeek\(\[day\]/);
   assert.doesNotMatch(dayFn, /query\(/);
 });
 

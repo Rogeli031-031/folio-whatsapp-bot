@@ -185,6 +185,7 @@ export default function IgfDiarioWeeklyPlantPanel({
           seriesMetric={selectedRow.key}
           seriesLabel={selectedRow.label}
           seriesUnit={selectedRow.unit}
+          weekAnchor={anchor}
           onClose={() => setChartOpen(false)}
         />
       )}
