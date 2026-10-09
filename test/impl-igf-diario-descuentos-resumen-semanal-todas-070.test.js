@@ -30,13 +30,13 @@ test("JOSE baja 5.185 a 4.907 y solo el delta queda verde", () => {
   assert.equal(lines.length, 1);
   assert.equal(lines[0].prev, 5.185);
   assert.equal(lines[0].cur, 4.907);
-  assert.equal(lines[0].delta, -0.278);
+  assert.equal(lines[0].delta, 0.278);
   assert.equal(lines[0].up, false);
   const text = descuentos.plain(lines);
-  assert.equal(text, `${JOSE} — Bajó su comisión respecto a su última compra de $5.185/kg a $4.907/kg = -$0.278/kg`);
+  assert.equal(text, `${JOSE} — Bajó su comisión respecto a su última compra de $5.185/kg a $4.907/kg = $0.278/kg`);
   const cell = descuentos.cellValue(lines);
   assert.equal(cell.richText.length, 2);
-  assert.equal(cell.richText[1].text, "-$0.278/kg");
+  assert.equal(cell.richText[1].text, "$0.278/kg");
   assert.equal(cell.richText[1].font.color.argb, descuentos.GREEN);
   assert.equal(cell.richText[0].font, undefined);
   assert.match(cell.richText[0].text, /Bajó su comisión/);
@@ -50,7 +50,7 @@ test("el alza inversa pinta solo el delta en rojo", () => {
   assert.equal(lines[0].delta, 0.278);
   assert.match(descuentos.plain(lines), /Subió su comisión/);
   const cell = descuentos.cellValue(lines);
-  assert.equal(cell.richText[1].text, "+$0.278/kg");
+  assert.equal(cell.richText[1].text, "$0.278/kg");
   assert.equal(cell.richText[1].font.color.argb, descuentos.RED);
   assert.equal(cell.richText[0].font, undefined);
 });
@@ -83,7 +83,7 @@ test("la compra anterior cruza semana y mes, y omite al cliente sin cambio", () 
     jose("2026-10-03", 5185),
     jose("2026-10-06", 4907),
   ], "2026-10-06");
-  assert.equal(week[0].delta, -0.278);
+  assert.equal(week[0].delta, 0.278);
   const month = descuentos.discountLines(events, "2026-10-06");
   assert.equal(month.length, 2);
   assert.equal(month.find((line) => line.cliente === JOSE).prev, 5.185);
@@ -106,7 +106,7 @@ test("el rich text de descuentos sobrevive al XLSX", async () => {
   const joined = value.richText.map((part) => part.text).join("");
   assert.match(joined, new RegExp(JOSE));
   assert.match(joined, /Bajó su comisión/);
-  const colored = value.richText.find((part) => String(part.text).includes("-$0.278/kg"));
+  const colored = value.richText.find((part) => String(part.text).includes("$0.278/kg"));
   assert.equal(colored.font.color.argb, descuentos.GREEN);
   for (const part of value.richText) {
     if (part !== colored) assert.equal(part.font && part.font.color, undefined);
@@ -144,7 +144,7 @@ test("AK queda en la columna 37 y el comentario no se mueve", () => {
   assert.equal(ws.getCell(5, 37).value, "DESCUENTOS");
   assert.equal(ws.getCell(row, 34).value, "COMENTARIO DEL DIA intacto");
   assert.equal(ws.getCell(row, 35).value, "venta casa");
-  assert.equal(ws.getCell(row, 37).value.richText[1].text, "-$0.278/kg");
+  assert.equal(ws.getCell(row, 37).value.richText[1].text, "$0.278/kg");
   assert.equal(ws.getColumn(36).hidden, true);
   assert.equal(ws.getColumn(37).hidden, false);
   assert.equal(ws.getColumn(38).hidden, true);
