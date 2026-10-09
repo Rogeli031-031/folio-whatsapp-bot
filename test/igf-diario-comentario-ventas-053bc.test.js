@@ -251,7 +251,7 @@ test("Provincia no fusiona homónimos y une clientes nuevos por planta", () => {
   ]);
 });
 
-test("AH y AI visibles, AJ y AK ocultas, y el carry amarillo usa AJ/AK", () => {
+test("AH y AI visibles, AJ oculta, AK descuentos y el carry de flete usa AL", () => {
   const wb = new ExcelJS.Workbook();
   const venta = wb.addWorksheet("Provincia Venta Diaria");
   venta.getCell(1, 8).value = "Puebla\nCASA";
@@ -291,10 +291,12 @@ test("AH y AI visibles, AJ y AK ocultas, y el carry amarillo usa AJ/AK", () => {
   });
   assert.equal(ws.getCell(5, 34).value, "COMENTARIO DEL DIA");
   assert.equal(ws.getCell(5, 35).value, "VENTAS");
+  assert.equal(ws.getCell(5, 37).value, "DESCUENTOS");
   assert.equal(ws.getColumn(34).hidden, false);
   assert.equal(ws.getColumn(35).hidden, false);
   assert.equal(ws.getColumn(36).hidden, true);
-  assert.equal(ws.getColumn(37).hidden, true);
+  assert.equal(ws.getColumn(37).hidden, false);
+  assert.equal(ws.getColumn(38).hidden, true);
   const commentRow = rowFor(ws, "2026-09-27");
   const comment = ws.getCell(commentRow, 34);
   assert.equal(comment.alignment.wrapText, true);
@@ -305,13 +307,13 @@ test("AH y AI visibles, AJ y AK ocultas, y el carry amarillo usa AJ/AK", () => {
   assert.notEqual(ws.getCell(commentRow, 35).value, 1);
   const helperRow = 28;
   const costoHelper = ws.getCell(helperRow, 36).value;
-  const fleteHelper = ws.getCell(helperRow, 37).value;
+  const fleteHelper = ws.getCell(helperRow, 38).value;
   assert.match(String(costoHelper && costoHelper.formula), /CONTROL DE COMPRAS/);
   assert.match(String(fleteHelper && fleteHelper.formula), /CONTROL DE COMPRAS/);
   assert.equal((ws.getCell(helperRow, 35).value && ws.getCell(helperRow, 35).value.formula) || "", "");
   const rules = ws.conditionalFormattings || [];
   assert.equal(rules.find((item) => item.ref === "F28").rules[0].formulae[0], "AND(ISNUMBER(F28),AJ28=1)");
-  assert.equal(rules.find((item) => item.ref === "G28").rules[0].formulae[0], "AND(ISNUMBER(G28),AK28=1)");
+  assert.equal(rules.find((item) => item.ref === "G28").rules[0].formulae[0], "AND(ISNUMBER(G28),AL28=1)");
 });
 
 test("Puebla individual y Puebla dentro de Todas escriben el mismo AH y AI", () => {

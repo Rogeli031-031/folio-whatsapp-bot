@@ -85,5 +85,6 @@ test("el 19 queda amarillo al exportar y una fórmula sin resultado no oculta un
   assert.equal(re.getColumn(34).hidden, false);
   assert.equal(re.getColumn(35).hidden, false);
   assert.equal(re.getColumn(36).hidden, true);
-  assert.equal(re.getColumn(37).hidden, true);
+  assert.equal(re.getColumn(37).hidden, false);
+  assert.equal(re.getColumn(38).hidden, true);
 });

@@ -332,8 +332,10 @@ test("la nueva R desplaza HG, resultado, comentario, ventas y carry", () => {
   assert.equal(ws.getCell(5, 33).value, "RESULTADO");
   assert.equal(ws.getCell(5, 35).value, "COMENTARIO DEL DIA");
   assert.equal(ws.getCell(5, 36).value, "VENTAS");
-  assert.equal(ws.getColumn(37).hidden, true);
+  assert.equal(ws.getCell(5, 37).value, "DESCUENTOS");
+  assert.equal(ws.getColumn(37).hidden, false);
   assert.equal(ws.getColumn(38).hidden, true);
+  assert.equal(ws.getColumn(39).hidden, true);
   assert.equal(ws.getCell(5, 24).value, null);
 });
 
@@ -412,8 +414,9 @@ test("fórmulas desplazadas O W Z AB AF AG y comentarios", () => {
   const insight = rowByDate(ws, 2026, 10, 5);
   assert.equal(ws.getCell(insight, 35).value, "nota del dia");
   assert.equal(ws.getCell(insight, 36).value, "venta casa");
-  assert.equal(ws.getColumn(37).hidden, true);
+  assert.equal(ws.getColumn(37).hidden, false);
   assert.equal(ws.getColumn(38).hidden, true);
+  assert.equal(ws.getColumn(39).hidden, true);
 });
 
 test("Provincia, individual y Todas usan el layout nuevo sin hardcode de planta", () => {
@@ -460,8 +463,10 @@ test("septiembre 2026 conserva el layout legacy completo", () => {
   assert.equal(ws.getCell(5, 32).value, "RESULTADO");
   assert.equal(ws.getCell(5, 34).value, "COMENTARIO DEL DIA");
   assert.equal(ws.getCell(5, 35).value, "VENTAS");
+  assert.equal(ws.getCell(5, 37).value, "DESCUENTOS");
   assert.equal(ws.getColumn(36).hidden, true);
-  assert.equal(ws.getColumn(37).hidden, true);
+  assert.equal(ws.getColumn(37).hidden, false);
+  assert.equal(ws.getColumn(38).hidden, true);
   assert.equal(ws.getCell(5, 36).value, null);
   const cal = igf.monthBusinessDays(2026, 9);
   const habil = cal.days.find((day) => !day.inhabil);
