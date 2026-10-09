@@ -1,174 +1,154 @@
-﻿task_id: "G4-PREP-IMPL-IGF-DIARIO-DESCUENTOS-RESUMEN-SEMANAL-TODAS-070"
+﻿task_id: "FIX-IGF-DIARIO-DESCUENTOS-SIGN-SEMANTICS-070-R1"
 
-title: "Preparar integración de IMPL 070"
+title: "Corregir semántica Subió/Bajó para comisiones negativas"
 
 status: "DONE_PENDING_REVIEW"
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-09"
 
-main_reference_sha: "9b9fa20e6b19279ec6384dfe78f93581e5ed6ecd"
+main_reference_sha: "bccdf84e5f19fec65c282eff5eb7eec6d6132241"
 
-branch: "implementation/igf-diario-descuentos-resumen-semanal-todas-070"
-
-product_sha: "daa3123b663cdb6de04fb5518b0966dcc46e3022"
-
-implementation_final_sha: "6bc33faa19100d6c4d68866cbfa90a6ecab93430"
+branch: "fix/igf-diario-descuentos-sign-semantics-070-r1"
 
 objective: >
-  Preparar G4 y Pull Request de IMPL 070 hacia main.
-  Auditar la implementación ya terminada, verificar que el producto
-  corresponde al alcance autorizado y preparar el PR para revisión humana.
-  No modificar producto ni tests.
-  No hacer merge ni deploy.
+  Corregir exclusivamente la interpretación Subió/Bajó de la columna
+  DESCUENTOS de IGF Diario. La comisión/descuento puede almacenarse como
+  valor negativo; el sentido comercial debe determinarse por la magnitud
+  absoluta del cargo y no por la comparación algebraica de los valores
+  firmados.
 
-verified_scope:
-  descuentos:
-    - "Nueva columna AK DESCUENTOS."
-    - "Compara descuento $/kg contra la compra real inmediatamente anterior del mismo cliente."
-    - "Puede cruzar semana y mes."
-    - "Solo aparecen clientes cuyo descuento cambió."
-    - "Delta de disminución en verde."
-    - "Delta de aumento en rojo."
-    - "Solo el delta usa rich text de color."
-    - "Fuente: arr.descuentos_diarios_cliente y arr.ventas_diarias_cliente."
-    - "Descuento $/kg = SUM(monto) / SUM(kg)."
-    - "AK auxiliar existente fue desplazada, no sobrescrita."
+business_semantics:
+  principle: >
+    Una comisión de mayor magnitud representa una comisión mayor,
+    aunque numéricamente sea más negativa.
 
-  final_column_map:
-    septiembre:
-      AH: "COMENTARIO DEL DIA"
-      AI: "VENTAS"
-      AJ: "costo auxiliar oculto"
-      AK: "DESCUENTOS"
-      AL: "flete auxiliar oculto"
+  comparison:
+    previous_magnitude: "ABS(previous_commission_per_kg)"
+    current_magnitude: "ABS(current_commission_per_kg)"
+    magnitude_delta: "ABS(current_commission_per_kg) - ABS(previous_commission_per_kg)"
 
-    octubre:
-      AI: "COMENTARIO DEL DIA"
-      AJ: "VENTAS"
-      AK: "DESCUENTOS"
-      AL: "costo auxiliar oculto"
-      AM: "flete auxiliar oculto"
+  rules:
+    - >
+      Si ABS(actual) > ABS(anterior):
+      la comisión SUBIÓ.
+    - >
+      Si ABS(actual) < ABS(anterior):
+      la comisión BAJÓ.
+    - >
+      Si ABS(actual) == ABS(anterior):
+      no existe cambio de magnitud y no se genera comentario.
 
-  resumen_semanal_todas:
-    - "RESUMEN SEMANAL después de Concepto y antes de la primera planta."
-    - "Venta en Kilos = suma."
-    - "Ingreso Generado = suma."
-    - "HG = suma."
-    - "RESULTADO (Importe) = suma."
-    - "Métricas $/kg = ponderación por Venta en Kilos."
-    - "Null no se convierte a cero."
-    - "Venta 0 no participa en ponderación."
-    - "RESULTADO ($/kg) respeta elegibilidad de la métrica."
+display_contract:
+  - "Conservar los valores anterior y actual con su signo real."
+  - "El importe del cambio mostrado al final debe ser la diferencia ABSOLUTA entre magnitudes."
+  - "No mostrar + o - delante del delta final."
+  - "Subió = delta final rojo."
+  - "Bajó = delta final verde."
+  - "Solo colorear el delta final."
+  - "Mantener 3 decimales."
 
-  excel_resumen:
-    - "Selección Todas genera TODAS CONSOLIDADO."
-    - "Tabla y gráfica consumen la misma serie consolidada."
-    - "Export individual permanece sin cambio."
-    - "069-R2 permanece: labels, positivo/negativo, línea cero, real/proyectado y null como hueco."
+examples:
+  case_1:
+    previous: -3.000
+    current: -4.000
+    expected_direction: "Subió"
+    expected_delta: "$1.000/kg"
+    expected_color: "red"
 
-validated_tests:
-  - "123 pruebas PASS."
-  - "070 PASS."
-  - "053BC PASS."
-  - "064–069-R2 PASS."
-  - "node --check server.js PASS."
-  - "frontend build PASS."
+  case_2:
+    previous: -2.500
+    current: -2.000
+    expected_direction: "Bajó"
+    expected_delta: "$0.500/kg"
+    expected_color: "green"
 
-in_scope:
-  - "git fetch origin."
-  - "Verificar origin/main exacto."
-  - "Verificar ancestry."
-  - "Verificar ahead/behind."
-  - "Verificar product SHA."
-  - "Verificar implementation final SHA."
-  - "Auditar rango product_sha..implementation_final_sha."
-  - "Revisar diff completo origin/main...HEAD."
-  - "Verificar específicamente desplazamiento seguro de auxiliares AK/AL/AM."
-  - "Verificar fórmula y fuente de DESCUENTOS."
-  - "Verificar agregación RESUMEN SEMANAL Todas."
-  - "Verificar RESUMEN Excel Todas."
-  - "Crear reporte G4."
-  - "Actualizar CURRENT_TASK."
-  - "Commit exclusivamente documental G4."
-  - "Push únicamente a rama 070."
-  - "Crear PR hacia main."
-  - "Verificar PR final."
-  - "STOP."
+  case_3_arturo:
+    previous: -4.630
+    current: -4.352
+    expected_direction: "Bajó"
+    expected_delta: "$0.278/kg"
+    expected_color: "green"
+    expected_text: >
+      ARTURO ANDRADE SANCHEZ — Bajó su comisión respecto a su última compra
+      de -$4.630/kg a -$4.352/kg = $0.278/kg
 
-out_of_scope:
-  - "Modificar producto."
-  - "Modificar tests."
-  - "Modificar fórmula de descuentos."
-  - "Modificar agregación financiera."
-  - "Modificar columnas."
-  - "Modificar gráfica."
-  - "Modificar DB."
-  - "Modificar ARR."
-  - "Modificar Forecast."
-  - "Modificar Folios."
-  - "Rebase."
-  - "Merge."
-  - "Deploy."
-  - "Auto-merge."
+  case_4_positive:
+    previous: 3.000
+    current: 4.000
+    expected_direction: "Subió"
+    expected_delta: "$1.000/kg"
+    expected_color: "red"
 
-pr_contract:
-  base: "main"
-  head: "implementation/igf-diario-descuentos-resumen-semanal-todas-070"
-  title: "IMPL 070: descuentos por cliente y resumen semanal consolidado"
-  preferred_merge: "Squash and merge"
-  merge_executor: "HUMAN_APPROVER_ONLY"
+  case_5_positive_decrease:
+    previous: 4.000
+    current: 3.000
+    expected_direction: "Bajó"
+    expected_delta: "$1.000/kg"
+    expected_color: "green"
 
-merge_contract:
-  merge_authorized: false
-  deploy_authorized: false
-  auto_merge: false
-
-required_g4_checks:
+important_sign_transition:
   - >
-    Confirmar que daa3123b663cdb6de04fb5518b0966dcc46e3022
-    pertenece a la rama.
+    Si existieran transiciones entre signo positivo y negativo,
+    la clasificación sigue siendo por magnitud absoluta.
   - >
-    Confirmar que 6bc33faa19100d6c4d68866cbfa90a6ecab93430
-    corresponde al cierre reportado.
+    Ejemplo: -3.000 -> +4.000 = Subió $1.000/kg.
   - >
-    Auditar exactamente:
-    daa3123b663cdb6de04fb5518b0966dcc46e3022
-    ..
-    6bc33faa19100d6c4d68866cbfa90a6ecab93430
+    Ejemplo: +4.000 -> -3.000 = Bajó $1.000/kg.
   - >
-    Después del SHA producto no debe existir ningún cambio funcional
-    de producto o tests.
-  - >
-    Confirmar que el diff completo contra main corresponde únicamente
-    a IMPL 070 y su documentación.
-  - >
-    Confirmar que la inserción de AK no destruyó auxiliares existentes.
-  - >
-    Confirmar que no quedaron fórmulas/referencias obsoletas apuntando
-    a las antiguas posiciones AK/AL.
-  - >
-    Confirmar que el consolidado Todas no usa promedio simple.
-  - >
-    Confirmar que tabla y gráfica RESUMEN Todas consumen el mismo consolidado.
+    Los valores anterior y actual conservan sus signos reales en el texto.
+
+unchanged_contract:
+  - "Fuente de datos permanece sin cambios."
+  - "Descuento/comisión $/kg permanece SUM(monto) / SUM(kg)."
+  - "Compra anterior permanece como compra real inmediatamente anterior del mismo cliente."
+  - "Puede cruzar semana y mes."
+  - "Sin compra anterior no listar."
+  - "Sin cambio de magnitud no listar."
+  - "Múltiples clientes permanecen uno por línea."
+  - "AK DESCUENTOS permanece en la misma posición."
+  - "No modificar auxiliares AL/AM."
+  - "No modificar COMENTARIO DEL DIA."
+  - "No modificar VENTAS."
+  - "No modificar RESUMEN SEMANAL."
+  - "No modificar RESUMEN Excel."
+  - "No modificar gráfica semanal."
+  - "No modificar lógica de Todas."
+  - "No modificar DB schema."
+
+required_tests:
+  - "-3.000 -> -4.000 = Subió $1.000/kg rojo."
+  - "-4.000 -> -3.000 = Bajó $1.000/kg verde."
+  - "-2.500 -> -2.000 = Bajó $0.500/kg verde."
+  - "-4.630 -> -4.352 = Bajó $0.278/kg verde."
+  - "-4.352 -> -4.630 = Subió $0.278/kg rojo."
+  - "3.000 -> 4.000 = Subió $1.000/kg rojo."
+  - "4.000 -> 3.000 = Bajó $1.000/kg verde."
+  - "-3.000 -> +4.000 = Subió $1.000/kg rojo."
+  - "+4.000 -> -3.000 = Bajó $1.000/kg verde."
+  - "-3.000 -> +3.000 = sin cambio de magnitud, no listar."
+  - "Delta mostrado nunca lleva + ni -."
+  - "Valores anterior/actual sí conservan su signo real."
+  - "Solo delta usa rich text de color."
+  - "Serialización/reapertura XLSX conserva rich text."
+  - "Regresiones 070 PASS."
+  - "Regresiones 069-R2 PASS."
+  - "git diff --check PASS."
+
+report:
+  path: "docs/dev-loop/reports/FIX-IGF-DIARIO-DESCUENTOS-SIGN-SEMANTICS-070-R1.md"
 
 stop_conditions:
-  - "Si origin/main != 9b9fa20e6b19279ec6384dfe78f93581e5ed6ecd, STOP."
-  - "Si product_sha no pertenece a la rama, STOP."
-  - "Si implementation_final_sha no corresponde al cierre reportado, STOP."
-  - "Si después del product SHA hay cambios funcionales o de tests, STOP."
-  - "Si aparecen cambios fuera del alcance 070, STOP."
-  - "Si existe una referencia rota por desplazamiento AK/AL/AM, STOP."
-  - "Si RESUMEN SEMANAL usa promedio simple en alguna métrica $/kg, STOP."
-  - "Si tabla y gráfica Todas no tienen paridad, STOP."
-  - "Si PR tiene conflictos o no es mergeable, STOP."
-  - "No rebase."
+  - "Si origin/main != bccdf84e5f19fec65c282eff5eb7eec6d6132241, STOP."
+  - "Si la corrección requiere cambiar la fuente de descuentos, STOP."
+  - "Si requiere cambiar el cálculo SUM(monto)/SUM(kg), STOP."
+  - "Si requiere modificar RESUMEN SEMANAL o lógica Todas, STOP."
+  - "Si requiere DB schema, STOP."
   - "No merge."
   - "No deploy."
 
-result_report_path: >
-  docs/dev-loop/reports/G4-PREP-IMPL-IGF-DIARIO-DESCUENTOS-RESUMEN-SEMANAL-TODAS-070.md
-
 completion:
   status: "DONE_PENDING_REVIEW"
+  commit: true
+  push_branch_only: true
   merge: false
   deploy: false
