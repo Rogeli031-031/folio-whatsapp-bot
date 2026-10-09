@@ -16221,6 +16221,14 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     if (individualInsights && comprasPayload) {
       igfDiarioComprasComment.applyPayload(individualInsights, comprasPayload);
     }
+    if (individualInsights) {
+      const igfDiarioDescuentos = require("./lib/igf-diario-descuentos-columna");
+      await igfDiarioDescuentos.attachToInsights(client, individualInsights, {
+        plantaNombre: resolvedPlant && resolvedPlant.nombre,
+        year,
+        month,
+      });
+    }
     if (individualInsights) forecastOpts.igfDailyInsights = individualInsights;
     const igfDiarioTodas = /^(1|true|yes)$/i.test(String(req.query.igf_diario_todas || "").trim());
     if (!requirePlant && igfDiarioTodas) {
@@ -16234,6 +16242,7 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
         ? await igfDiarioMargenManual.listMonthOverrides(client, year, month)
         : [];
       await comprasDashboard.ensureComprasTables(client);
+      const igfDiarioDescuentos = require("./lib/igf-diario-descuentos-columna");
       const igfDiarioPlantas = [];
       const insightBundles = [];
       for (const plant of plants) {
@@ -16283,6 +16292,11 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
         }
         const comprasPayloadPlant = await comprasDashboard.loadMonth(client, plant.plantaId, year, month);
         igfDiarioComprasComment.applyPayload(dailyInsights, comprasPayloadPlant);
+        await igfDiarioDescuentos.attachToInsights(client, dailyInsights, {
+          plantaNombre: plant.nombre,
+          year,
+          month,
+        });
         igfDiarioPlantas.push({
           exportPlant: code,
           humanName: plant.nombre,
@@ -16298,6 +16312,37 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
         month,
         corteYmd: uploadDay || proyeccionHasta || "",
       });
+      const weeklyTodas = require("./lib/igf-diario-weekly-plant");
+      const rawTodasAnchor = String((req.query && req.query.week_anchor) || "").trim().slice(0, 10);
+      const todasAnchor = /^\d{4}-\d{2}-\d{2}$/.test(rawTodasAnchor) ? rawTodasAnchor : String(uploadDay || "").slice(0, 10);
+      const rawTodasMetric = String((req.query && req.query.summary_metric) || "").trim();
+      const todasMetric = weeklyTodas.METRICS.some((item) => item[0] === rawTodasMetric) ? rawTodasMetric : "resultado_mxn";
+      if (/^\d{4}-\d{2}-\d{2}$/.test(todasAnchor)) {
+        let todasProjection = forecastOpts.pronosticoProjection || null;
+        if (!todasProjection) {
+          try {
+            todasProjection = await dashboardArrForecast.buildPronosticoProjectionContext(client, year, month, uploadDay);
+          } catch (error) {
+            console.error("[dashboard-excel] pronostico todas", error && error.message ? error.message : error);
+            todasProjection = null;
+          }
+          forecastOpts.pronosticoProjection = todasProjection;
+        }
+        const todasWeek = await weeklyTodas.loadWeeklyAll(client, {
+          plants,
+          year,
+          month,
+          weekAnchor: todasAnchor,
+          corteYmd: uploadDay,
+          versionAsOfCorte: versionAsOfCorteExcel,
+          projection: todasProjection,
+          comprasCache: new Map(),
+          loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
+          labelPlant: (plant) => dashboardArrForecast.igfLabelForForecastPlant(plant.nombre || plant.canon),
+        });
+        forecastOpts.igfWeeklyTodasSummary = todasWeek.resumen;
+        forecastOpts.igfWeeklySummaryMetric = todasMetric;
+      }
     }
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, forecastOpts);
     try {

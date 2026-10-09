@@ -90,6 +90,11 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
           <thead>
             <tr className="bg-slate-900/80 text-xs font-semibold text-slate-300">
               <th className="sticky left-0 z-20 min-w-[220px] bg-slate-900 px-3 py-2 text-left">Concepto</th>
+              {data?.resumen && (
+                <th data-resumen="1" className="min-w-[150px] bg-sky-950 px-3 py-2 text-right text-sky-100">
+                  RESUMEN SEMANAL
+                </th>
+              )}
               {plants.map((plant) => (
                 <th key={plant.plant_code} className="min-w-[120px] px-3 py-2 text-right">
                   {plant.empresa}
@@ -114,6 +119,14 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
                   >
                     {row.label}
                   </th>
+                  {data?.resumen && (
+                    <td
+                      data-resumen="1"
+                      className={`bg-sky-950/40 px-3 text-right tabular-nums text-sky-50 ${row.separatorBefore ? "border-t-4 border-slate-400 py-3" : "border-t border-slate-700 py-2"} ${tone(row.key, data.resumen.metrics[row.key])} ${row.strongest ? "text-base font-semibold" : ""}`}
+                    >
+                      {fmtValue(data.resumen.metrics[row.key], row.unit)}
+                    </td>
+                  )}
                   {plants.map((plant) => {
                     const value = plant.metrics[row.key];
                     return (

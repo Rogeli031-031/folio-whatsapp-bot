@@ -178,6 +178,12 @@ export type IgfDiarioSemanalAllResponse = {
   corte_ymd: string | null;
   week: IgfDiarioSemanalWeek;
   plants: IgfDiarioSemanalPlantColumn[];
+  resumen?: {
+    plant_code: string;
+    empresa: string;
+    metrics: IgfDiarioSemanalMetrics;
+    days?: IgfDiarioSemanalDay[];
+  };
   nav: IgfDiarioSemanalNav;
   query_count?: number;
 };
