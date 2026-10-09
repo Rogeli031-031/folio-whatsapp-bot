@@ -51,6 +51,7 @@ const igfDiarioGastosDesglose = require("./lib/igf-diario-gastos-desglose");
 const igfDiarioGastosDistribucion = require("./lib/igf-diario-gastos-distribucion");
 const igfDiarioMargenManual = require("./lib/igf-diario-margen-manual");
 const igfDiarioDailyInsights = require("./lib/igf-diario-daily-insights");
+const igfDiarioComprasComment = require("./lib/igf-diario-compras-comment");
 const igfDiarioGrafica = require("./lib/igf-diario-grafica");
 const arrAnnualCategoryAnalysis = require("./lib/arr-annual-category-analysis");
 const igfMetaExcel = require("./lib/igf-meta-excel");
@@ -16217,6 +16218,9 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     if (Array.isArray(precioDiario)) {
       forecastOpts.precioDiario = precioDiario;
     }
+    if (individualInsights && comprasPayload) {
+      igfDiarioComprasComment.applyPayload(individualInsights, comprasPayload);
+    }
     if (individualInsights) forecastOpts.igfDailyInsights = individualInsights;
     const igfDiarioTodas = /^(1|true|yes)$/i.test(String(req.query.igf_diario_todas || "").trim());
     if (!requirePlant && igfDiarioTodas) {
@@ -16277,10 +16281,12 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
             plant.provinciaPlantCode,
           ]);
         }
+        const comprasPayloadPlant = await comprasDashboard.loadMonth(client, plant.plantaId, year, month);
+        igfDiarioComprasComment.applyPayload(dailyInsights, comprasPayloadPlant);
         igfDiarioPlantas.push({
           exportPlant: code,
           humanName: plant.nombre,
-          comprasPayload: await comprasDashboard.loadMonth(client, plant.plantaId, year, month),
+          comprasPayload: comprasPayloadPlant,
           precioDiario: await dashboardArrForecast.loadPrecioDiario(client, code, year, month),
           ...packetTodas,
           dailyInsights,

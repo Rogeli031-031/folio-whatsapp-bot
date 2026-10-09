@@ -1,157 +1,115 @@
-﻿task_id: "G4-PREP-FIX-IGF-DIARIO-WEEKLY-COVERAGE-RESUMEN-5D-069-R1"
+﻿task_id: "G4-PREP-FIX-IGF-DIARIO-WEEKLY-CHART-VALUES-COMPRAS-COMMENT-069-R2"
 
-title: "Preparar integración de FIX 069-R1"
+title: "Preparar integración de FIX 069-R2"
 
 status: "DONE_PENDING_REVIEW"
 
-mode: "INTEGRATION"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-09"
 
-authorized_by: "HUMAN_APPROVER"
+main_reference_sha: "ac8625cc8f3b81bd345c54a291219f7bf7b8e9ff"
 
-authorized_at: "2026-10-07"
+branch: "fix/igf-diario-weekly-chart-values-compras-comment-069-r2"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-07"
+product_sha: "5827f2c709cf847c029fee8e83b251c8ca293ce9"
 
-main_reference_sha: "f50e61356325b13be289beb4e6354b52634f5eee"
+implementation_final_sha: "b6a01c72cf437324119d0de35c171a321183a714"
 
-branch: "fix/igf-diario-weekly-coverage-resumen-5d-069-r1"
-
-product_sha: "be14171adbe9fd1d55b59a5dee22eea3d1c616c5"
-
-implementation_final_sha: "493e2b6387f1b71006eeaaf89a9a9132b57a9d90"
-
-expected_before_g4:
-  ahead: 2
-  behind: 0
-  merge_base: "f50e61356325b13be289beb4e6354b52634f5eee"
+objective: >
+  Preparar G4 y Pull Request de FIX 069-R2 hacia main.
+  Verificar integridad de la implementación ya aprobada para preparación.
+  No modificar producto ni tests.
+  No hacer merge ni deploy.
+  El merge queda reservado al HUMAN_APPROVER.
 
 verified_scope:
-  san_luis:
-    - "Un domingo con venta null no anula la semana."
-    - "Venta fixture 04–10 = 143031 kg."
-    - "Ponderados usan únicamente días con venta > 0."
-    - "Faltante en día con venta positiva permanece como falta real."
-    - "Resultado $/kg = Resultado Importe / Venta."
+  weekly_chart:
+    - "Etiquetas visibles en todos los puntos no-null."
+    - "Resultado positivo distinguible en verde."
+    - "Resultado negativo distinguible en rojo."
+    - "Referencia horizontal de cero."
+    - "Real continuo y proyectado punteado."
+    - "Null permanece como hueco."
+    - "summary_metric permanece."
 
-  daily:
-    - "Precio/costo/flete/margen pueden existir en día sin venta."
-    - "Venta null permanece null."
-    - "No global null->0."
+  compras_comment:
+    - "COMPRAS aparece al principio de COMENTARIO DEL DIA."
+    - "Costo consolidado sale de CONTROL DE COMPRAS."
+    - "Referencia usa los últimos dos días anteriores válidos."
+    - "Puede cruzar semana y mes."
+    - "Proveedor sale de compra real kg > 0."
+    - "Tarifa no determina proveedor."
+    - "Delta positivo usa rich text rojo."
+    - "Delta negativo usa rich text verde."
+    - "Solo el valor de la variación recibe color."
+    - "Comentario existente de Venta/clientes permanece."
 
-  chart_5d:
-    - "Semana 04/10–10/10 -> 5D 04/10–08/10."
-    - "Semana 27/09–03/10 -> 5D 27/09–01/10."
-    - "week_anchor viaja desde la semana seleccionada."
-    - "No usa cierre de mes para 5D."
-
-  excel:
-    - "Export individual reserva RESUMEN antes de IGF Diario."
-    - "RESUMEN usa loadWeeklyPlant."
-    - "Tabla Concepto | Semana | Dom–Sáb."
-    - "Gráfica PNG embebida con sharp."
-    - "summary_metric validada."
-    - "Sin dependencia nueva."
+  puebla_acceptance:
+    date: "2026-10-07"
+    previous_costs:
+      - 12.465
+      - 12.465
+    reference: 12.465
+    current_cost: 12.918
+    delta: 0.453
+    supplier: "TOMZA TEPEJI"
+    kg: 20220
 
 validated_tests:
-  - "93/93 reportadas PASS."
-  - "069-R1 PASS."
-  - "069 PASS."
-  - "068-R2 PASS."
-  - "068-R1 PASS."
-  - "068 PASS."
-  - "067 PASS."
-  - "066-R1 PASS."
-  - "066 PASS."
-  - "065-R1 PASS."
-  - "065 PASS."
-  - "064-R1 PASS."
-  - "064 PASS."
+  - "109/109 PASS."
   - "node --check server.js PASS."
-  - "frontend npm run build exit 0."
+  - "frontend build exit 0."
   - "git diff --check limpio."
 
-production_validation_required:
-  san_luis:
-    - "Seleccionar San Luis."
-    - "Confirmar Semana 41 04/10–10/10."
-    - "Confirmar Venta semanal ya no es —."
-    - "Confirmar venta aproximada 143031 kg con el fixture observado."
-    - "Confirmar domingo conserva venta — pero puede mostrar precio/costo/flete."
-    - "Confirmar Resultado semanal ya no desaparece por el domingo."
-
-  all_plants:
-    - "Seleccionar Todas."
-    - "Confirmar que San Luis deja de estar vacío."
-    - "Confirmar que las demás plantas no cambian."
-
-  chart:
-    - "Abrir Semana 41 de San Luis."
-    - "Abrir gráfica de RESULTADO Importe."
-    - "Seleccionar 5D."
-    - "Confirmar eje X 04/10–08/10."
-    - "Confirmar que NO muestra 27/10–31/10."
-    - "Ir a semana anterior y validar 27/09–01/10."
-
-  excel:
-    - "Desde la gráfica semanal descargar Excel."
-    - "Confirmar hoja #1 RESUMEN."
-    - "Confirmar hoja #2 IGF Diario San Luis."
-    - "Confirmar título y Semana 41."
-    - "Confirmar tabla Semana + Dom–Sáb."
-    - "Confirmar valores contra dashboard."
-    - "Confirmar gráfica embebida."
-    - "Confirmar gráfica corresponde a la métrica seleccionada."
-    - "Confirmar resto de hojas del workbook."
-
-  regression:
-    - "Forecast no cambia."
-    - "ARR no cambia."
-    - "Folios 068 no cambia."
-    - "Precio 068-R1/R2 no cambia."
-    - "Export Todas no cambia."
-
-pr_contract:
-  base: "main"
-  head: "fix/igf-diario-weekly-coverage-resumen-5d-069-r1"
-  title: "FIX 069-R1: cobertura semanal, RESUMEN Excel y 5D por semana"
-  preferred_merge: "Squash and merge"
-  merge_executor: "HUMAN_APPROVER_ONLY"
-
 in_scope:
+  - "git fetch origin."
   - "Verificar origin/main exacto."
-  - "Verificar ahead 2 / behind 0."
-  - "Verificar que no exista cambio de producto después de 493e2b6387f1b71006eeaaf89a9a9132b57a9d90."
-  - "Crear reporte G4-PREP."
+  - "Verificar ancestry y ahead/behind."
+  - "Verificar product SHA."
+  - "Verificar que después de product_sha no existan cambios de producto/tests."
+  - "Revisar diff completo contra main."
+  - "Crear reporte G4."
   - "Actualizar CURRENT_TASK."
-  - "Crear commit exclusivamente documental."
-  - "Push únicamente a la rama 069-R1."
-  - "Crear PR."
-  - "Verificar mergeable."
+  - "Crear commit exclusivamente documental G4."
+  - "Push únicamente a la rama 069-R2."
+  - "Crear PR hacia main."
+  - "Verificar head SHA del PR."
+  - "Verificar mergeable/mergeable_state."
   - "STOP."
 
 out_of_scope:
   - "Modificar producto."
   - "Modificar tests."
   - "Modificar fórmulas."
-  - "Modificar Excel."
-  - "Modificar gráfica."
   - "Modificar DB."
+  - "Modificar gráfica."
+  - "Modificar comentarios."
+  - "Modificar CONTROL DE COMPRAS."
   - "Rebase."
   - "Merge."
   - "Deploy."
+  - "Auto-merge."
+
+pr_contract:
+  base: "main"
+  head: "fix/igf-diario-weekly-chart-values-compras-comment-069-r2"
+  title: "FIX 069-R2: valores de gráfica y comentario de compras"
+  preferred_merge: "Squash and merge"
+  merge_executor: "HUMAN_APPROVER_ONLY"
 
 merge_contract:
-  executor: "HUMAN_APPROVER_ONLY"
   merge_authorized: false
   deploy_authorized: false
+  auto_merge: false
 
 stop_conditions:
-  - "Si origin/main != f50e61356325b13be289beb4e6354b52634f5eee, STOP."
-  - "Si la rama no está ahead 2 / behind 0 antes del commit G4, STOP."
-  - "Si aparece un cambio de producto posterior a 493e2b6387f1b71006eeaaf89a9a9132b57a9d90, STOP."
+  - "Si origin/main != ac8625cc8f3b81bd345c54a291219f7bf7b8e9ff, STOP."
+  - "Si product_sha 5827f2c709cf847c029fee8e83b251c8ca293ce9 no pertenece a la rama, STOP."
+  - "Si implementation_final_sha b6a01c72cf437324119d0de35c171a321183a714 no corresponde al estado reportado, STOP."
+  - "Si después de product_sha existe modificación de producto o tests, STOP."
+  - "Si aparece un diff inesperado contra main, STOP."
   - "Si el PR tiene conflictos o no es mergeable, STOP."
   - "No rebase."
   - "No merge."
   - "No deploy."
 
-result_report_path: "docs/dev-loop/reports/G4-PREP-FIX-IGF-DIARIO-WEEKLY-COVERAGE-RESUMEN-5D-069-R1.md"
+result_report_path: "docs/dev-loop/reports/G4-PREP-FIX-IGF-DIARIO-WEEKLY-CHART-VALUES-COMPRAS-COMMENT-069-R2.md"
