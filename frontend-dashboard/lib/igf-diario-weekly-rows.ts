@@ -1,4 +1,4 @@
-import type { IgfDiarioSemanalMetrics } from "@/lib/api";
+import type { IgfDiarioSemanalCoverage, IgfDiarioSemanalCoverageMap, IgfDiarioSemanalMetrics } from "@/lib/api";
 
 export type WeeklyUnit = "kg" | "mxn" | "per_kg";
 
@@ -64,4 +64,33 @@ export function tone(key: string, value: number | null): string {
 
 export function weekLabel(weekNumber: number, desde: string, hasta: string): string {
   return `SEMANA ${weekNumber} · ${fmtFecha(desde)}–${fmtFecha(hasta)}`;
+}
+
+export function coverageIsPartial(block: IgfDiarioSemanalCoverage | null | undefined): boolean {
+  if (!block) return false;
+  return block.days_with_sales > 0 && block.days_covered < block.days_with_sales;
+}
+
+function groupedKg(value: number | null | undefined): string {
+  const rounded = Math.round(Number(value) || 0);
+  const sign = rounded < 0 ? "-" : "";
+  const body = String(Math.abs(rounded)).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${sign}${body}`;
+}
+
+export function coverageCaption(block: IgfDiarioSemanalCoverage | null | undefined): string | null {
+  if (!coverageIsPartial(block) || !block) return null;
+  const pct = block.coverage_kg_pct == null || !Number.isFinite(block.coverage_kg_pct)
+    ? ""
+    : `${block.coverage_kg_pct.toFixed(2)}%`;
+  const total = block.kg_total == null ? "—" : groupedKg(block.kg_total);
+  return `Cobertura financiera ${pct} · ${groupedKg(block.kg_covered)} / ${total} kg · ${block.days_covered}/${block.days_with_sales} días · Real ${groupedKg(block.covered_real_kg)} kg · Proyectado ${groupedKg(block.covered_projected_kg)} kg`;
+}
+
+export function coverageLines(coverage: IgfDiarioSemanalCoverageMap | null | undefined): string[] {
+  if (!coverage) return [];
+  const result = coverageCaption(coverage.resultado);
+  const commission = coverageCaption(coverage.com_desc_kg);
+  if (result && commission && result === commission) return [result];
+  return [result, commission].filter((line): line is string => Boolean(line));
 }

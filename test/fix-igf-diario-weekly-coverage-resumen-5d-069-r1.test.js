@@ -78,7 +78,16 @@ test("San Luis suma la venta conocida y no convierte el domingo null en cero", (
   assert.equal(weekly.aggregateWeek(missingCost, "2026-10-06").metrics.costo_kg, null);
   assert.equal(weekly.aggregateWeek(missingCost, "2026-10-06").metrics.venta_kg, 143031);
   const incomplete = days.map((item, index) => (index === 3 ? { ...item, cdKg: null } : item));
-  assert.equal(weekly.aggregateWeek(incomplete, "2026-10-06").metrics.resultado_mxn, null);
+  const partialWeek = weekly.aggregateWeek(incomplete, "2026-10-06");
+  assert.equal(weekly.dayMetrics(incomplete[3]).metrics.com_desc_kg, null);
+  assert.equal(weekly.dayMetrics(incomplete[3]).metrics.resultado_mxn, null);
+  const coveredMxn = incomplete.reduce((sum, item) => {
+    const value = weekly.dayResultMxn(item);
+    return value == null ? sum : sum + value;
+  }, 0);
+  assert.equal(partialWeek.metrics.resultado_mxn, coveredMxn);
+  assert.equal(partialWeek.metrics.resultado_kg, coveredMxn / partialWeek.coverage.resultado.kg_covered);
+  assert.notEqual(partialWeek.coverage.resultado.kg_covered, partialWeek.metrics.venta_kg);
 });
 
 test("5D usa los primeros cinco días de la semana seleccionada", () => {

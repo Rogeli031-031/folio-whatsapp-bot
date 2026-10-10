@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchIgfDiarioSemanal, type IgfDiarioSemanalMetrics, type IgfDiarioSemanalResponse } from "@/lib/api";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
-import { WEEKLY_ROWS, dayHeader, fmtValue, tone, weekLabel } from "@/lib/igf-diario-weekly-rows";
+import { WEEKLY_ROWS, coverageLines, dayHeader, fmtValue, tone, weekLabel } from "@/lib/igf-diario-weekly-rows";
 
 export default function IgfDiarioWeeklyPlantPanel({
   token,
@@ -110,6 +110,14 @@ export default function IgfDiarioWeeklyPlantPanel({
       {error && <p className="text-sm text-red-300">{error}</p>}
       {data && (data.week.missing_components || []).length > 0 && (
         <p className="mb-2 text-xs text-amber-200">Faltantes: {(data.week.missing_components || []).join(", ")}</p>
+      )}
+      {data && coverageLines(data.coverage || data.week.coverage).map((line) => (
+        <p key={line} data-coverage="partial" className="mb-2 text-xs font-medium text-amber-100">{line}</p>
+      ))}
+      {data && days.some((day) => (day.missing_components || []).length > 0) && (
+        <p className="mb-2 text-xs text-amber-200">
+          Días incompletos: {days.filter((day) => (day.missing_components || []).length > 0).map((day) => `${dayHeader(day.fecha)} (${(day.missing_components || []).join(", ")})`).join("; ")}
+        </p>
       )}
       <div className="overflow-x-auto rounded border border-slate-700">
         <table className="w-full min-w-[980px] border-separate border-spacing-0 text-sm">
