@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchIgfDiarioSemanal, type IgfDiarioSemanalAllResponse } from "@/lib/api";
-import { WEEKLY_ROWS, fmtValue, tone, weekLabel } from "@/lib/igf-diario-weekly-rows";
+import { WEEKLY_ROWS, coverageLines, fmtValue, tone, weekLabel } from "@/lib/igf-diario-weekly-rows";
 
 export default function IgfDiarioWeeklyAllPlantsPanel({
   token,
@@ -85,6 +85,9 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
       </div>
       {loading && <p className="text-sm text-slate-400">Cargando semana…</p>}
       {error && <p className="text-sm text-red-300">{error}</p>}
+      {data && coverageLines(data.resumen?.coverage || data.week.coverage).map((line) => (
+        <p key={line} data-coverage="partial" className="mb-2 text-xs font-medium text-amber-100">{line}</p>
+      ))}
       <div className="overflow-x-auto rounded border border-slate-700">
         <table className="w-full min-w-[860px] border-separate border-spacing-0 text-sm">
           <thead>

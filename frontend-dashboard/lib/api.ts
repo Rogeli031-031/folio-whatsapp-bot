@@ -123,6 +123,22 @@ export type IgfDiarioSemanalMetrics = {
   resultado_mxn: number | null;
 };
 
+export type IgfDiarioSemanalCoverage = {
+  kg_total: number | null;
+  kg_covered: number;
+  coverage_kg_pct: number | null;
+  days_with_sales: number;
+  days_covered: number;
+  coverage_days_pct: number | null;
+  covered_real_kg: number;
+  covered_projected_kg: number;
+};
+
+export type IgfDiarioSemanalCoverageMap = {
+  com_desc_kg?: IgfDiarioSemanalCoverage;
+  resultado?: IgfDiarioSemanalCoverage;
+};
+
 export type IgfDiarioSemanalWeek = {
   week_year: number;
   week_number: number;
@@ -131,6 +147,7 @@ export type IgfDiarioSemanalWeek = {
   estado: "real" | "parcial" | "proyectada";
   complete?: boolean;
   missing_components?: string[];
+  coverage?: IgfDiarioSemanalCoverageMap;
 };
 
 export type IgfDiarioSemanalDay = {
@@ -138,6 +155,7 @@ export type IgfDiarioSemanalDay = {
   weekday: string;
   estado: "real" | "parcial" | "proyectada";
   metrics: IgfDiarioSemanalMetrics;
+  missing_components?: string[];
 };
 
 export type IgfDiarioSemanalNav = {
@@ -157,6 +175,7 @@ export type IgfDiarioSemanalResponse = {
   corte_ymd: string | null;
   week: IgfDiarioSemanalWeek;
   metrics: IgfDiarioSemanalMetrics;
+  coverage?: IgfDiarioSemanalCoverageMap;
   days?: IgfDiarioSemanalDay[];
   nav: IgfDiarioSemanalNav;
   query_count?: number;
@@ -166,6 +185,7 @@ export type IgfDiarioSemanalPlantColumn = {
   plant_code: string;
   empresa: string;
   metrics: IgfDiarioSemanalMetrics;
+  coverage?: IgfDiarioSemanalCoverageMap;
   complete: boolean;
   missing_components: string[];
 };
@@ -182,6 +202,7 @@ export type IgfDiarioSemanalAllResponse = {
     plant_code: string;
     empresa: string;
     metrics: IgfDiarioSemanalMetrics;
+    coverage?: IgfDiarioSemanalCoverageMap;
     days?: IgfDiarioSemanalDay[];
   };
   nav: IgfDiarioSemanalNav;
