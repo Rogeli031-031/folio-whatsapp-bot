@@ -1,6 +1,6 @@
-﻿task_id: "CHANGE-IGF-DIARIO-CUTOFF-REAL-SALES-PRECEDENCE-072"
+﻿task_id: "G4-PREP-CHANGE-IGF-DIARIO-CUTOFF-REAL-SALES-PRECEDENCE-072"
 
-title: "Cambiar precedencia de venta en día de corte: real antes que pronóstico"
+title: "Preparar integración del cambio de precedencia de venta en fecha de corte 072"
 
 status: "DONE_PENDING_REVIEW"
 
@@ -10,199 +10,184 @@ main_reference_sha: "ad8a8ba8e00557993a8da62f735f9fe6ee020ada"
 
 branch: "change/igf-diario-cutoff-real-sales-precedence-072"
 
-supersedes_contract:
-  task: "054-R2"
-  scope: >
-    Modificar exclusivamente la precedencia de venta Casa/Comisionista
-    en la FECHA DE CORTE. No eliminar ni reescribir otros contratos de 054-R2.
+product_sha: "3f2e41cff5ede48449a952a5eb7b19db4374b8c2"
+
+implementation_final_sha: "73156c80355c9cf862fd1bcdfd647c2570ab23ca"
 
 objective: >
-  Unificar el tratamiento de la fecha de corte para que una venta real
-  capturada en Casa o Comisionista no sea descartada únicamente porque
-  fecha >= corte. En la fecha exacta de corte, cada canal debe conservar
-  su captura real válida cuando exista y utilizar pronóstico únicamente
-  cuando esa captura falte. Después del corte permanece la lógica
-  proyectada vigente.
+  Auditar CHANGE 072 y preparar su Pull Request hacia main.
+  Verificar que el cambio funcional se limite a la fecha exacta de corte:
+  cada canal Casa/Comisionista conserva captura real válida y usa pronóstico
+  solo como fallback. Confirmar que antes del corte permanece el contrato
+  existente y después del corte continúa prevaleciendo el pronóstico.
+  No modificar producto ni tests.
+  No merge.
+  No deploy.
 
-root_cause_confirmed:
-  - >
-    Provincia Venta Diaria total planta considera la fecha de corte todavía
-    como real y el primer día proyectado es el día siguiente.
-  - >
-    Casa/Comisionista pasan por resolveCanalTon y actualmente fecha >= corte
-    entra a la rama proyectada.
-  - >
-    Esto puede descartar una captura existente exactamente en la fecha de corte.
-  - >
-    Venta KG exige Casa y Comisionista numéricos.
-  - >
-    Si un canal no tiene pronóstico para la fecha de corte, Venta KG termina
-    null aunque exista venta real visible en Provincia Venta Diaria.
-  - "isSunday no es la causa."
-  - "069-R1 no es la causa."
-  - "RESUMEN no es la causa."
-
-new_business_contract:
+contract_072:
   before_cutoff:
-    rule: "Conservar comportamiento real vigente."
+    rule: "Sin cambio."
 
   on_cutoff:
-    rule: >
-      Resolver cada canal Casa/Comisionista con precedencia:
-      captura real válida -> pronóstico válido -> null.
+    rule: "Por canal: captura real válida -> pronóstico válido -> null."
 
   after_cutoff:
-    rule: >
-      Mantener comportamiento proyectado vigente.
-      No introducir fallback general a captura real después del corte.
+    rule: "Contrato proyectado anterior permanece sin cambio."
 
-important_per_channel_rule:
-  - "La precedencia debe resolverse por canal, no únicamente sobre el total de planta."
-  - >
-    En fecha de corte, si Casa tiene captura real y Comisionista no,
-    Casa conserva su real y Comisionista puede usar su pronóstico válido.
-  - >
-    Si ambos tienen captura real válida, ambos conservan real.
-  - >
-    Si ninguno tiene captura y ambos tienen pronóstico, ambos usan pronóstico.
-  - >
-    Si después de resolver los canales alguno continúa no numérico,
-    Venta KG conserva el contrato existente y queda null.
-  - "No convertir canal faltante en cero."
+  zero_semantics:
+    rule: "0 explícito cuenta como captura válida en la fecha de corte."
 
-real_value_semantics:
-  - "Determinar 'captura real válida' usando exactamente la semántica existente de la fuente."
-  - "No asumir que 0 equivale a missing."
-  - >
-    Si el contrato existente considera 0 una captura real explícita,
-    preservarlo como real.
-  - >
-    Si la fuente distingue null/missing de 0, mantener esa distinción.
+  null_semantics:
+    rule: "No convertir missing/null a 0 en la fecha de corte."
 
-san_luis_acceptance:
+verified_case:
   plant: "San Luis"
-  cutoff: "2026-10-04"
-  source_total_provincia_tons: 2.000
-  expected_behavior: >
-    Las capturas reales de Casa/Comisionista que originan esas 2.000 t
-    deben conservarse en la fecha de corte en vez de ser descartadas
-    por la rama forecast.
-  expected_igf_venta_kg: 2000
-  expected_weekly_inclusion: true
+  date: "2026-10-04"
+  casa_tons: 1.2
+  comisionista_tons: 0.8
+  venta_kg: 2000
+  price: 21.13
+  expected_income: 42260
+  note: >
+    Los 2,000 kg deben originarse en Casa + Comisionista.
+    No deben copiarse desde la columna total de Provincia Venta Diaria.
 
-not_sunday_specific:
-  - "La misma regla aplica lunes, martes, miércoles, jueves, viernes, sábado o domingo."
-  - "No agregar condición isSunday."
-  - "No hardcodear 04/10/2026."
-  - "No hardcodear San Luis."
+important_contract_change:
+  task: "054-R2"
+  previous_rule: "La fecha de corte entraba a forecast."
+  new_rule: "La fecha de corte conserva captura real válida por canal."
 
-weekly_effect:
-  - >
-    Una vez corregido Venta KG en la fuente, RESUMEN semanal debe incorporar
-    naturalmente el día mediante los agregadores existentes.
-  - "No modificar RESUMEN para forzar el dato."
-  - "No modificar 069-R1 para conseguir el resultado."
+important_regression_effect:
+  task: "054-R3"
+  previous_cutoff_value_kg: 30750
+  new_cutoff_value_kg: 9000
+  reason: >
+    30,750 kg correspondían al pronóstico. Con 072, los 9,000 kg
+    capturados realmente en la fecha de corte prevalecen.
+  expected: true
 
-required_acceptance_matrix:
-  - "Antes del corte + real -> real."
-  - "Fecha de corte + ambos canales reales -> reales."
-  - "Fecha de corte + Casa real + Comisionista forecast -> combinación resuelta por canal."
-  - "Fecha de corte + Casa forecast + Comisionista real -> combinación resuelta por canal."
-  - "Fecha de corte + sin real + ambos forecast -> forecast."
-  - "Fecha de corte + canal sin real ni forecast -> ese canal null; Venta KG respeta contrato existente."
-  - "Después del corte + real histórico/capturado + forecast -> comportamiento forecast vigente."
-  - "Después del corte no debe comenzar a preferir real por efecto colateral."
-  - "Domingo de corte con real -> real."
-  - "Domingo de corte sin real pero forecast -> forecast."
-  - "Domingo de corte sin real ni forecast -> null."
-  - "Día de corte con 0 real explícito -> respetar semántica existente de 0."
+g4_required_checks:
+  - "git fetch origin."
+  - "origin/main debe permanecer en main_reference_sha."
+  - "Verificar ancestry."
+  - "Verificar merge-base."
+  - "Verificar ahead/behind."
+  - "Verificar product_sha."
+  - "Verificar implementation_final_sha."
+  - "Auditar product_sha..implementation_final_sha."
+  - "Después del SHA producto solo debe existir documentación."
+  - "Auditar origin/main...HEAD completo."
+  - "Confirmar que no existe lógica específica de domingo."
+  - "Confirmar que no existe hardcode San Luis."
+  - "Confirmar que no existe hardcode 04/10/2026."
+  - "Confirmar que la resolución se realiza por canal."
+  - "Confirmar semántica explícita de 0."
+  - "Confirmar que después del corte no se introdujo fallback a real."
+  - "Confirmar que RESUMEN no fue modificado para conseguir el resultado."
+  - "Confirmar que 069-R1 permanece intacto."
+  - "Confirmar que 070/070-R1 permanece intacto."
 
-san_luis_regression:
-  - "San Luis 01/10 permanece correcto."
-  - "San Luis 02/10 permanece correcto."
-  - "San Luis 03/10 permanece correcto."
-  - "San Luis 04/10 cambia de null a 2,000 kg si el fixture reproduce las capturas reales observadas."
-  - >
-    Semana 41 incorpora los 2,000 kg y recalcula Ingreso y ponderados
-    mediante la lógica existente, sin hardcodear totales.
+cutoff_matrix_to_audit:
+  - "fecha < corte + real -> comportamiento anterior."
+  - "fecha == corte + Casa real + Comisionista real -> ambos reales."
+  - "fecha == corte + Casa real + Comisionista forecast -> real + forecast."
+  - "fecha == corte + Casa forecast + Comisionista real -> forecast + real."
+  - "fecha == corte + ambos sin real + forecast -> forecast."
+  - "fecha == corte + canal irresoluble -> null según contrato."
+  - "fecha == corte + real 0 -> 0 gana a forecast."
+  - "fecha > corte + real + forecast -> forecast."
+  - "fecha > corte + ausencia de forecast -> comportamiento posterior existente."
+  - "domingo de corte no recibe tratamiento especial."
 
-scope_protection:
-  - "No modificar fuente de Provincia Venta Diaria."
-  - "No modificar fórmula financiera de Ingreso."
-  - "No modificar Precio."
-  - "No modificar Compras."
-  - "No modificar Costo/Flete."
-  - "No modificar DESCUENTOS 070/070-R1."
-  - "No modificar RESUMEN SEMANAL 069."
-  - "No modificar gráfica."
-  - "No modificar DB schema."
-  - "No modificar días posteriores al corte salvo lo necesario para demostrar que permanecen iguales."
-
-tests_required:
-  - "Fixture San Luis 04/10/2026."
-  - "Día de corte ambos canales reales."
-  - "Día de corte real/forecast."
-  - "Día de corte forecast/real."
-  - "Día de corte ambos forecast."
-  - "Día de corte canal irresoluble -> Venta KG null según contrato."
-  - "Día antes del corte sin regresión."
-  - "Día después del corte sin regresión."
-  - "Domingo no recibe tratamiento especial."
-  - "0 explícito probado según contrato existente."
-  - "null permanece null cuando corresponde."
-  - "Semana con domingo real incluye el día."
-  - "Semana con domingo realmente null conserva protección 069-R1."
-  - "Export individual correcto."
-  - "Export Todas sin regresión."
-  - "070/070-R1 sin regresión."
-  - "Regresiones 054-R2 actualizadas exclusivamente donde el contrato cambió."
-  - "Regresiones 069–070-R1 PASS."
+tests_expected:
+  - "072: 12/12 PASS."
+  - "054-R2: 20/20 PASS."
+  - "Lote 054-R1, 054-R3, 069, 069-R1, 069-R2, 070, 070-R1: 44/44 PASS."
   - "node --check server.js PASS."
-  - "frontend build si corresponde."
   - "git diff --check PASS."
+  - "Frontend no modificado."
 
-documentation_requirement:
-  - >
-    Las pruebas/documentación de 054-R2 que afirmaban que en fecha de corte
-    siempre se usa forecast deben actualizarse explícitamente para registrar
-    que ese contrato fue sustituido por 072.
-  - >
-    No borrar silenciosamente la evidencia histórica de 054-R2.
-    Documentar el superseding contract.
+in_scope:
+  - "Auditoría."
+  - "Reporte G4."
+  - "Actualización documental CURRENT_TASK."
+  - "Commit documental G4."
+  - "Push a rama 072."
+  - "Crear Pull Request."
+  - "Verificar Pull Request."
+  - "STOP."
+
+out_of_scope:
+  - "Modificar producto."
+  - "Modificar tests."
+  - "Modificar resolveCanalTon."
+  - "Modificar precedencia."
+  - "Modificar RESUMEN."
+  - "Modificar 069."
+  - "Modificar 070."
+  - "Modificar DB."
+  - "Rebase."
+  - "Merge."
+  - "Deploy."
+  - "Auto-merge."
+
+pr_contract:
+  base: "main"
+  head: "change/igf-diario-cutoff-real-sales-precedence-072"
+  title: "CHANGE 072: priorizar venta real en la fecha de corte"
+  preferred_merge: "Squash and merge"
+  merge_executor: "HUMAN_APPROVER_ONLY"
+
+merge_contract:
+  merge_authorized: false
+  deploy_authorized: false
+  auto_merge: false
 
 report:
-  path: "docs/dev-loop/reports/CHANGE-IGF-DIARIO-CUTOFF-REAL-SALES-PRECEDENCE-072.md"
+  path: "docs/dev-loop/reports/G4-PREP-CHANGE-IGF-DIARIO-CUTOFF-REAL-SALES-PRECEDENCE-072.md"
 
   must_include:
-    - "Contrato anterior 054-R2."
-    - "Motivo del cambio."
-    - "Contrato nuevo 072."
-    - "Causa raíz descubierta durante 071."
-    - "Ruta Provincia Venta Diaria vs resolveCanalTon."
-    - "Precedencia por canal."
-    - "Tratamiento de 0/null."
-    - "Caso San Luis 04/10."
-    - "Antes/después."
-    - "Efecto Semana 41."
-    - "Protección de días posteriores al corte."
-    - "Pruebas actualizadas de 054-R2."
-    - "Regresiones."
+    - "Base exacta."
+    - "Merge-base."
+    - "Ahead/behind."
     - "SHA producto."
-    - "SHA final."
+    - "SHA documental."
+    - "Auditoría product..final."
+    - "Archivos funcionales."
+    - "Archivos tests."
+    - "Archivos documentales."
+    - "Contrato 054-R2 anterior."
+    - "Contrato 072 nuevo."
+    - "Matriz fecha < / == / > corte."
+    - "Resolución por canal."
+    - "0 vs null."
+    - "San Luis 04/10."
+    - "Reconciliación 1.2 + 0.8 = 2.0 t."
+    - "Ingreso 21.13 * 2,000."
+    - "Cambio esperado 054-R3 30,750 -> 9,000."
+    - "Demostración de que días posteriores siguen forecast."
+    - "Protección 069-R1."
+    - "Protección 070-R1."
+    - "Pruebas."
+    - "Riesgos/hallazgos."
+    - "NO MERGE."
+    - "NO DEPLOY."
 
 stop_conditions:
   - "Si origin/main != ad8a8ba8e00557993a8da62f735f9fe6ee020ada, STOP."
-  - "Si la evidencia demuestra que Casa/Comisionista no tienen captura real válida el 04/10, STOP antes de fabricar 2,000 kg."
-  - "Si el total 2.000 t no puede reconciliarse con los canales fuente, STOP y documentar."
-  - "Si la solución requiere hardcodear fecha/planta/domingo, STOP."
-  - "Si cambia la precedencia después del corte, STOP."
-  - "Si requiere DB schema, STOP."
+  - "Si product_sha no pertenece a la rama, STOP."
+  - "Si implementation_final_sha no corresponde al cierre reportado, STOP."
+  - "Si después del product SHA existen cambios funcionales o de tests, STOP."
+  - "Si aparece hardcode de San Luis/04-10/domingo, STOP."
+  - "Si fecha > corte comienza a preferir real, STOP."
+  - "Si el cambio 054-R3 30,750 -> 9,000 no se explica por la captura real, STOP."
+  - "Si RESUMEN fue modificado funcionalmente para forzar 2,000 kg, STOP."
+  - "Si PR tiene conflictos o no es mergeable, STOP."
+  - "No rebase."
   - "No merge."
   - "No deploy."
 
 completion:
   status: "DONE_PENDING_REVIEW"
-  commit: true
-  push_branch_only: true
   merge: false
   deploy: false
