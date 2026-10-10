@@ -1,193 +1,277 @@
-﻿task_id: "G4-PREP-CHANGE-IGF-DIARIO-CUTOFF-REAL-SALES-PRECEDENCE-072"
+﻿task_id: "FIX-IGF-DIARIO-SINGLE-CHANNEL-REAL-SALES-074"
 
-title: "Preparar integración del cambio de precedencia de venta en fecha de corte 072"
+title: "Conservar Venta KG cuando existe venta real en un solo canal"
 
 status: "DONE_PENDING_REVIEW"
 
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez 2026-10-09"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez"
 
-main_reference_sha: "ad8a8ba8e00557993a8da62f735f9fe6ee020ada"
+main_reference_sha: "5de98adc664185351afe0c69e29222903ba2b47e"
 
-branch: "change/igf-diario-cutoff-real-sales-precedence-072"
+branch: "fix/igf-diario-single-channel-real-sales-074"
 
-product_sha: "3f2e41cff5ede48449a952a5eb7b19db4374b8c2"
-
-implementation_final_sha: "73156c80355c9cf862fd1bcdfd647c2570ab23ca"
+source_audit:
+  task: "AUDIT-IGF-DIARIO-SAN-LUIS-0410-RUNTIME-073"
 
 objective: >
-  Auditar CHANGE 072 y preparar su Pull Request hacia main.
-  Verificar que el cambio funcional se limite a la fecha exacta de corte:
-  cada canal Casa/Comisionista conserva captura real válida y usa pronóstico
-  solo como fallback. Confirmar que antes del corte permanece el contrato
-  existente y después del corte continúa prevaleciendo el pronóstico.
-  No modificar producto ni tests.
-  No merge.
-  No deploy.
+  Corregir el contrato de Venta KG para que una venta real válida no sea
+  anulada únicamente porque el otro canal Casa/Comisionista no tenga filas
+  de venta para la misma planta y fecha.
 
-contract_072:
-  before_cutoff:
-    rule: "Sin cambio."
+  Cuando exactamente un canal tenga actividad real válida y el otro canal
+  esté ausente, Venta KG debe conservar el canal existente.
 
-  on_cutoff:
-    rule: "Por canal: captura real válida -> pronóstico válido -> null."
+  Cuando ambos canales estén ausentes, Venta KG debe permanecer null.
 
-  after_cutoff:
-    rule: "Contrato proyectado anterior permanece sin cambio."
-
-  zero_semantics:
-    rule: "0 explícito cuenta como captura válida en la fecha de corte."
-
-  null_semantics:
-    rule: "No convertir missing/null a 0 en la fecha de corte."
-
-verified_case:
+confirmed_production_case:
   plant: "San Luis"
+  plant_id: 5
+  plant_key: "SANLUIS"
   date: "2026-10-04"
-  casa_tons: 1.2
-  comisionista_tons: 0.8
-  venta_kg: 2000
-  price: 21.13
-  expected_income: 42260
+
+  casa:
+    rows: 3
+    kg: 1701.0000
+    tons: 1.701
+
+  comisionista:
+    rows: 0
+    value: null
+
+  total_plant_row:
+    exists: false
+
+  current_venta_kg: null
+  expected_venta_kg_after_074: 1701
+
+  precio: 21.1269958848
+  costo_kg: 11.6106
+  flete_kg: 1.1107
+  hg: -2747.736
+
+root_cause:
+  classification: "MIXED"
+
+  data_component: >
+    No existe ninguna fila de venta Comisionista para San Luis 04/10/2026.
+
+  contract_component: >
+    Venta KG actualmente requiere que Casa y Comisionista sean ambos
+    numéricos. Por ello una venta real válida de Casa se anula cuando
+    Comisionista está ausente.
+
+new_business_contract:
+  real_sales_aggregation:
+    - >
+      Casa con actividad real válida + Comisionista con actividad real válida
+      -> sumar ambos canales.
+    - >
+      Casa con actividad real válida + Comisionista sin filas
+      -> Venta KG = Casa.
+    - >
+      Casa sin filas + Comisionista con actividad real válida
+      -> Venta KG = Comisionista.
+    - >
+      Casa sin filas + Comisionista sin filas
+      -> Venta KG = null.
+    - >
+      No crear una fila de 0 en DB para representar el canal ausente.
+    - >
+      El 0 explícito, si llega como valor válido según el contrato existente,
+      sigue siendo numérico y debe conservar su semántica.
+
+critical_semantics:
+  - >
+    "Canal ausente" no significa hacer un null->0 global.
+  - >
+    El cero se usa únicamente como identidad matemática al agregar dos
+    canales cuando el otro canal sí demuestra actividad real válida.
+  - >
+    Si ambos canales están ausentes, el resultado debe seguir siendo null.
+  - >
+    No interpretar ausencia de ambos canales como venta total 0.
+  - >
+    No utilizar la columna total de Provincia Venta Diaria como fallback.
+
+expected_examples:
+  both_present:
+    casa_kg: 1200
+    comisionista_kg: 800
+    venta_kg: 2000
+
+  casa_only:
+    casa_kg: 1701
+    comisionista: null
+    venta_kg: 1701
+
+  comisionista_only:
+    casa: null
+    comisionista_kg: 900
+    venta_kg: 900
+
+  both_absent:
+    casa: null
+    comisionista: null
+    venta_kg: null
+
+contract_072_protection:
+  - "No cambiar resolveCanalTon salvo que sea estrictamente necesario para compartir semántica; preferir corregir la agregación Venta KG."
+  - "Antes del corte: conservar comportamiento 072."
+  - "Fecha exacta de corte: conservar real válido -> forecast válido -> null por canal."
+  - "Después del corte: forecast continúa prevaleciendo."
+  - >
+    074 cambia cómo se agregan los canales resueltos; no cambia qué valor
+    selecciona 072 para cada canal.
+
+forecast_protection:
+  - >
+    No asumir que un forecast faltante equivale a cero sin revisar el
+    contexto del canal resuelto.
+  - >
+    Mantener la semántica existente de forecast/null salvo en la agregación
+    autorizada de Venta KG.
+  - >
+    No convertir días futuros sin información en ventas 0.
+  - >
+    No cambiar cálculo de pronósticos.
+
+known_regression_cases:
+  - "San Luis 04/10/2026: Casa 1,701 kg + Comisionista ausente -> 1,701 kg."
+  - "San Luis 20/09/2026: patrón Casa-only encontrado por 073; debe evaluarse con la misma regla."
+  - "San Luis 27/09/2026: patrón Casa-only encontrado por 073; debe evaluarse con la misma regla."
+
+weekly_expected_effect:
+  current_week_total_kg: 128461.74
+  additional_real_kg_0410: 1701
+  expected_new_week_total_before_display_rounding: 130162.74
+  expected_display_week_total_kg: 130163
   note: >
-    Los 2,000 kg deben originarse en Casa + Comisionista.
-    No deben copiarse desde la columna total de Provincia Venta Diaria.
+    Este valor es una expectativa derivada de la evidencia de 073.
+    La implementación no debe hardcodearlo.
 
-important_contract_change:
-  task: "054-R2"
-  previous_rule: "La fecha de corte entraba a forecast."
-  new_rule: "La fecha de corte conserva captura real válida por canal."
+daily_expected_effect:
+  date: "2026-10-04"
+  venta_kg: 1701
+  price: 21.1269958848
+  expected_income_formula: "venta_kg * precio"
+  expected_income_approx: 35937.02
+  note: "Usar precisión real del sistema; no hardcodear importe."
 
-important_regression_effect:
-  task: "054-R3"
-  previous_cutoff_value_kg: 30750
-  new_cutoff_value_kg: 9000
-  reason: >
-    30,750 kg correspondían al pronóstico. Con 072, los 9,000 kg
-    capturados realmente en la fecha de corte prevalecen.
-  expected: true
+downstream_effect:
+  - "Ingreso Generado debe aparecer naturalmente."
+  - "Gastos dependientes de venta deben seguir sus reglas existentes."
+  - "Margen Neto debe recalcularse naturalmente si depende de esos valores."
+  - "Resultado $/kg debe recalcularse naturalmente."
+  - "Resultado Importe debe recalcularse naturalmente."
+  - "Semana debe incorporar 1,701 kg mediante el agregador existente."
+  - "No parchear RESUMEN."
 
-g4_required_checks:
-  - "git fetch origin."
-  - "origin/main debe permanecer en main_reference_sha."
-  - "Verificar ancestry."
-  - "Verificar merge-base."
-  - "Verificar ahead/behind."
-  - "Verificar product_sha."
-  - "Verificar implementation_final_sha."
-  - "Auditar product_sha..implementation_final_sha."
-  - "Después del SHA producto solo debe existir documentación."
-  - "Auditar origin/main...HEAD completo."
-  - "Confirmar que no existe lógica específica de domingo."
-  - "Confirmar que no existe hardcode San Luis."
-  - "Confirmar que no existe hardcode 04/10/2026."
-  - "Confirmar que la resolución se realiza por canal."
-  - "Confirmar semántica explícita de 0."
-  - "Confirmar que después del corte no se introdujo fallback a real."
-  - "Confirmar que RESUMEN no fue modificado para conseguir el resultado."
-  - "Confirmar que 069-R1 permanece intacto."
-  - "Confirmar que 070/070-R1 permanece intacto."
+scope_protection:
+  - "No cambiar datos productivos."
+  - "No INSERT/UPDATE/DELETE."
+  - "No DB schema."
+  - "No modificar Provincia Venta Diaria."
+  - "No cambiar upload_day."
+  - "No cambiar fecha de corte."
+  - "No cambiar 072."
+  - "No cambiar forecast."
+  - "No cambiar Precio."
+  - "No cambiar Compras."
+  - "No cambiar Costo/Flete."
+  - "No cambiar HG."
+  - "No cambiar DESCUENTOS."
+  - "No cambiar gráfica salvo efecto natural de datos corregidos."
+  - "No hardcodear San Luis."
+  - "No hardcodear domingos."
+  - "No hardcodear fechas."
 
-cutoff_matrix_to_audit:
-  - "fecha < corte + real -> comportamiento anterior."
-  - "fecha == corte + Casa real + Comisionista real -> ambos reales."
-  - "fecha == corte + Casa real + Comisionista forecast -> real + forecast."
-  - "fecha == corte + Casa forecast + Comisionista real -> forecast + real."
-  - "fecha == corte + ambos sin real + forecast -> forecast."
-  - "fecha == corte + canal irresoluble -> null según contrato."
-  - "fecha == corte + real 0 -> 0 gana a forecast."
-  - "fecha > corte + real + forecast -> forecast."
-  - "fecha > corte + ausencia de forecast -> comportamiento posterior existente."
-  - "domingo de corte no recibe tratamiento especial."
+implementation_requirement:
+  - >
+    Localizar todos los lugares donde Venta KG o equivalentes se construyen
+    a partir de Casa y Comisionista.
+  - >
+    Evitar corregir solamente Excel si semanal/materializePlantMonth usa
+    otra implementación.
+  - >
+    Centralizar la semántica si actualmente está duplicada y puede hacerse
+    con cambio mínimo y seguro.
+  - >
+    Excel individual, materialización mensual, semanal y Todas deben compartir
+    la misma semántica de agregación.
 
-tests_expected:
-  - "072: 12/12 PASS."
-  - "054-R2: 20/20 PASS."
-  - "Lote 054-R1, 054-R3, 069, 069-R1, 069-R2, 070, 070-R1: 44/44 PASS."
+acceptance_matrix:
+  - "Casa numérico + Comisionista numérico -> suma."
+  - "Casa numérico + Comisionista null/ausente -> Casa."
+  - "Casa null/ausente + Comisionista numérico -> Comisionista."
+  - "Casa null + Comisionista null -> null."
+  - "Casa 0 explícito + Comisionista numérico -> suma válida."
+  - "Casa numérico + Comisionista 0 explícito -> suma válida."
+  - "Casa 0 explícito + Comisionista 0 explícito -> 0 si ambos son valores explícitos válidos."
+  - "No filas en ambos canales -> null, no 0."
+
+tests_required:
+  - "Fixture exacto San Luis 04/10/2026 -> 1,701 kg."
+  - "Casa-only."
+  - "Comisionista-only."
+  - "Ambos canales."
+  - "Ambos ausentes."
+  - "0/null."
+  - "0/numérico."
+  - "numérico/0."
+  - "0/0 explícitos."
+  - "Fecha antes del corte."
+  - "Fecha exacta de corte preservando 072."
+  - "Fecha después del corte preservando 072."
+  - "Domingo no recibe lógica especial."
+  - "20/09 y 27/09 o fixtures equivalentes Casa-only."
+  - "IGF Diario individual."
+  - "materializePlantMonth."
+  - "IGF Diario semanal."
+  - "Todas."
+  - "Ingreso derivado naturalmente."
+  - "Semana incorpora el canal único."
+  - "069-R1 conserva semana cuando ambos canales realmente están ausentes."
+  - "072 conserva precedencia de corte."
+  - "070/070-R1 sin regresión."
   - "node --check server.js PASS."
   - "git diff --check PASS."
-  - "Frontend no modificado."
-
-in_scope:
-  - "Auditoría."
-  - "Reporte G4."
-  - "Actualización documental CURRENT_TASK."
-  - "Commit documental G4."
-  - "Push a rama 072."
-  - "Crear Pull Request."
-  - "Verificar Pull Request."
-  - "STOP."
-
-out_of_scope:
-  - "Modificar producto."
-  - "Modificar tests."
-  - "Modificar resolveCanalTon."
-  - "Modificar precedencia."
-  - "Modificar RESUMEN."
-  - "Modificar 069."
-  - "Modificar 070."
-  - "Modificar DB."
-  - "Rebase."
-  - "Merge."
-  - "Deploy."
-  - "Auto-merge."
-
-pr_contract:
-  base: "main"
-  head: "change/igf-diario-cutoff-real-sales-precedence-072"
-  title: "CHANGE 072: priorizar venta real en la fecha de corte"
-  preferred_merge: "Squash and merge"
-  merge_executor: "HUMAN_APPROVER_ONLY"
-
-merge_contract:
-  merge_authorized: false
-  deploy_authorized: false
-  auto_merge: false
 
 report:
-  path: "docs/dev-loop/reports/G4-PREP-CHANGE-IGF-DIARIO-CUTOFF-REAL-SALES-PRECEDENCE-072.md"
+  path: "docs/dev-loop/reports/FIX-IGF-DIARIO-SINGLE-CHANNEL-REAL-SALES-074.md"
 
   must_include:
-    - "Base exacta."
-    - "Merge-base."
-    - "Ahead/behind."
-    - "SHA producto."
-    - "SHA documental."
-    - "Auditoría product..final."
-    - "Archivos funcionales."
-    - "Archivos tests."
-    - "Archivos documentales."
-    - "Contrato 054-R2 anterior."
-    - "Contrato 072 nuevo."
-    - "Matriz fecha < / == / > corte."
-    - "Resolución por canal."
-    - "0 vs null."
-    - "San Luis 04/10."
-    - "Reconciliación 1.2 + 0.8 = 2.0 t."
-    - "Ingreso 21.13 * 2,000."
-    - "Cambio esperado 054-R3 30,750 -> 9,000."
-    - "Demostración de que días posteriores siguen forecast."
+    - "Evidencia 073."
+    - "Contrato anterior."
+    - "Contrato nuevo."
+    - "Por qué null no se convierte globalmente en 0."
+    - "Semántica de un canal presente."
+    - "Semántica de ambos ausentes."
+    - "San Luis 04/10 = 1,701 kg."
+    - "20/09 y 27/09."
+    - "Impacto semanal."
+    - "Protección 072."
     - "Protección 069-R1."
-    - "Protección 070-R1."
+    - "Todos los puntos de código que agregaban Casa + Comisionista."
     - "Pruebas."
-    - "Riesgos/hallazgos."
-    - "NO MERGE."
-    - "NO DEPLOY."
+    - "SHA producto."
+    - "SHA final."
 
 stop_conditions:
-  - "Si origin/main != ad8a8ba8e00557993a8da62f735f9fe6ee020ada, STOP."
-  - "Si product_sha no pertenece a la rama, STOP."
-  - "Si implementation_final_sha no corresponde al cierre reportado, STOP."
-  - "Si después del product SHA existen cambios funcionales o de tests, STOP."
-  - "Si aparece hardcode de San Luis/04-10/domingo, STOP."
-  - "Si fecha > corte comienza a preferir real, STOP."
-  - "Si el cambio 054-R3 30,750 -> 9,000 no se explica por la captura real, STOP."
-  - "Si RESUMEN fue modificado funcionalmente para forzar 2,000 kg, STOP."
-  - "Si PR tiene conflictos o no es mergeable, STOP."
-  - "No rebase."
+  - "Si origin/main != 5de98adc664185351afe0c69e29222903ba2b47e, STOP."
+  - "Si la auditoría de código demuestra que ausencia de un canal tiene otra semántica contractual documentada, STOP."
+  - "Si el fix requiere modificar datos productivos, STOP."
+  - "Si requiere cambiar fecha de corte/upload_day, STOP."
+  - "Si requiere cambiar forecast, STOP."
+  - "Si requiere DB schema, STOP."
+  - "Si requiere usar total planta como fallback, STOP."
+  - "Si aparecen múltiples agregaciones con contratos incompatibles que no pueden unificarse con seguridad, STOP y reportar."
+  - "No PR en fase de implementación."
   - "No merge."
   - "No deploy."
 
 completion:
   status: "DONE_PENDING_REVIEW"
+  commit: true
+  push_branch_only: true
   merge: false
   deploy: false
