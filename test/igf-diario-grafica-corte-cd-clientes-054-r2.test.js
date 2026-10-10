@@ -434,24 +434,26 @@ function plantMap(index, plant) {
   return map;
 }
 
-test("1. la fecha de corte con captura real distinta del forecast queda proyectada", async () => {
-  assert.equal(forecast.resolveCanalTon(4, CORTE, CORTE, 3, null, 10.25), 10.25);
-  assert.equal(forecast.resolveCanalTon(5, CORTE, CORTE, 3, null, 20.5), 20.5);
-  assert.equal(forecast.resolveCanalTon(4, CORTE, CORTE, 3, null, null), null);
+test("1. la fecha de corte conserva la captura real y el día posterior sigue en forecast", async () => {
+  assert.equal(forecast.resolveCanalTon(4, CORTE, CORTE, 3, null, 10.25), 4);
+  assert.equal(forecast.resolveCanalTon(5, CORTE, CORTE, 3, null, 20.5), 5);
+  assert.equal(forecast.resolveCanalTon(4, CORTE, CORTE, 3, null, null), 4);
+  assert.equal(forecast.resolveCanalTon(99, "2026-09-04", CORTE, 4, null, 8), 8);
   assert.equal(forecast.resolveCanalTon(99, "2026-09-04", CORTE, 4, null, null), 0);
   assert.equal(forecast.resolveCanalTon(99, "2026-09-02", "", 2, 2, null), 0);
   assert.match(FORECAST_SRC, /String\(fecha\) >= String\(corteYmd\)/);
   const built = await corteCase();
   const corte = dayView(built, CORTE);
   assert.equal(corte.estado, "proyectado");
-  assert.notEqual(corte.excel.B, CAPTURE_KG);
-  assert.notEqual(corte.grafica.B, CAPTURE_KG);
+  assert.equal(corte.excel.B, CAPTURE_KG);
+  assert.equal(corte.grafica.B, CAPTURE_KG);
 });
 
-test("2. B del corte usa el forecast de 30,750 kg", async () => {
+test("2. B del corte usa la captura real de 9,000 kg", async () => {
   const corte = dayView(await corteCase(), CORTE);
-  assert.equal(corte.excel.B, FORECAST_KG);
-  assert.equal(corte.grafica.B, FORECAST_KG);
+  assert.equal(corte.excel.B, CAPTURE_KG);
+  assert.equal(corte.grafica.B, CAPTURE_KG);
+  assert.notEqual(corte.excel.B, FORECAST_KG);
 });
 
 test("3. AC del corte usa el forecast y no el primario capturado", async () => {
