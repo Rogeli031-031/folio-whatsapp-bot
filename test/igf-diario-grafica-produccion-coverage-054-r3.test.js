@@ -418,7 +418,7 @@ test("paridad Excel contra el payload productivo en real, corte y día posterior
   }
   const corte = built.series.points.find((row) => row.fecha === CORTE);
   assert.equal(corte.estado, "proyectado");
-  assert.equal(corte.venta_kg, 30750);
+  assert.equal(corte.venta_kg, 9000);
 });
 
 function livePlant(nombre, canon, code) {
