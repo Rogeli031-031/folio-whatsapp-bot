@@ -83,11 +83,11 @@ test("E. en el corte sin reales se usan los dos forecast", () => {
   assert.equal(ventaOf(series, CORTE), 2000);
 });
 
-test("F. un canal sin real ni forecast deja Venta KG null", () => {
+test("F. en el corte un canal resuelto y el otro ausente conserva el canal presente", () => {
   const series = month("Puebla", CORTE, new Map([[CORTE, 1.2]]), new Map(), pack([], []));
   assert.equal(forecast.resolveCanalTon(1.2, CORTE, CORTE, 4, null, null), 1.2);
   assert.equal(forecast.resolveCanalTon(null, CORTE, CORTE, 4, null, null), null);
-  assert.equal(ventaOf(series, CORTE), null);
+  assert.equal(ventaOf(series, CORTE), 1200);
 });
 
 test("G. despues del corte el forecast sigue prevaleciendo", () => {

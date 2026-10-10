@@ -85,9 +85,9 @@ test("Tehuacán usa CASA + COMISIONISTA y no el total redondeado de 40", async (
   const { wb, venta } = book();
   const ws = fill(wb, "Tehuacan", "Tehuacán");
   const f = formula(ws.getCell(igfRow(26), 2));
-  assert.match(f, /J27\+/);
-  assert.match(f, /K27\)\*1000/);
-  assert.match(f, /AND\(ISNUMBER\(/);
+  assert.match(f, /ISNUMBER\([^)]*J27\)/);
+  assert.match(f, /ISNUMBER\([^)]*K27\).*\*1000/);
+  assert.match(f, /OR\(ISNUMBER\(/);
   assert.doesNotMatch(f, /!B27\*/);
   assert.equal(venta.getCell(27, 2).value, 40);
   assert.equal(venta.getCell(27, 10).value, 14.114);
@@ -103,7 +103,7 @@ test("Tehuacán usa CASA + COMISIONISTA y no el total redondeado de 40", async (
   await again.xlsx.readFile(file);
   fs.unlinkSync(file);
   const re = again.getWorksheet("IGF Diario Tehuacan");
-  assert.match(formula(re.getCell(igfRow(26), 2)), /J27\+.*K27\)\*1000/);
+  assert.match(formula(re.getCell(igfRow(26), 2)), /ISNUMBER\([^)]*J27\).*ISNUMBER\([^)]*K27\).*\*1000/);
   assert.doesNotMatch(formula(re.getCell(igfRow(26), 2)), /!B27\*/);
 });
 
@@ -119,7 +119,7 @@ test("cada planta localiza sus canales y Querétaro acepta el alias", () => {
   for (const [code, human, casa, com] of cases) {
     const ws = fill(wb, code, human);
     const f = formula(ws.getCell(igfRow(26), 2));
-    assert.match(f, new RegExp(`${casa}27\\+.*${com}27\\)\\*1000`), human);
+    assert.match(f, new RegExp(`ISNUMBER\\([^)]*${casa}27\\).*ISNUMBER\\([^)]*${com}27\\).*\\*1000`), human);
     assert.doesNotMatch(f, /!B27\*/, human);
   }
 });

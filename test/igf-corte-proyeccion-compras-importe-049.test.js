@@ -116,14 +116,14 @@ test("corte 27: real el 25, proyección el 26 y el 27, y del 28 al 30 solo la fe
   assert.equal(venta.getCell(28, 13).value, 6);
 
   // 051: VENTA KG vuelve a CASA + COMISIONISTA. La proyección hasta fin de mes de la 050 sigue.
-  assert.match(String(aca.getCell(36, 2).value.formula), /J26\+.*K26\)\*1000/);
+  assert.match(String(aca.getCell(36, 2).value.formula), /ISNUMBER\([^)]*J26\).*ISNUMBER\([^)]*K26\).*\*1000/);
   assert.doesNotMatch(String(aca.getCell(36, 2).value.formula), /B26\*1000/);
-  assert.match(String(aca.getCell(37, 2).value.formula), /J27\+.*K27\)\*1000/);
-  assert.match(String(aca.getCell(38, 2).value.formula), /J28\+.*K28\)\*1000/);
-  assert.match(String(teh.getCell(36, 2).value.formula), /L26\+.*M26\)\*1000/);
+  assert.match(String(aca.getCell(37, 2).value.formula), /ISNUMBER\([^)]*J27\).*ISNUMBER\([^)]*K27\).*\*1000/);
+  assert.match(String(aca.getCell(38, 2).value.formula), /ISNUMBER\([^)]*J28\).*ISNUMBER\([^)]*K28\).*\*1000/);
+  assert.match(String(teh.getCell(36, 2).value.formula), /ISNUMBER\([^)]*L26\).*ISNUMBER\([^)]*M26\).*\*1000/);
   assert.doesNotMatch(String(teh.getCell(36, 2).value.formula), /C26\*1000/);
-  assert.match(String(teh.getCell(37, 2).value.formula), /L27\+.*M27\)\*1000/);
-  assert.match(String(teh.getCell(38, 2).value.formula), /L28\+.*M28\)\*1000/);
+  assert.match(String(teh.getCell(37, 2).value.formula), /ISNUMBER\([^)]*L27\).*ISNUMBER\([^)]*M27\).*\*1000/);
+  assert.match(String(teh.getCell(38, 2).value.formula), /ISNUMBER\([^)]*L28\).*ISNUMBER\([^)]*M28\).*\*1000/);
   assert.match(String(aca.getCell(39, 2).value.formula), /B32:B38/);
   assert.equal(typeof aca.getCell(41, 2).value, "object");
   assert.equal(typeof aca.getCell(42, 2).value, "object");
@@ -144,8 +144,8 @@ test("corte 27: real el 25, proyección el 26 y el 27, y del 28 al 30 solo la fe
   assert.equal(ventaAgain.getCell(26, 11).value, 0);
   assert.equal(ventaAgain.getCell(27, 10).value, 1);
   assert.equal(ventaAgain.getCell(28, 13).value, 6);
-  assert.match(String(acaAgain.getCell(38, 2).value.formula), /J28\+.*K28\)\*1000/);
-  assert.match(String(tehAgain.getCell(37, 2).value.formula), /L27\+.*M27\)\*1000/);
+  assert.match(String(acaAgain.getCell(38, 2).value.formula), /ISNUMBER\([^)]*J28\).*ISNUMBER\([^)]*K28\).*\*1000/);
+  assert.match(String(tehAgain.getCell(37, 2).value.formula), /ISNUMBER\([^)]*L27\).*ISNUMBER\([^)]*M27\).*\*1000/);
   assert.equal(typeof acaAgain.getCell(41, 2).value, "object");
   assert.equal(typeof tehAgain.getCell(42, 2).value, "object");
 });
