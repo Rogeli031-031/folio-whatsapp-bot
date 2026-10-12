@@ -187,8 +187,8 @@ export default function IgfDiarioWeeklyExecutiveModal({
   }
 
   return (
-    <div data-executive-chart="fullscreen" className="fixed inset-0 z-[80] flex flex-col bg-slate-950 text-slate-100">
-      <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b border-sky-800 bg-slate-950 px-4 py-3">
+    <div data-executive-chart="fullscreen" className="fixed inset-0 z-[80] flex w-full flex-col bg-[#071422] text-slate-100">
+      <header className="sticky top-0 z-10 flex w-full flex-wrap items-center justify-between gap-3 border-b border-[#245074] bg-[#071422] px-4 py-3">
         <h2 className="text-lg font-semibold">{view.title}</h2>
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
@@ -227,11 +227,11 @@ export default function IgfDiarioWeeklyExecutiveModal({
           </button>
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-auto p-3">
-        {loading && <p className="text-sm text-slate-400">Cargando semanas…</p>}
-        {error && <p className="text-sm text-red-300">{error}</p>}
+      <div data-grid-scroll="1" className="min-h-0 w-full flex-1 overflow-auto">
+        {loading && <p className="px-4 py-3 text-sm text-slate-400">Cargando semanas…</p>}
+        {error && <p className="px-4 py-3 text-sm text-red-300">{error}</p>}
         {!loading && !error && (
-          <div className="min-w-[720px]" dangerouslySetInnerHTML={{ __html: svg }} />
+          <div className="w-full" dangerouslySetInnerHTML={{ __html: svg }} />
         )}
       </div>
     </div>
