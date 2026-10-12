@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchIgfDiarioSemanal, type IgfDiarioSemanalAllResponse } from "@/lib/api";
+import IgfDiarioWeeklyExecutiveModal from "@/components/IgfDiarioWeeklyExecutiveModal";
 import { WEEKLY_ROWS, coverageLines, fmtValue, tone, weekLabel } from "@/lib/igf-diario-weekly-rows";
 
 export default function IgfDiarioWeeklyAllPlantsPanel({
@@ -21,6 +22,7 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
   const [data, setData] = useState<IgfDiarioSemanalAllResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [executiveOpen, setExecutiveOpen] = useState(false);
 
   useEffect(() => {
     setAnchor((uploadDay || "").trim());
@@ -81,6 +83,13 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
           className="rounded bg-slate-700 px-3 py-1.5 text-sm text-white disabled:opacity-40"
         >
           Semana siguiente ▶
+        </button>
+        <button
+          type="button"
+          onClick={() => setExecutiveOpen(true)}
+          className="rounded bg-sky-700 px-3 py-1.5 text-sm font-semibold text-white"
+        >
+          Gráfica
         </button>
       </div>
       {loading && <p className="text-sm text-slate-400">Cargando semana…</p>}
@@ -147,6 +156,19 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
           </tbody>
         </table>
       </div>
+      {executiveOpen && (
+        <IgfDiarioWeeklyExecutiveModal
+          token={token}
+          year={year}
+          month={month}
+          todas
+          empresa="Todas"
+          uploadDay={uploadDay}
+          versionAsOfCorte={versionAsOfCorte}
+          weekAnchor={anchor}
+          onClose={() => setExecutiveOpen(false)}
+        />
+      )}
     </section>
   );
 }
