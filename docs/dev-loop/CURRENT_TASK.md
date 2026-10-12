@@ -1,31 +1,85 @@
-﻿task_id: G4-FIX-IGF-DIARIO-COMDESC-LAST-REAL-FALLBACK-078-R2
+﻿task_id: FIX-IGF-DIARIO-EXCEL-SUNDAY-SATURDAY-WEEKS-079
+
+title: "Alinear semanas de IGF Diario Excel a domingo-sábado"
+
 status: DONE_PENDING_REVIEW
-phase: G4_PR
+phase: IMPLEMENTATION
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez"
 
-base_sha: "d3a63cb96c4483a3caa3c85db5f5e6ee0fd4030c"
-branch: "fix/igf-diario-comdesc-last-real-fallback-078-r2"
+base_sha: "0f96e3ed54df4b57c4ccba620e51205a23b22f9a"
 
-product_sha: "eb03de9206508da33b7fcf3fc55d665508bdd37f"
-implementation_final_sha: "25d64b8e803bf97ac3ab6e0f8f83e859ac941e82"
+branch: "fix/igf-diario-excel-sunday-saturday-weeks-079"
 
-audit_078_r3:
-  outcome: A
-  regression: false
-  recommendation: SAFE_FOR_PR
-  documentation_sha: "7d76ae2b9e068a095be7fc552d03b87feb7fbc39"
+product_sha: "d8385a32e6930b47366002e325c02e4cb980166d"
 
-g4: PASS
-tests: "118/118"
+problem:
+  surface: "Excel exportado"
+  sheet: "IGF Diario {planta}"
+  example: "IGF Diario Morelos"
 
-authorized:
-  - G4 validation
-  - create PR
+  observed: >
+    La hoja RESUMEN agrupa correctamente la semana domingo-sábado,
+    pero la hoja IGF Diario no coloca sus cortes/resúmenes semanales
+    con el mismo calendario.
 
-not_authorized:
-  - merge
-  - deploy
+business_contract:
+  week_start: SUNDAY
+  week_end: SATURDAY
+
+  rule: >
+    Todos los agrupamientos semanales del IGF Diario deben usar
+    domingo-sábado, igual que RESUMEN.
+
+october_2026_expected_blocks:
+  - "01/10/2026–03/10/2026 (bloque parcial inicial)"
+  - "04/10/2026–10/10/2026"
+  - "11/10/2026–17/10/2026"
+  - "18/10/2026–24/10/2026"
+  - "25/10/2026–31/10/2026"
+
+critical_example:
+  plant: Morelos
+  expected:
+    "04/10": SUNDAY
+    "10/10": SATURDAY
+    "11/10": SUNDAY
+    "17/10": SATURDAY
+
+design_goal: >
+  Reutilizar la misma regla/helper semanal de RESUMEN cuando sea
+  técnicamente apropiado, evitando dos definiciones distintas de semana.
+
+protections:
+  - "No modificar cálculos financieros."
+  - "No modificar Venta."
+  - "No modificar Precio."
+  - "No modificar Costo/Flete."
+  - "No modificar HG."
+  - "No modificar Comisiones/Descuentos."
+  - "No modificar RESULTADO."
+  - "No modificar forecast."
+  - "No modificar cutoff."
+  - "No modificar 078-R2."
+  - "No DB writes."
+  - "No migrations."
+  - "No hardcode Morelos."
+  - "No hardcode octubre 2026."
+  - "Debe funcionar para cualquier planta/mes/año."
+
+required_surfaces:
+  - "IGF Diario por planta"
+  - "IGF Diario Provincia/Todas si comparte la misma estructura"
+  - "RESUMEN debe conservar comportamiento actual correcto"
+
+tests: "143/143"
+
+completion:
+  status: DONE_PENDING_REVIEW
+  push_branch_only: true
+  create_pr: false
+  merge: false
+  deploy: false
 
 report:
-  path: "docs/dev-loop/reports/G4-FIX-IGF-DIARIO-COMDESC-LAST-REAL-FALLBACK-078-R2.md"
+  path: "docs/dev-loop/reports/FIX-IGF-DIARIO-EXCEL-SUNDAY-SATURDAY-WEEKS-079.md"
