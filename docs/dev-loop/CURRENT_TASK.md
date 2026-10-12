@@ -1,29 +1,20 @@
-﻿task_id: IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-CHART-081
+﻿task_id: FIX-IGF-DIARIO-WEEKLY-EXECUTIVE-GRID-081-R1
 status: DONE_PENDING_REVIEW
 phase: IMPLEMENTATION
 
-base_sha: "dab88ce72ff37aa7396a068d1a18f595658dc16c"
-branch: "implementation/igf-diario-weekly-executive-chart-081"
-product_sha: "4687a316b9e457fde97de596a8eeeb4a4829a777"
+base_sha: "70acf3ca5ab123949a5557df3e53519e479ee018"
+branch: "fix/igf-diario-weekly-executive-grid-081-r1"
+product_sha: "beff940988798b7c6c7e27171fdadf70aea7e347"
 
 goal: >
-  Abrir un visor ejecutivo a pantalla completa desde el botón Gráfica
-  de IGF Diario semanal, para una planta y para TODAS, reutilizando
-  el contrato financiero ya publicado.
+  Corregir solo el layout de la gráfica ejecutiva semanal para que cada
+  semana tenga su mini-gráfica y el delta quede entre columnas.
 
 contract:
-  - "La tabla semanal y los cálculos existentes no cambian."
-  - "GASTO usa los siete componentes ponderados por la venta cubierta."
-  - "Descuento Compra permanece pendiente, sin serie inventada."
-  - "TODAS muestra el consolidado canónico, no una gráfica por planta."
-  - "Cerrar no cambia la semana seleccionada."
-
-protections:
-  - "No modificar 077, 078-R2, 079 ni 080."
-  - "No DB writes."
-  - "No migrations."
-  - "No modificar el Excel."
-  - "No hardcode de planta ni de semana."
+  - "No recalcula métricas ni cambia API, DB, Excel ni los contratos 077 a 081."
+  - "La semana sigue siendo domingo-sábado."
+  - "GASTO conserva los siete componentes."
+  - "Descuento Compra permanece Pendiente."
 
 completion:
   status: DONE_PENDING_REVIEW
@@ -32,5 +23,5 @@ completion:
   merge: false
   deploy: false
 
-tests: "081 8/8. Regresiones 077, 078-R2, 079, 080 y el panel 067: 31/31."
-result_report_path: docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-CHART-081.md
+tests: "081-R1 4/4. 081 y regresiones 077, 078-R2, 079, 080 y panel 067: 43/43."
+result_report_path: docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-EXECUTIVE-GRID-081-R1.md
