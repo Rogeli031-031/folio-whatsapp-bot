@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { fetchIgfDiarioSemanal, type IgfDiarioSemanalMetrics, type IgfDiarioSemanalResponse } from "@/lib/api";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
+import IgfDiarioWeeklyExecutiveModal from "@/components/IgfDiarioWeeklyExecutiveModal";
 import { WEEKLY_ROWS, coverageLines, dayHeader, fmtValue, tone, weekLabel } from "@/lib/igf-diario-weekly-rows";
 
 export default function IgfDiarioWeeklyPlantPanel({
@@ -30,6 +31,7 @@ export default function IgfDiarioWeeklyPlantPanel({
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<keyof IgfDiarioSemanalMetrics>("resultado_mxn");
   const [chartOpen, setChartOpen] = useState(false);
+  const [executiveOpen, setExecutiveOpen] = useState(false);
 
   useEffect(() => {
     setAnchor((uploadDay || "").trim());
@@ -100,7 +102,7 @@ export default function IgfDiarioWeeklyPlantPanel({
         </button>
         <button
           type="button"
-          onClick={() => setChartOpen(true)}
+          onClick={() => setExecutiveOpen(true)}
           className="rounded bg-sky-700 px-3 py-1.5 text-sm font-semibold text-white"
         >
           Gráfica
@@ -179,6 +181,19 @@ export default function IgfDiarioWeeklyPlantPanel({
           </tbody>
         </table>
       </div>
+      {executiveOpen && (
+        <IgfDiarioWeeklyExecutiveModal
+          token={token}
+          year={year}
+          month={month}
+          plantCode={plantCode}
+          empresa={data?.empresa || empresa}
+          uploadDay={uploadDay}
+          versionAsOfCorte={versionAsOfCorte}
+          weekAnchor={anchor}
+          onClose={() => setExecutiveOpen(false)}
+        />
+      )}
       {chartOpen && (
         <IgfDiarioGraficaModal
           token={token}
