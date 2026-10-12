@@ -297,7 +297,7 @@ test("la semana usa SUM(AF)/SUM(B) y no el promedio de AE", () => {
   const series = plantSeries(days, { corteYmd: "2026-10-01" });
   let weekRow = null;
   for (let row = 6; row < 20; row += 1) {
-    if (ws.getCell(row, 1).value === "Semana 1") weekRow = row;
+    if (ws.getCell(row, 1).value === "Semana 36") weekRow = row;
   }
   assert.ok(weekRow);
   const af = valueAt(wb, ws, weekRow, 32);

@@ -358,7 +358,7 @@ test("Excel diario usa el asignado entre B y la semana suma ese dinero", () => {
   assert.match(formulaOf(ws.getCell(row, 10)), /B\d+<>0/);
   assert.match(formulaOf(ws.getCell(laterRow, 10)), /40\.00\/B/);
   assert.equal(ws.getCell(inhabilRow, 10).value, 0);
-  const weekRow = rowByLabel(ws, "Semana 1");
+  const weekRow = rowByLabel(ws, "Semana 40");
   const weekMoney = dist.sumAssignedForWeek(built, weeks[0]).toFixed(2).replace(".", "\\.");
   const weekFormula = formulaOf(ws.getCell(weekRow, 10));
   assert.match(weekFormula, new RegExp(`${weekMoney}/B${weekRow}`));
@@ -379,7 +379,7 @@ test("Provincia semanal refleja las hojas y Todas conserva horarios propios", ()
     corteYmd: "2026-10-05",
   });
   const provincia = wb.getWorksheet("IGF Diario Provincia");
-  const week = rowByLabel(provincia, "Semana 1");
+  const week = rowByLabel(provincia, "Semana 40");
   const total = rowByLabel(provincia, "TOTAL MES");
   const weekJ = formulaOf(provincia.getCell(week, 10));
   assert.match(weekJ, /IGF Diario Queretaro/);

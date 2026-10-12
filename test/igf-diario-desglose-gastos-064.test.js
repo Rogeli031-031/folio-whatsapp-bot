@@ -374,7 +374,7 @@ test("semana usa dinero asignado y TOTAL MES divide el monto entre B", () => {
     presupuesto_nomina_gastos: 40, presupuesto_imss_sua: 10, extraordinarios: 5, provisiones_planta: 5,
   }, 2026, 10);
   const ws = fillPlant(2026, 10, { sheetLabel: "San Luis", humanName: "San Luis", desglose: view });
-  const week = rowByLabel(ws, "Semana 1");
+  const week = rowByLabel(ws, "Semana 40");
   const total = rowByLabel(ws, "TOTAL MES");
   const weekJ = formulaOf(ws.getCell(week, 10));
   const weekMoney = dist.sumAssignedForWeek(

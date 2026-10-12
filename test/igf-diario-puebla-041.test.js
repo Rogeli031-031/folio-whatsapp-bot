@@ -82,6 +82,6 @@ test("el amarillo condicional de F28 y G28 se guarda como fgColor", async () => 
   assert.match(rules, /G28/);
   assert.equal(re.getCell(3, 13).value, 1034293);
   assert.equal(re.getCell(3, 20).value, 2998518);
-  assert.equal(re.getCell(45, 1).value, "Semana 5");
+  assert.equal(re.getCell(45, 1).value, "Semana 40");
   assert.equal(re.getCell(47, 1).value, "TOTAL MES");
 });

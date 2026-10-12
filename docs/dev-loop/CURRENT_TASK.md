@@ -1,23 +1,17 @@
-﻿task_id: G4-FIX-IGF-DIARIO-COMDESC-LAST-REAL-FALLBACK-078-R2
+﻿task_id: G4-FIX-IGF-DIARIO-EXCEL-SUNDAY-SATURDAY-WEEKS-079
 status: DONE_PENDING_REVIEW
 phase: G4_PR
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez"
 
-base_sha: "d3a63cb96c4483a3caa3c85db5f5e6ee0fd4030c"
-branch: "fix/igf-diario-comdesc-last-real-fallback-078-r2"
+base_sha: "0f96e3ed54df4b57c4ccba620e51205a23b22f9a"
+branch: "fix/igf-diario-excel-sunday-saturday-weeks-079"
 
-product_sha: "eb03de9206508da33b7fcf3fc55d665508bdd37f"
-implementation_final_sha: "25d64b8e803bf97ac3ab6e0f8f83e859ac941e82"
-
-audit_078_r3:
-  outcome: A
-  regression: false
-  recommendation: SAFE_FOR_PR
-  documentation_sha: "7d76ae2b9e068a095be7fc552d03b87feb7fbc39"
+product_sha: "d8385a32e6930b47366002e325c02e4cb980166d"
+implementation_final_sha: "05a293a7099bab402ab14e5b36b3f8290848af95"
 
 g4: PASS
-tests: "118/118"
+tests: "143/143"
 
 authorized:
   - G4 validation
@@ -28,4 +22,4 @@ not_authorized:
   - deploy
 
 report:
-  path: "docs/dev-loop/reports/G4-FIX-IGF-DIARIO-COMDESC-LAST-REAL-FALLBACK-078-R2.md"
+  path: "docs/dev-loop/reports/G4-FIX-IGF-DIARIO-EXCEL-SUNDAY-SATURDAY-WEEKS-079.md"

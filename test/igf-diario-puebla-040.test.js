@@ -89,7 +89,7 @@ test("F28 prueba O27 antes que O6 y el amarillo es condicional", async () => {
   assert.equal(evalCarry(f, compras), 11.965423104349892);
   assert.equal(evalCarry(g, compras), 1.23);
   assert.ok(Math.abs(19.530989164349892 - 11.965423104349892 - 1.23 - 6.33556606) < 0.0000001);
-  const f20 = formulaOf(ws.getCell(29, 6));
+  const f20 = formulaOf(ws.getCell(31, 6));
   assert.equal(evalCarry(f20, compras), 11.965423104349892);
   compras.getCell(27, 15).value = { formula: "12", result: 12 };
   assert.equal(evalCarry(f, compras), 12);
@@ -98,8 +98,8 @@ test("F28 prueba O27 antes que O6 y el amarillo es condicional", async () => {
   assert.match(rules, /G28/);
   assert.doesNotMatch(formulaOf(ws.getCell(35, 6)), /!O27\b/);
   assert.doesNotMatch(formulaOf(ws.getCell(36, 6)), /!O6\b/);
-  assert.equal(ws.getCell(12, 1).fill.fgColor.argb, "FF000000");
-  assert.equal(ws.getCell(12, 2).fill.fgColor.argb, "FFF2F2F2");
+  assert.equal(ws.getCell(11, 1).fill.fgColor.argb, "FF000000");
+  assert.equal(ws.getCell(11, 2).fill.fgColor.argb, "FFF2F2F2");
   assert.equal(ws.getCell(47, 1).fill.fgColor.argb, "FF000000");
   assert.equal(ws.getCell(47, 2).fill.fgColor.argb, "FFF2F2F2");
   assert.equal(ws.getCell(3, 13).value, 1034293);
@@ -117,7 +117,7 @@ test("F28 prueba O27 antes que O6 y el amarillo es condicional", async () => {
   assert.equal(re.getCell(1, 15).font.size, 18);
   assert.equal(re.getCell(3, 13).font.size, 14);
   assert.equal(re.getCell(3, 13).alignment.horizontal, "center");
-  assert.equal(re.getCell(45, 1).value, "Semana 5");
+  assert.equal(re.getCell(45, 1).value, "Semana 40");
   assert.equal(re.getCell(47, 1).value, "TOTAL MES");
-  assert.equal(re.getCell(12, 3).numFmt, "#,##0.00;[Red]-#,##0.00");
+  assert.equal(re.getCell(11, 3).numFmt, "#,##0.00;[Red]-#,##0.00");
 });

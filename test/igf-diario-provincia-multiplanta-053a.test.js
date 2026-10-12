@@ -283,12 +283,12 @@ test("Provincia pondera venta, precio, costo, flete, corporativo, operativo, HG,
   assert.match(formulaOf(ws.getCell(3, 13)), /SUM\('IGF Diario Puebla'!M3,'IGF Diario Acapulco'!M3,'IGF Diario Tehuacán'!M3\)/);
   assert.match(formulaOf(ws.getCell(3, 20)), /SUM\('IGF Diario Puebla'!T3,'IGF Diario Acapulco'!T3,'IGF Diario Tehuacán'!T3\)/);
 
-  const sunday = formulaOf(ws.getCell(11, 13));
+  const sunday = formulaOf(ws.getCell(13, 13));
   assert.equal(sunday, "");
-  assert.match(formulaOf(ws.getCell(11, 15)), /H11/);
-  assert.doesNotMatch(formulaOf(ws.getCell(11, 15)), /H11-M11/);
+  assert.match(formulaOf(ws.getCell(13, 15)), /H13/);
+  assert.doesNotMatch(formulaOf(ws.getCell(13, 15)), /H13-M13/);
 
-  const semana = formulaOf(ws.getCell(12, 3));
+  const semana = formulaOf(ws.getCell(11, 3));
   assert.match(semana, /C6\*B6/);
   assert.match(semana, /C7\*B7/);
   assert.doesNotMatch(semana, /IGF Diario Puebla/);
