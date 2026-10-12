@@ -133,9 +133,9 @@ test("la hoja queda primera y liga cada fecha, incluido el 6 y el día posterior
   assert.match(formulaOf(ws.getCell(r23, 3)), /PRECIO!B24/);
   assert.doesNotMatch(formulaOf(ws.getCell(r23, 3)), /,0\)/);
   assert.equal(ws.getCell(r6, 1).numFmt, "dd/mm/yyyy");
-  assert.equal(ws.getCell(r1 + 6, 1).value, "Semana 1");
-  assert.match(formulaOf(ws.getCell(r1 + 6, 2)), /SUM\(B6:B11\)/);
-  assert.match(formulaOf(ws.getCell(r1 + 6, 4)), /SUM\(D6:D11\)/);
+  assert.equal(ws.getCell(r1 + 5, 1).value, "Semana 36");
+  assert.match(formulaOf(ws.getCell(r1 + 5, 2)), /SUM\(B6:B10\)/);
+  assert.match(formulaOf(ws.getCell(r1 + 5, 4)), /SUM\(D6:D10\)/);
   assert.equal(ws.getCell(r30, 1).value.getUTCDate(), 30);
   const total = ws.getCell(ws.rowCount, 1).value;
   assert.equal(total, "TOTAL MES");

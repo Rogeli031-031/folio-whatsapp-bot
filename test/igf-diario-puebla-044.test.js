@@ -73,8 +73,8 @@ test("una fórmula compartida con result se arrastra y el XLSX reabierto conserv
   assert.equal(yellow(ws.getCell(28, 7)), "FFFFFF00");
   assert.notEqual(yellow(ws.getCell(27, 6)), "FFFFFF00");
   assert.notEqual(yellow(ws.getCell(26, 6)), "FFFFFF00");
-  assert.equal(yellow(ws.getCell(29, 6)), "FFFFFF00");
-  assert.notEqual(yellow(ws.getCell(29, 7)), "FFFFFF00");
+  assert.equal(yellow(ws.getCell(31, 6)), "FFFFFF00");
+  assert.notEqual(yellow(ws.getCell(31, 7)), "FFFFFF00");
   assert.notEqual(yellow(ws.getCell(35, 6)), "FFFFFF00");
   const file = path.join(os.tmpdir(), "igf-044-shared.xlsx");
   await wb.xlsx.writeFile(file);

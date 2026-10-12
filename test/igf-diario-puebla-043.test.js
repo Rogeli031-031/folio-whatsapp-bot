@@ -66,8 +66,8 @@ test("el 19 queda amarillo al exportar y una fórmula sin resultado no oculta un
   assert.equal(yellow(ws.getCell(28, 7)), "FFFFFF00");
   assert.notEqual(yellow(ws.getCell(27, 6)), "FFFFFF00");
   assert.notEqual(yellow(ws.getCell(27, 7)), "FFFFFF00");
-  assert.equal(yellow(ws.getCell(29, 6)), "FFFFFF00");
-  assert.notEqual(yellow(ws.getCell(29, 7)), "FFFFFF00");
+  assert.equal(yellow(ws.getCell(31, 6)), "FFFFFF00");
+  assert.notEqual(yellow(ws.getCell(31, 7)), "FFFFFF00");
   assert.notEqual(yellow(ws.getCell(35, 6)), "FFFFFF00");
   assert.notEqual(yellow(ws.getCell(35, 7)), "FFFFFF00");
   assert.notEqual(yellow(ws.getCell(36, 6)), "FFFFFF00");
@@ -80,7 +80,7 @@ test("el 19 queda amarillo al exportar y una fórmula sin resultado no oculta un
   assert.equal(yellow(re.getCell(28, 6)), "FFFFFF00");
   assert.equal(yellow(re.getCell(28, 7)), "FFFFFF00");
   assert.notEqual(yellow(re.getCell(27, 6)), "FFFFFF00");
-  assert.equal(re.getCell(45, 1).value, "Semana 5");
+  assert.equal(re.getCell(45, 1).value, "Semana 40");
   assert.equal(re.getCell(47, 1).value, "TOTAL MES");
   assert.equal(re.getColumn(34).hidden, false);
   assert.equal(re.getColumn(35).hidden, false);

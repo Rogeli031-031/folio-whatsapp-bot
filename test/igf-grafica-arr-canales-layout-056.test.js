@@ -69,12 +69,12 @@ test("semanas se alinean por fecha y una semana parcial no ocupa días ajenos", 
   assert.equal(new Date("2026-09-01T12:00:00Z").getUTCDay(), 2);
   const first = weekGridSpan(september, weeks[0]);
   assert.equal(weeks[0].fecha_desde, "2026-09-01");
-  assert.equal(weeks[0].fecha_hasta, "2026-09-06");
+  assert.equal(weeks[0].fecha_hasta, "2026-09-05");
   assert.equal(first.gridColumnStart, 1);
-  assert.equal(first.gridColumnEnd, 7);
+  assert.equal(first.gridColumnEnd, 6);
   const last = weeks[weeks.length - 1];
   const lastSpan = weekGridSpan(september, last);
-  assert.equal(last.fecha_desde, "2026-09-28");
+  assert.equal(last.fecha_desde, "2026-09-27");
   assert.equal(last.fecha_hasta, "2026-09-30");
   assert.equal(lastSpan.gridColumnEnd - lastSpan.gridColumnStart, last.length);
   assert.ok(last.length < 7);
@@ -83,8 +83,8 @@ test("semanas se alinean por fecha y una semana parcial no ocupa días ajenos", 
   assert.equal(new Date("2026-04-01T12:00:00Z").getUTCDay(), 3);
   const aprilFirst = weekGridSpan(april, aprilWeeks[0]);
   assert.equal(aprilWeeks[0].fecha_desde, "2026-04-01");
-  assert.equal(aprilWeeks[0].fecha_hasta, "2026-04-05");
-  assert.equal(aprilFirst.gridColumnEnd - aprilFirst.gridColumnStart, 5);
+  assert.equal(aprilWeeks[0].fecha_hasta, "2026-04-04");
+  assert.equal(aprilFirst.gridColumnEnd - aprilFirst.gridColumnStart, 4);
 });
 
 test("el cierre queda fuera del grid y conserva los campos 055", () => {

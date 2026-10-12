@@ -279,9 +279,9 @@ test("semana y TOTAL MES quedan vacíos si un día con venta tiene la métrica v
   }
   assert.ok(totalRow);
   for (const col of [3, 4, 6, 7, 13, 20, 29]) {
-    blank(valueAt(wb, ws, 12, col), `semana col ${col}`);
+    blank(valueAt(wb, ws, 11, col), `semana col ${col}`);
     blank(valueAt(wb, ws, totalRow, col), `total col ${col}`);
-    assert.match(formulaOf(ws.getCell(12, col)), /B6>0/);
+    assert.match(formulaOf(ws.getCell(11, col)), /B6>0/);
     assert.match(formulaOf(ws.getCell(totalRow, col)), /B6>0/);
   }
   const raw = await wb.xlsx.writeBuffer();
@@ -289,8 +289,8 @@ test("semana y TOTAL MES quedan vacíos si un día con venta tiene la métrica v
   await again.xlsx.load(raw);
   const re = again.getWorksheet("IGF Diario Provincia");
   blank(evalFormula(again, re, formulaOf(re.getCell(6, 6))), "costo reabierto");
-  blank(evalFormula(again, re, formulaOf(re.getCell(12, 6))), "semana reabierta");
-  assert.match(LIB, /writeWeek\(ws, r, index \+ 1, includedEnd == null \? null : start, includedEnd, index === 0\);/);
+  blank(evalFormula(again, re, formulaOf(re.getCell(11, 6))), "semana reabierta");
+  assert.match(LIB, /writeWeek\(ws, r, resumenWeekNumber\(week\[0\]\.fecha\), includedEnd == null \? null : start, includedEnd, index === 0\);/);
   assert.match(LIB, /writeTotal\(ws, r, dayRows, weekRows\);/);
   assert.match(LIB, /strictCoverage: true/);
 });

@@ -482,7 +482,7 @@ test("semana real, semana mixta y tendencia con índices reales", async () => {
   assert.equal(mixed.series.weeks[0].estado, "mixto");
   let weekRow = null;
   for (let row = 6; row < 80; row += 1) {
-    if (mixed.ws.getCell(row, 1).value === "Semana 1") weekRow = row;
+    if (mixed.ws.getCell(row, 1).value === "Semana 36") weekRow = row;
   }
   assert.ok(weekRow);
   close(mixed.series.weeks[0].resultado_mxn, valueAt(mixed.wb, mixed.ws, weekRow, 32), "AF semana mixta");
@@ -492,7 +492,7 @@ test("semana real, semana mixta y tendencia con índices reales", async () => {
   assert.equal(realWeek.series.weeks[0].estado, "real");
   weekRow = null;
   for (let row = 6; row < 80; row += 1) {
-    if (realWeek.ws.getCell(row, 1).value === "Semana 1") weekRow = row;
+    if (realWeek.ws.getCell(row, 1).value === "Semana 36") weekRow = row;
   }
   close(realWeek.series.weeks[0].resultado_mxn, valueAt(realWeek.wb, realWeek.ws, weekRow, 32), "AF semana real");
   close(realWeek.series.weeks[0].resultado_per_kg, valueAt(realWeek.wb, realWeek.ws, weekRow, 31), "AE semana real");
