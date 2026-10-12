@@ -81,7 +81,7 @@ function blocks(svg, attr) {
 test("cada semana tiene su mini-gráfica y el eje es domingo-sábado", () => {
   const svg = chart.renderExecutiveSvg(viewOf("plant", "San Luis", ["a", "b", "c"]));
   const charts = blocks(svg, 'data-week-chart="');
-  assert.equal(charts.length, 12 * 3);
+  assert.equal(charts.length, 13 * 3);
   const precio = charts.filter((block) => block.startsWith("42") || block.startsWith("43") || block.startsWith("44"));
   assert.ok(precio.length >= 3);
   const one = charts.find((block) => block.startsWith("42"));
@@ -103,7 +103,7 @@ test("el delta queda entre semanas y la primera no tiene delta anterior", () => 
   assert.equal((header.match(/Δ vs\. S42/g) || []).length, 1);
   assert.equal((header.match(/Δ vs\. S43/g) || []).length, 1);
   assert.equal((header.match(/Δ vs\. S41/g) || []).length, 0);
-  const precio = svg.slice(svg.indexOf('data-indicator="precio"'), svg.indexOf('data-indicator="gasto"'));
+  const precio = svg.slice(svg.indexOf('data-indicator="precio"'), svg.indexOf('data-indicator="costo"'));
   const weekX = [...precio.matchAll(/data-week-chart="(\d+)" data-x="([^"]+)"/g)];
   const deltaX = [...precio.matchAll(/data-delta-column="(\d+)" data-vs-week="(\d+)" data-x="([^"]+)"/g)];
   assert.equal(deltaX.length, 2);
@@ -129,7 +129,7 @@ test("tres semanas ocupan el ancho y más semanas crecen para el scroll", () => 
 
 test("HG más negativo es verde y menos negativo es rojo sin invertir a los demás", () => {
   const hg = chart.INDICATORS.find((item) => item.id === "hg");
-  const gasto = chart.INDICATORS.find((item) => item.id === "gasto");
+  const gasto = chart.INDICATORS.find((item) => item.id === "gasto_corporativo");
   const resultado = chart.INDICATORS.find((item) => item.id === "resultado");
   const cd = chart.INDICATORS.find((item) => item.id === "com_desc");
   const moreNegative = chart.deltaOf(-100000, -50000);
@@ -182,7 +182,7 @@ test("el layout no cambia el contrato de GASTO, Pendiente, planta, TODAS ni el P
   assert.match(plant, /IGF Diario semanal · San Luis/);
   assert.match(todas, /IGF Diario semanal · Todas/);
   assert.match(plant, /data-indicator="descuento_compra"[\s\S]*Pendiente/);
-  assert.doesNotMatch(plant.slice(plant.indexOf('data-indicator="descuento_compra"'), plant.indexOf('data-indicator="venta_casa"')), /<polyline/);
+  assert.doesNotMatch(plant.slice(plant.indexOf('data-indicator="descuento_compra"'), plant.indexOf('data-indicator="hg"')), /<polyline/);
   assert.match(MODAL, /image\/png/);
   assert.match(MODAL, /toBlob/);
   assert.match(chart.downloadName({ title: "IGF Diario semanal · San Luis" }), /\.png$/);

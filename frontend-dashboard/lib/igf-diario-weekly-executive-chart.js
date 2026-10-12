@@ -11,19 +11,28 @@ const GASTO_COMPONENTS = [
 ];
 const EXCLUDED_FROM_GASTO = ["costo_kg", "flete_kg", "hg_mxn", "hg_kg"];
 
+const FRAMES = [
+  { id: "resultado", title: "RESULTADO" },
+  { id: "gastos", title: "GASTOS" },
+  { id: "margen", title: "MARGEN / PRECIO / COSTOS" },
+  { id: "hg", title: "HG / VOLUMEN" },
+  { id: "canal", title: "VENTAS POR CANAL" },
+];
+
 const INDICATORS = [
-  { id: "precio", group: "RENTABILIDAD", label: "Precio de Venta al Público", unit: "$/kg", weeklyKey: "precio_kg", dailyKey: "precio_kg", sense: "up" },
-  { id: "gasto", group: "GASTO", label: "GASTO", unit: "$/kg", sense: "down", gasto: true },
-  { id: "margen", group: "MARGEN BRUTO", label: "Margen Bruto", unit: "$/kg", weeklyKey: "margen_kg", dailyKey: "margen_kg", sense: "up" },
-  { id: "com_desc", group: "COMISIONES Y DESCUENTOS", label: "Comisiones y Descuentos", unit: "$/kg", weeklyKey: "com_desc_kg", dailyKey: "com_desc_kg", sense: "up" },
-  { id: "hg", group: "HG ($)", label: "HG", unit: "$", weeklyKey: "hg_mxn", dailyKey: "hg_mxn", sense: "down" },
-  { id: "kilos", group: "KILOS / VENTA", label: "Kilos / Venta", unit: "kg", weeklyKey: "venta_kg", dailyKey: "venta_kg", sense: "up" },
-  { id: "costo", group: "COSTO DEL GAS LP", label: "Costo del Gas LP", unit: "$/kg", weeklyKey: "costo_kg", dailyKey: "costo_kg", sense: "down" },
-  { id: "flete", group: "FLETE TERRESTRE", label: "Flete Terrestre", unit: "$/kg", weeklyKey: "flete_kg", dailyKey: "flete_kg", sense: "down" },
-  { id: "descuento_compra", group: "DESCUENTO COMPRA", label: "Descuento Compra", unit: "$/kg", pending: true },
-  { id: "venta_casa", group: "VENTA CASA", label: "Venta Casa", unit: "kg", channel: "venta_casa_kg", sense: "up" },
-  { id: "venta_comisionista", group: "VENTA COMISIONISTA", label: "Venta Comisionista", unit: "kg", channel: "venta_comisionista_kg", sense: "up" },
-  { id: "resultado", group: "RESULTADO", label: "Resultado", unit: "$", weeklyKey: "resultado_mxn", dailyKey: "resultado_mxn", sense: "up" },
+  { id: "resultado", frame: "resultado", label: "RESULTADO", tip: "Resultado", unit: "$", weeklyKey: "resultado_mxn", dailyKey: "resultado_mxn", sense: "up" },
+  { id: "gasto_corporativo", frame: "gastos", label: "GASTO CORPORATIVO", tip: "Gasto Corporativo", unit: "$", money: "gasto_corporativo_mxn", sense: "down" },
+  { id: "gasto_operativo", frame: "gastos", label: "GASTO OPERATIVO", tip: "Gasto Operativo", unit: "$", money: "gasto_operativo_mxn", sense: "down" },
+  { id: "margen", frame: "margen", label: "MARGEN BRUTO", tip: "Margen Bruto", unit: "$/kg", weeklyKey: "margen_kg", dailyKey: "margen_kg", sense: "up" },
+  { id: "com_desc", frame: "margen", label: "COMISIONES Y DESCUENTOS", tip: "Comisiones y Descuentos", unit: "$/kg", weeklyKey: "com_desc_kg", dailyKey: "com_desc_kg", sense: "up" },
+  { id: "precio", frame: "margen", label: "PRECIO DE VENTA AL PÚBLICO", tip: "Precio de Venta al Público", unit: "$/kg", weeklyKey: "precio_kg", dailyKey: "precio_kg", sense: "up" },
+  { id: "costo", frame: "margen", label: "COSTO GAS LP", tip: "Costo Gas LP", unit: "$/kg", weeklyKey: "costo_kg", dailyKey: "costo_kg", sense: "down" },
+  { id: "flete", frame: "margen", label: "FLETE", tip: "Flete", unit: "$/kg", weeklyKey: "flete_kg", dailyKey: "flete_kg", sense: "down" },
+  { id: "descuento_compra", frame: "margen", label: "DESCUENTO COMPRA", tip: "Descuento Compra", unit: "$/kg", pending: true },
+  { id: "hg", frame: "hg", label: "HG", tip: "HG", unit: "$", weeklyKey: "hg_mxn", dailyKey: "hg_mxn", sense: "down" },
+  { id: "kilos", frame: "hg", label: "KILOS", tip: "Kilos", unit: "kg", weeklyKey: "venta_kg", dailyKey: "venta_kg", sense: "up" },
+  { id: "venta_casa", frame: "canal", label: "VENTA CASA", tip: "Venta Casa", unit: "kg", channel: "venta_casa_kg", sense: "up" },
+  { id: "venta_comisionista", frame: "canal", label: "VENTA COMISIONISTA", tip: "Venta Comisionista", unit: "kg", channel: "venta_comisionista_kg", sense: "up" },
 ];
 
 function finite(value) {
@@ -92,17 +101,27 @@ function channelTotal(days, key) {
 function weeklyValue(week, indicator) {
   if (indicator.pending) return null;
   if (indicator.gasto) return weeklyGastoKg(week.days);
+  if (indicator.money) return channelTotal(week.days, indicator.money);
   if (indicator.channel) return channelTotal(week.days, indicator.channel);
   return finite(week.metrics && week.metrics[indicator.weeklyKey]);
+}
+
+function pointValue(point) {
+  if (point == null) return null;
+  if (typeof point === "object") return finite(point.value);
+  return finite(point);
 }
 
 function dailyPoints(week, indicator) {
   const days = [...(week.days || [])].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
   return days.map((day) => {
-    if (indicator.pending) return null;
-    if (indicator.gasto) return dayGastoRate(day.metrics);
-    if (indicator.channel) return finite(day[indicator.channel]);
-    return finite(day.metrics && day.metrics[indicator.dailyKey]);
+    const fecha = day && day.fecha ? String(day.fecha).slice(0, 10) : "";
+    let value = null;
+    if (!indicator.pending && indicator.gasto) value = dayGastoRate(day.metrics);
+    else if (!indicator.pending && indicator.money) value = finite(day[indicator.money]);
+    else if (!indicator.pending && indicator.channel) value = finite(day[indicator.channel]);
+    else if (!indicator.pending) value = finite(day.metrics && day.metrics[indicator.dailyKey]);
+    return { fecha, value };
   });
 }
 
@@ -132,6 +151,25 @@ function formatDelta(delta, unit) {
   if (delta > 0) return `+${body}`;
   if (delta < 0) return `-${body}`;
   return formatNumber(0, unit);
+}
+
+function formatShown(value, unit) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  if (unit === "kg") {
+    return `${value.toLocaleString("es-MX", { maximumFractionDigits: 0 })} kg`;
+  }
+  const body = Math.abs(value).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const signed = value < 0 ? `-$${body}` : `$${body}`;
+  return unit === "$/kg" ? `${signed}/kg` : signed;
+}
+
+function formatFecha(fecha) {
+  const match = String(fecha || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+}
+
+function tooltipLines(fecha, label, value, unit) {
+  return [formatFecha(fecha), label, formatShown(value, unit)];
 }
 
 function formatPercent(value) {
@@ -171,14 +209,15 @@ function buildExecutiveView(input) {
         coverage_note: week.coverage_note || null,
       };
     });
-    const samples = columns.flatMap((column) => column.points).filter((point) => point != null && Number.isFinite(point));
+    const samples = columns.flatMap((column) => column.points).map(pointValue).filter((point) => point != null);
     const scale = samples.length
       ? { min: Math.min(...samples), max: Math.max(...samples) }
       : null;
     return {
       id: indicator.id,
-      group: indicator.group,
+      frame: indicator.frame,
       label: indicator.label,
+      tip: indicator.tip || indicator.label,
       unit: indicator.unit,
       pending: Boolean(indicator.pending),
       scale,
@@ -217,7 +256,8 @@ function toneColor(tone) {
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const LINE_COLOR = {
   precio: "#f59e0b",
-  gasto: "#60a5fa",
+  gasto_corporativo: "#60a5fa",
+  gasto_operativo: "#93c5fd",
   margen: "#cbd5e1",
   com_desc: "#fbbf24",
   hg: "#f87171",
@@ -228,7 +268,7 @@ const LINE_COLOR = {
   venta_comisionista: "#a78bfa",
   resultado: "#fb7185",
 };
-const LABEL_W = 210;
+const LABEL_W = 268;
 const DELTA_W = 118;
 const MIN_CHART_W = 300;
 const FULL_W = 1680;
@@ -258,11 +298,28 @@ function renderExecutiveSvg(view, options) {
   const indicators = (view && view.indicators) || [];
   const width = gridWidth(weeks.length);
   const chartW = weeks.length ? chartWidth(weeks.length, width) : MIN_CHART_W;
-  const height = TITLE_H + HEADER_H + indicators.length * ROW_H + 8;
+  const FRAME_H = 28;
+  const FRAME_GAP = 12;
+  const frames = FRAMES.map((frame) => ({
+    ...frame,
+    rows: indicators.filter((item) => item.frame === frame.id),
+  })).filter((frame) => frame.rows.length);
+  let cursor = TITLE_H + HEADER_H;
+  const placed = frames.map((frame) => {
+    const y = cursor;
+    const frameHeight = FRAME_H + frame.rows.length * ROW_H;
+    const rows = frame.rows.map((indicator, index) => ({
+      indicator,
+      y: y + FRAME_H + index * ROW_H,
+    }));
+    cursor += frameHeight + FRAME_GAP;
+    return { ...frame, y, height: frameHeight, rows };
+  });
+  const height = Math.max(cursor + 8, TITLE_H + HEADER_H + 8);
   const stamp = options && options.exportedAt ? `Exportado ${options.exportedAt}` : "";
   const font = "Segoe UI, sans-serif";
   const parts = [];
-  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-executive-chart="svg" data-layout="week-grid" data-week-count="${weeks.length}" data-full-width="${weeks.length > 0 && weeks.length <= 3 ? "1" : "0"}">`);
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-executive-chart="svg" data-layout="week-grid" data-week-count="${weeks.length}" data-frame-count="${placed.length}" data-full-width="${weeks.length > 0 && weeks.length <= 3 ? "1" : "0"}">`);
   parts.push(`<rect width="${width}" height="${height}" fill="#071422"/>`);
   parts.push(`<text x="16" y="26" fill="#f8fafc" font-family="${font}" font-size="18" font-weight="700">${escapeXml(view && view.title)}${stamp ? ` · ${escapeXml(stamp)}` : ""}</text>`);
   const headerY = TITLE_H;
@@ -282,17 +339,20 @@ function renderExecutiveSvg(view, options) {
       parts.push("</g>");
     }
   });
-  indicators.forEach((indicator, rowIndex) => {
-    const y = headerY + HEADER_H + rowIndex * ROW_H;
+  placed.forEach((frame) => {
+    const frameRight = 6 + LABEL_W + weeks.length * chartW + Math.max(0, weeks.length - 1) * DELTA_W;
+    parts.push(`<g data-frame="${frame.id}" data-frame-title="${escapeXml(frame.title)}" data-frame-rows="${frame.rows.map((row) => row.indicator.id).join(",")}">`);
+    parts.push(`<rect x="4" y="${frame.y}" width="${Math.max(frameRight - 4, LABEL_W)}" height="${frame.height}" rx="8" fill="none" stroke="#60a5fa" stroke-width="2"/>`);
+    parts.push(`<text x="16" y="${frame.y + 18}" fill="#93c5fd" font-family="${font}" font-size="12" font-weight="700">${escapeXml(frame.title)}</text>`);
+    frame.rows.forEach((row, rowIndex) => {
+    const indicator = row.indicator;
+    const y = row.y;
     const fill = rowIndex % 2 === 0 ? "#0c1e33" : "#10283f";
     const color = LINE_COLOR[indicator.id] || "#7dd3fc";
     parts.push(`<g data-indicator="${indicator.id}" data-scale="${indicator.scale ? `${indicator.scale.min},${indicator.scale.max}` : "none"}">`);
     parts.push(`<rect x="6" y="${y}" width="${LABEL_W}" height="${ROW_H}" fill="${fill}" stroke="#245074"/>`);
-    parts.push(`<text x="16" y="${y + 28}" fill="#f8fafc" font-family="${font}" font-size="13" font-weight="700">${escapeXml(indicator.group)}</text>`);
-    if (indicator.label && indicator.label !== indicator.group) {
-      parts.push(`<text x="16" y="${y + 48}" fill="#cbd5e1" font-family="${font}" font-size="11">${escapeXml(indicator.label)}</text>`);
-    }
-    parts.push(`<text x="16" y="${y + 68}" fill="#93c5fd" font-family="${font}" font-size="11">(${escapeXml(indicator.unit)})</text>`);
+    parts.push(`<text x="16" y="${y + 36}" fill="#f8fafc" font-family="${font}" font-size="12" font-weight="700">${escapeXml(indicator.label)}</text>`);
+    parts.push(`<text x="16" y="${y + 56}" fill="#93c5fd" font-family="${font}" font-size="11">(${escapeXml(indicator.unit)})</text>`);
     indicator.columns.forEach((column, index) => {
       const x = columnX(index, chartW);
       parts.push(`<g data-week-chart="${column.week_number}" data-x="${x}" data-w="${chartW}">`);
@@ -324,14 +384,33 @@ function renderExecutiveSvg(view, options) {
           }
         };
         column.points.forEach((point, pointIndex) => {
+          const amount = pointValue(point);
           const px = plotX + (pointIndex * plotW) / 6;
-          if (point == null || !Number.isFinite(point)) {
+          if (amount == null) {
             flush();
             return;
           }
-          const py = yOf(point);
+          const py = yOf(amount);
           segment.push(`${px},${py}`);
-          parts.push(`<circle cx="${px}" cy="${py}" r="2.4" fill="${color}"/>`);
+          const fecha = point && point.fecha ? point.fecha : "";
+          const lines = tooltipLines(fecha, indicator.tip, amount, indicator.unit);
+          const hover = options && options.tooltip
+            && options.tooltip.indicatorId === indicator.id
+            && Number(options.tooltip.weekNumber) === Number(column.week_number)
+            && options.tooltip.fecha === fecha;
+          parts.push(`<circle cx="${px}" cy="${py}" r="2.4" fill="${color}" data-point="1" data-week="${column.week_number}" data-fecha="${escapeXml(fecha)}" data-fecha-label="${escapeXml(lines[0])}" data-label="${escapeXml(indicator.tip)}" data-value="${amount}" data-unit="${escapeXml(indicator.unit)}" data-shown="${escapeXml(lines[2])}"><title>${escapeXml(lines.join("\n"))}</title></circle>`);
+          if (hover) {
+            const boxW = 210;
+            const boxH = 54;
+            const bx = Math.min(px + 8, width - boxW - 8);
+            const by = Math.max(8, py - boxH - 8);
+            parts.push(`<g data-tooltip="open" data-tooltip-week="${column.week_number}" data-tooltip-indicator="${indicator.id}">`);
+            parts.push(`<rect x="${bx}" y="${by}" width="${boxW}" height="${boxH}" rx="6" fill="#0b1c30" stroke="#60a5fa"/>`);
+            lines.forEach((line, lineIndex) => {
+              parts.push(`<text x="${bx + 10}" y="${by + 16 + lineIndex * 14}" fill="#f8fafc" font-family="${font}" font-size="11">${escapeXml(line)}</text>`);
+            });
+            parts.push("</g>");
+          }
         });
         flush();
         DAY_LABELS.forEach((label, dayIndex) => {
@@ -357,6 +436,8 @@ function renderExecutiveSvg(view, options) {
       }
     });
     parts.push("</g>");
+    });
+    parts.push("</g>");
   });
   parts.push("</svg>");
   return parts.join("");
@@ -375,7 +456,10 @@ function downloadName(view) {
 module.exports = {
   GASTO_COMPONENTS,
   EXCLUDED_FROM_GASTO,
+  FRAMES,
   INDICATORS,
+  formatShown,
+  tooltipLines,
   defaultSelectedIds,
   selectedWeeks,
   dayGastoRate,
