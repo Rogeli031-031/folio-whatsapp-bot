@@ -1,40 +1,46 @@
-﻿task_id: "G4-PREP-IMPL-IGF-DIARIO-WEEKLY-FINANCIAL-COVERAGE-077"
-
-title: "Auditar IMPL 077 y preparar el Pull Request hacia main"
-
-status: "DONE_PENDING_REVIEW"
-
-phase: "G4_PREP"
+﻿task_id: AUDIT-IGF-DIARIO-1010-RESULTADO-DELTA-078-R3
+title: "Auditar cambio de RESULTADO (Importe) San Luis 10/10"
+status: DONE_PENDING_REVIEW
+phase: AUDIT_READ_ONLY
 
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Álvarez"
 
-base_sha: "f6dbbe76021ce52f8f2559836239a95f415c2615"
+main_sha: "d3a63cb96c4483a3caa3c85db5f5e6ee0fd4030c"
 
-branch: "implementation/igf-diario-weekly-financial-coverage-077"
+candidate_branch: "fix/igf-diario-comdesc-last-real-fallback-078-r2"
+candidate_product_sha: "eb03de9206508da33b7fcf3fc55d665508bdd37f"
+candidate_final_sha: "25d64b8e803bf97ac3ab6e0f8f83e859ac941e82"
 
-product_sha: "cc5ef7975977936e835f8a13375ade170e45d496"
+case:
+  plant: "San Luis"
+  date: "2026-10-10"
+  cutoff: "2026-10-09"
 
-implementation_final_sha: "96c1fb46eb8508ec27ae3302aa9b93d7fba12fef"
+outcome: A
+regression: NO
+last_real_fallback_on_1010: NOT_EXECUTED
+recommendation: SAFE_FOR_PR
 
-decision: "B"
+known:
+  validation_077_resultado_mxn: -12529.461765140528
+  current_both_shas_resultado_mxn: -29997.146805829616
+  intermediate_after_hg_insert_resultado_mxn: -30568.656805829625
+  venta_kg: 29730
+  com_desc_kg: -4.3
+  first_difference: HG
+  hg_cause: "arr.compras_hg San Luis 2026-10-10 creado 2026-10-12T14:22:29.556Z con hg_kilos -382"
 
 objective: >
-  Auditar IMPL 077 y, únicamente después de G4 PASS, crear el Pull
-  Request hacia main. No merge. No deploy.
+  Determinar si -30,568.656805829625 ya lo produce main con los datos
+  actuales, o si el cambio fue introducido por 078-R2.
 
-g4: "PASS"
+restrictions:
+  - READ ONLY
+  - NO PRODUCT CHANGE
+  - NO DB WRITE
+  - NO PR
+  - NO MERGE
+  - NO DEPLOY
 
-report: "docs/dev-loop/reports/G4-PREP-IMPL-IGF-DIARIO-WEEKLY-FINANCIAL-COVERAGE-077.md"
-
-tests: >
-  107/107 en 054-R2, 054-R3, 067, 069, 069-R1, 069-R2, 070, 070-R1,
-  072, 074 y 077. node --check server.js correcto. git diff --check
-  limpio. npm run build del frontend terminó con código 0.
-
-protections:
-  - "sin merge"
-  - "sin deploy"
-  - "sin auto-merge"
-  - "el día incompleto permanece null"
-  - "sin imputar kilos desconocidos"
-  - "sin modificar producto ni tests en G4"
+report:
+  path: "docs/dev-loop/reports/AUDIT-IGF-DIARIO-1010-RESULTADO-DELTA-078-R3.md"
