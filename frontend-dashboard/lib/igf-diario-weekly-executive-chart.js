@@ -108,6 +108,7 @@ function dailyPoints(week, indicator) {
 
 function deltaTone(indicator, delta) {
   if (delta == null || !Number.isFinite(delta) || delta === 0) return "neutral";
+  if (indicator && indicator.id === "hg") return delta < 0 ? "good" : "bad";
   if (indicator.sense === "down") return delta < 0 ? "good" : "bad";
   return delta > 0 ? "good" : "bad";
 }
@@ -213,66 +214,146 @@ function toneColor(tone) {
   return "#94a3b8";
 }
 
-function lineColor(index) {
-  return ["#e0f2fe", "#7dd3fc", "#38bdf8", "#0ea5e9", "#0284c7"][index % 5];
+const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const LINE_COLOR = {
+  precio: "#f59e0b",
+  gasto: "#60a5fa",
+  margen: "#cbd5e1",
+  com_desc: "#fbbf24",
+  hg: "#f87171",
+  kilos: "#c084fc",
+  costo: "#38bdf8",
+  flete: "#22d3ee",
+  venta_casa: "#3b82f6",
+  venta_comisionista: "#a78bfa",
+  resultado: "#fb7185",
+};
+const LABEL_W = 210;
+const DELTA_W = 118;
+const MIN_CHART_W = 300;
+const FULL_W = 1680;
+const ROW_H = 132;
+const HEADER_H = 54;
+const TITLE_H = 40;
+
+function gridWidth(weekCount) {
+  const count = Math.max(0, weekCount || 0);
+  const min = 12 + LABEL_W + count * MIN_CHART_W + Math.max(0, count - 1) * DELTA_W;
+  if (count > 0 && count <= 3) return Math.max(FULL_W, min);
+  return min;
+}
+
+function chartWidth(weekCount, width) {
+  const count = Math.max(1, weekCount || 1);
+  const free = width - 12 - LABEL_W - Math.max(0, count - 1) * DELTA_W;
+  return free / count;
+}
+
+function columnX(index, chartW) {
+  return 6 + LABEL_W + index * (chartW + DELTA_W);
 }
 
 function renderExecutiveSvg(view, options) {
   const weeks = (view && view.weeks) || [];
   const indicators = (view && view.indicators) || [];
-  const width = Math.max(1080, 220 + weeks.length * 210);
-  const cardH = 188;
-  const height = 92 + indicators.length * (cardH + 14) + 36;
+  const width = gridWidth(weeks.length);
+  const chartW = weeks.length ? chartWidth(weeks.length, width) : MIN_CHART_W;
+  const height = TITLE_H + HEADER_H + indicators.length * ROW_H + 8;
   const stamp = options && options.exportedAt ? `Exportado ${options.exportedAt}` : "";
+  const font = "Segoe UI, sans-serif";
   const parts = [];
-  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-executive-chart="svg">`);
-  parts.push(`<rect width="${width}" height="${height}" fill="#020617"/>`);
-  parts.push(`<text x="24" y="36" fill="#f8fafc" font-family="Segoe UI, sans-serif" font-size="22" font-weight="700">${escapeXml(view && view.title)}</text>`);
-  const range = weeks.length ? `${weeks[0].range.split("–")[0]} – ${weeks[weeks.length - 1].range.split("–")[1] || weeks[weeks.length - 1].range}` : "";
-  parts.push(`<text x="24" y="58" fill="#94a3b8" font-family="Segoe UI, sans-serif" font-size="13">${escapeXml(range)}${stamp ? ` · ${escapeXml(stamp)}` : ""}</text>`);
-  indicators.forEach((indicator, index) => {
-    const y = 78 + index * (cardH + 14);
-    parts.push(`<g data-indicator="${indicator.id}" data-scale="${indicator.scale ? `${indicator.scale.min},${indicator.scale.max}` : "none"}">`);
-    parts.push(`<rect x="16" y="${y}" width="${width - 32}" height="${cardH}" rx="12" fill="#0f172a" stroke="#0369a1" stroke-width="1.5"/>`);
-    parts.push(`<text x="32" y="${y + 24}" fill="#7dd3fc" font-family="Segoe UI, sans-serif" font-size="12" font-weight="700">${escapeXml(indicator.group)}</text>`);
-    parts.push(`<text x="32" y="${y + 44}" fill="#e2e8f0" font-family="Segoe UI, sans-serif" font-size="14">${escapeXml(indicator.label)} · ${escapeXml(indicator.unit)}</text>`);
-    const chartX = 32;
-    const chartY = y + 56;
-    const chartW = Math.min(280, width * 0.28);
-    const chartH = 108;
-    parts.push(`<rect x="${chartX}" y="${chartY}" width="${chartW}" height="${chartH}" rx="8" fill="#020617" stroke="#1e293b"/>`);
-    if (indicator.pending) {
-      parts.push(`<text x="${chartX + 16}" y="${chartY + 58}" fill="#94a3b8" font-family="Segoe UI, sans-serif" font-size="16" data-pending="1">Pendiente</text>`);
-    } else if (indicator.scale) {
-      const min = indicator.scale.min;
-      const max = indicator.scale.max;
-      const span = max === min ? 1 : max - min;
-      indicator.columns.forEach((column, columnIndex) => {
-        const coords = column.points.map((point, pointIndex) => {
-          if (point == null || !Number.isFinite(point)) return null;
-          const px = chartX + 12 + (pointIndex * (chartW - 24)) / 6;
-          const py = chartY + chartH - 12 - ((point - min) / span) * (chartH - 24);
-          return `${px},${py}`;
-        }).filter(Boolean);
-        if (coords.length) {
-          parts.push(`<polyline data-week="${column.week_number}" fill="none" stroke="${lineColor(columnIndex)}" stroke-width="2.4" points="${coords.join(" ")}"/>`);
-        }
-      });
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-executive-chart="svg" data-layout="week-grid" data-week-count="${weeks.length}" data-full-width="${weeks.length > 0 && weeks.length <= 3 ? "1" : "0"}">`);
+  parts.push(`<rect width="${width}" height="${height}" fill="#071422"/>`);
+  parts.push(`<text x="16" y="26" fill="#f8fafc" font-family="${font}" font-size="18" font-weight="700">${escapeXml(view && view.title)}${stamp ? ` · ${escapeXml(stamp)}` : ""}</text>`);
+  const headerY = TITLE_H;
+  parts.push(`<rect x="6" y="${headerY}" width="${LABEL_W}" height="${HEADER_H}" fill="#10283f" stroke="#245074"/>`);
+  weeks.forEach((week, index) => {
+    const x = columnX(index, chartW);
+    parts.push(`<g data-col="week" data-week="${week.week_number}" data-x="${x}">`);
+    parts.push(`<rect x="${x}" y="${headerY}" width="${chartW}" height="${HEADER_H}" fill="#10283f" stroke="#245074"/>`);
+    parts.push(`<text x="${x + chartW / 2}" y="${headerY + 22}" text-anchor="middle" fill="#f8fafc" font-family="${font}" font-size="14" font-weight="700">Semana ${week.week_number}</text>`);
+    parts.push(`<text x="${x + chartW / 2}" y="${headerY + 40}" text-anchor="middle" fill="#93c5fd" font-family="${font}" font-size="11">${escapeXml(week.range)}</text>`);
+    parts.push("</g>");
+    if (index < weeks.length - 1) {
+      const dx = x + chartW;
+      parts.push(`<g data-col="delta" data-vs="${week.week_number}" data-x="${dx}">`);
+      parts.push(`<rect x="${dx}" y="${headerY}" width="${DELTA_W}" height="${HEADER_H}" fill="#0c2238" stroke="#245074"/>`);
+      parts.push(`<text x="${dx + DELTA_W / 2}" y="${headerY + 32}" text-anchor="middle" fill="#e2e8f0" font-family="${font}" font-size="12" font-weight="700">Δ vs. S${week.week_number}</text>`);
+      parts.push("</g>");
     }
-    const colW = weeks.length ? Math.max(150, (width - chartX - chartW - 48) / weeks.length) : 180;
-    indicator.columns.forEach((column, columnIndex) => {
-      const x = chartX + chartW + 24 + columnIndex * colW;
-      const valueText = indicator.pending ? "Pendiente" : formatNumber(column.value, indicator.unit);
-      parts.push(`<text x="${x}" y="${y + 78}" fill="#f8fafc" font-family="Segoe UI, sans-serif" font-size="13" font-weight="700">Semana ${column.week_number}</text>`);
-      parts.push(`<text x="${x}" y="${y + 96}" fill="#94a3b8" font-family="Segoe UI, sans-serif" font-size="11">${escapeXml(column.range)}</text>`);
-      parts.push(`<text x="${x}" y="${y + 118}" fill="#e2e8f0" font-family="Segoe UI, sans-serif" font-size="16" data-acumulado="${indicator.id}-${column.week_number}">${escapeXml(valueText)}</text>`);
-      if (column.delta) {
-        const pct = formatPercent(column.delta.percent);
-        const deltaText = `Δ ${formatDelta(column.delta.absolute, indicator.unit)}${pct ? ` (${pct})` : ""}`;
-        parts.push(`<text x="${x}" y="${y + 142}" fill="${toneColor(column.tone)}" font-family="Segoe UI, sans-serif" font-size="13" data-delta="${indicator.id}-${column.week_number}" data-tone="${column.tone}">${escapeXml(deltaText)}</text>`);
-      }
+  });
+  indicators.forEach((indicator, rowIndex) => {
+    const y = headerY + HEADER_H + rowIndex * ROW_H;
+    const fill = rowIndex % 2 === 0 ? "#0c1e33" : "#10283f";
+    const color = LINE_COLOR[indicator.id] || "#7dd3fc";
+    parts.push(`<g data-indicator="${indicator.id}" data-scale="${indicator.scale ? `${indicator.scale.min},${indicator.scale.max}` : "none"}">`);
+    parts.push(`<rect x="6" y="${y}" width="${LABEL_W}" height="${ROW_H}" fill="${fill}" stroke="#245074"/>`);
+    parts.push(`<text x="16" y="${y + 28}" fill="#f8fafc" font-family="${font}" font-size="13" font-weight="700">${escapeXml(indicator.group)}</text>`);
+    if (indicator.label && indicator.label !== indicator.group) {
+      parts.push(`<text x="16" y="${y + 48}" fill="#cbd5e1" font-family="${font}" font-size="11">${escapeXml(indicator.label)}</text>`);
+    }
+    parts.push(`<text x="16" y="${y + 68}" fill="#93c5fd" font-family="${font}" font-size="11">(${escapeXml(indicator.unit)})</text>`);
+    indicator.columns.forEach((column, index) => {
+      const x = columnX(index, chartW);
+      parts.push(`<g data-week-chart="${column.week_number}" data-x="${x}" data-w="${chartW}">`);
+      parts.push(`<rect x="${x}" y="${y}" width="${chartW}" height="${ROW_H}" fill="${fill}" stroke="#245074"/>`);
+      const valueText = indicator.pending ? "Pendiente" : `Acumulado: ${formatNumber(column.value, indicator.unit)}`;
+      parts.push(`<text x="${x + chartW / 2}" y="${y + 16}" text-anchor="middle" fill="#f8fafc" font-family="${font}" font-size="12" font-weight="700" data-acumulado="${indicator.id}-${column.week_number}"${indicator.pending ? ' data-pending="1"' : ""}>${escapeXml(valueText)}</text>`);
       if (column.coverage_note) {
-        parts.push(`<text x="${x}" y="${y + 164}" fill="#fcd34d" font-family="Segoe UI, sans-serif" font-size="10">${escapeXml(column.coverage_note)}</text>`);
+        parts.push(`<text x="${x + 8}" y="${y + ROW_H - 6}" fill="#fcd34d" font-family="${font}" font-size="9">${escapeXml(column.coverage_note)}</text>`);
+      }
+      if (!indicator.pending && indicator.scale) {
+        const plotX = x + 42;
+        const plotY = y + 22;
+        const plotW = Math.max(20, chartW - 52);
+        const plotH = 78;
+        const min = indicator.scale.min;
+        const max = indicator.scale.max;
+        const span = max === min ? 1 : max - min;
+        const yOf = (point) => plotY + plotH - ((point - min) / span) * plotH;
+        [max, (min + max) / 2, min].forEach((tick, tickIndex) => {
+          const ty = yOf(max === min ? min : tick);
+          parts.push(`<text x="${x + 38}" y="${ty + 3}" text-anchor="end" fill="#64748b" font-family="${font}" font-size="8">${escapeXml(formatNumber(tick, indicator.unit))}</text>`);
+          if (tickIndex === 1) parts.push(`<line x1="${plotX}" y1="${ty}" x2="${plotX + plotW}" y2="${ty}" stroke="#1e3a5f" stroke-width="1"/>`);
+        });
+        let segment = [];
+        const flush = () => {
+          if (segment.length) {
+            parts.push(`<polyline fill="none" stroke="${color}" stroke-width="2" points="${segment.join(" ")}"/>`);
+            segment = [];
+          }
+        };
+        column.points.forEach((point, pointIndex) => {
+          const px = plotX + (pointIndex * plotW) / 6;
+          if (point == null || !Number.isFinite(point)) {
+            flush();
+            return;
+          }
+          const py = yOf(point);
+          segment.push(`${px},${py}`);
+          parts.push(`<circle cx="${px}" cy="${py}" r="2.4" fill="${color}"/>`);
+        });
+        flush();
+        DAY_LABELS.forEach((label, dayIndex) => {
+          const px = plotX + (dayIndex * plotW) / 6;
+          parts.push(`<text x="${px}" y="${plotY + plotH + 12}" text-anchor="middle" fill="#94a3b8" font-family="${font}" font-size="8" data-day="${label}">${label}</text>`);
+        });
+      }
+      parts.push("</g>");
+      if (index < indicator.columns.length - 1) {
+        const next = indicator.columns[index + 1];
+        const dx = x + chartW;
+        parts.push(`<g data-delta-column="${next.week_number}" data-vs-week="${column.week_number}" data-x="${dx}" data-tone="${next.tone || "neutral"}">`);
+        parts.push(`<rect x="${dx}" y="${y}" width="${DELTA_W}" height="${ROW_H}" fill="#0a1a2c" stroke="#245074"/>`);
+        if (indicator.pending || !next.delta) {
+          parts.push(`<text x="${dx + DELTA_W / 2}" y="${y + 68}" text-anchor="middle" fill="#94a3b8" font-family="${font}" font-size="13">—</text>`);
+        } else {
+          const pct = formatPercent(next.delta.percent);
+          const arrow = next.delta.absolute > 0 ? "▲" : next.delta.absolute < 0 ? "▼" : "";
+          parts.push(`<text x="${dx + DELTA_W / 2}" y="${y + 58}" text-anchor="middle" fill="${toneColor(next.tone)}" font-family="${font}" font-size="14" font-weight="700" data-delta="${indicator.id}-${next.week_number}">${escapeXml(formatDelta(next.delta.absolute, indicator.unit))}</text>`);
+          parts.push(`<text x="${dx + DELTA_W / 2}" y="${y + 78}" text-anchor="middle" fill="${toneColor(next.tone)}" font-family="${font}" font-size="12">${escapeXml(`${arrow} ${pct || ""}`.trim())}</text>`);
+        }
+        parts.push("</g>");
       }
     });
     parts.push("</g>");
@@ -303,6 +384,7 @@ module.exports = {
   deltaOf,
   buildExecutiveView,
   renderExecutiveSvg,
+  gridWidth,
   downloadName,
   formatRange,
 };
