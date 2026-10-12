@@ -108,6 +108,7 @@ function dailyPoints(week, indicator) {
 
 function deltaTone(indicator, delta) {
   if (delta == null || !Number.isFinite(delta) || delta === 0) return "neutral";
+  if (indicator && indicator.id === "hg") return delta < 0 ? "good" : "bad";
   if (indicator.sense === "down") return delta < 0 ? "good" : "bad";
   return delta > 0 ? "good" : "bad";
 }

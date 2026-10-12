@@ -127,6 +127,52 @@ test("tres semanas ocupan el ancho y más semanas crecen para el scroll", () => 
   assert.doesNotMatch(MODAL, /min-w-\[720px\]/);
 });
 
+test("HG más negativo es verde y menos negativo es rojo sin invertir a los demás", () => {
+  const hg = chart.INDICATORS.find((item) => item.id === "hg");
+  const gasto = chart.INDICATORS.find((item) => item.id === "gasto");
+  const resultado = chart.INDICATORS.find((item) => item.id === "resultado");
+  const cd = chart.INDICATORS.find((item) => item.id === "com_desc");
+  const moreNegative = chart.deltaOf(-100000, -50000);
+  const lessNegative = chart.deltaOf(-50000, -100000);
+  assert.equal(moreNegative.absolute, -50000);
+  assert.equal(moreNegative.percent, -100);
+  assert.equal(chart.deltaTone(hg, moreNegative.absolute), "good");
+  assert.equal(lessNegative.absolute, 50000);
+  assert.equal(lessNegative.percent, 50);
+  assert.equal(chart.deltaTone(hg, lessNegative.absolute), "bad");
+  assert.equal(chart.deltaTone(hg, 0), "neutral");
+  assert.equal(chart.deltaTone(gasto, -1), "good");
+  assert.equal(chart.deltaTone(gasto, 1), "bad");
+  assert.equal(chart.deltaTone(resultado, -50000), "bad");
+  assert.equal(chart.deltaTone(resultado, 50000), "good");
+  assert.equal(chart.deltaTone(cd, -1), "bad");
+  assert.equal(chart.deltaTone(cd, 0.5), "good");
+
+  function hgView(previous, current) {
+    return chart.buildExecutiveView({
+      scope: "plant",
+      plant: "San Luis",
+      weeks: [
+        { id: "a", week_number: 42, fecha_desde: "2026-10-11", fecha_hasta: "2026-10-17", metrics: { hg_mxn: previous }, days: [] },
+        { id: "b", week_number: 43, fecha_desde: "2026-10-18", fecha_hasta: "2026-10-24", metrics: { hg_mxn: current }, days: [] },
+      ],
+      selectedIds: ["a", "b"],
+    });
+  }
+  function hgBlock(previous, current) {
+    const svg = chart.renderExecutiveSvg(hgView(previous, current));
+    return svg.slice(svg.indexOf('data-indicator="hg"'), svg.indexOf('data-indicator="kilos"'));
+  }
+  const green = hgBlock(-50000, -100000);
+  assert.match(green, /data-tone="good"/);
+  assert.match(green, /#34d399/);
+  assert.doesNotMatch(green, /#f87171/);
+  const red = hgBlock(-100000, -50000);
+  assert.match(red, /data-tone="bad"/);
+  assert.match(red, /#f87171/);
+  assert.doesNotMatch(red, /#34d399/);
+});
+
 test("el layout no cambia el contrato de GASTO, Pendiente, planta, TODAS ni el PNG", () => {
   assert.deepEqual(chart.GASTO_COMPONENTS, CONCEPTS.map((key) => `${key}_kg`));
   assert.equal(chart.EXCLUDED_FROM_GASTO.includes("costo_kg"), true);
