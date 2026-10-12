@@ -6,4 +6,6 @@ Tres semanas usan el ancho completo. A partir de la cuarta el ancho crece y el v
 
 GASTO, Descuento Compra, las unidades y el resto del modelo de 081 no se recalcularon.
 
+En HG, un importe más negativo se pinta verde y uno menos negativo se pinta rojo. El valor y el porcentaje del delta no cambian. Esa inversión no aplica a los demás indicadores.
+
 Los SVG de `docs/dev-loop/reports/evidence-081-r1/` son el render del componente para San Luis y TODAS con tres semanas. Muestran la retícula. No son un extracto de producción.

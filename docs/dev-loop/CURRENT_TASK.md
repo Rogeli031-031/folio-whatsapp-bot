@@ -4,7 +4,7 @@ phase: IMPLEMENTATION
 
 base_sha: "70acf3ca5ab123949a5557df3e53519e479ee018"
 branch: "fix/igf-diario-weekly-executive-grid-081-r1"
-product_sha: "beff940988798b7c6c7e27171fdadf70aea7e347"
+product_sha: "25964f69a8c6711e1394f22d9d741ef7c3008fa7"
 
 goal: >
   Corregir solo el layout de la gráfica ejecutiva semanal para que cada
@@ -15,6 +15,7 @@ contract:
   - "La semana sigue siendo domingo-sábado."
   - "GASTO conserva los siete componentes."
   - "Descuento Compra permanece Pendiente."
+  - "HG más negativo es verde y menos negativo es rojo. Los demás deltas no se invierten."
 
 completion:
   status: DONE_PENDING_REVIEW
@@ -23,5 +24,5 @@ completion:
   merge: false
   deploy: false
 
-tests: "081-R1 4/4. 081 y regresiones 077, 078-R2, 079, 080 y panel 067: 43/43."
+tests: "081-R1 5/5. 081 y regresiones 077, 078-R2, 079, 080 y panel 067: 44/44."
 result_report_path: docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-EXECUTIVE-GRID-081-R1.md
