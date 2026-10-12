@@ -600,11 +600,12 @@ test("9. la consulta C&D se resuelve una vez por mes y se comparte entre plantas
   });
   const primary = cdCalls(client.calls, "primary");
   const fallback = cdCalls(client.calls, "fallback");
-  assert.deepEqual(primary.map((call) => call.params[0]).sort(), ["2026-07-01", "2026-08-01", "2026-09-01"]);
-  assert.equal(primary.length, 3);
-  assert.equal(fallback.length, 1);
-  assert.equal(fallback[0].params[0], "2026-08-01");
-  assert.equal(fallback[0].params[1], "2026-08-31");
+  assert.deepEqual(primary.map((call) => call.params[0]).sort(), ["2026-06-01", "2026-07-01", "2026-08-01", "2026-09-01"]);
+  assert.equal(primary.length, 4);
+  assert.equal(fallback.length, 2);
+  assert.deepEqual(fallback.map((call) => call.params[0]).sort(), ["2026-06-01", "2026-08-01"]);
+  const augustFallback = fallback.find((call) => call.params[0] === "2026-08-01");
+  assert.equal(augustFallback.params[1], "2026-08-31");
   assert.ok(live.points.some((point) => point.fecha === "2026-08-15" && point.estado === "real"));
   assert.ok(live.points.some((point) => point.fecha === "2026-09-10" && point.estado === "real"));
   const loader = GRAFICA_SRC.slice(GRAFICA_SRC.indexOf("async function loadLiveGrafica"), GRAFICA_SRC.indexOf("module.exports"));
@@ -639,7 +640,7 @@ const AUGUST_BUYER = [
   { fecha: "2026-09-17", cliente_norm: "CLIENTE B", canal: "CASA", kg: 850 },
 ];
 
-test("10. range 1m de septiembre consulta agosto para clasificar clientes", async () => {
+test("10. range 1m de septiembre consulta agosto para clasificar clientes y para el antecedente real de C&D", async () => {
   const { client } = await septemberClients(AUGUST_BUYER, [
     { fecha: "2026-09-17", cliente_norm: "CLIENTE B", monto: 603.5 },
   ]);
@@ -650,7 +651,7 @@ test("10. range 1m de septiembre consulta agosto para clasificar clientes", asyn
   const compras = client.calls.filter((call) => isComprasDetail(call.sql));
   assert.ok(compras.every((call) => call.params[1] === "2026-09-01"));
   const primary = cdCalls(client.calls, "primary");
-  assert.deepEqual(primary.map((call) => call.params[0]), ["2026-09-01"]);
+  assert.deepEqual(primary.map((call) => call.params[0]).sort(), ["2026-08-01", "2026-09-01"]);
 });
 
 test("11. un cliente con compra en agosto no aparece como nuevo", async () => {
@@ -668,7 +669,7 @@ test("12. un cliente sin compra en agosto sí es nuevo el 17/09", async () => {
   assert.equal(live.new_clients_top.some((row) => row.cliente === "CLIENTE B" && row.fecha_ingreso === "2026-09-17"), true);
 });
 
-test("13. enero consulta diciembre solo para la clasificación", async () => {
+test("13. enero consulta diciembre para clasificar clientes y para el antecedente real de C&D", async () => {
   const client = salesClient([
     { fecha: "2026-12-10", cliente_norm: "CLIENTE D", canal: "CASA", kg: 100 },
     { fecha: "2027-01-17", cliente_norm: "CLIENTE D", canal: "CASA", kg: 850 },
@@ -686,7 +687,7 @@ test("13. enero consulta diciembre solo para la clasificación", async () => {
   assert.equal(ventas.params[2], "2027-01-31");
   const compras = client.calls.filter((call) => isComprasDetail(call.sql));
   assert.ok(compras.every((call) => call.params[1] === "2027-01-01"));
-  assert.equal(cdCalls(client.calls, "primary").some((call) => call.params[0] === "2026-12-01"), false);
+  assert.deepEqual(cdCalls(client.calls, "primary").map((call) => call.params[0]).sort(), ["2026-12-01", "2027-01-01"]);
 });
 
 test("14. compra en diciembre impide marcarlo nuevo en enero", async () => {
