@@ -153,7 +153,7 @@ test("GASTO suma solo los siete componentes ponderados por la venta cubierta", (
 
 test("la semántica de color no sigue solo el signo matemático", () => {
   const cd = chart.INDICATORS.find((item) => item.id === "com_desc");
-  const gasto = chart.INDICATORS.find((item) => item.id === "gasto");
+  const gasto = chart.INDICATORS.find((item) => item.id === "gasto_corporativo");
   const resultado = chart.INDICATORS.find((item) => item.id === "resultado");
   assert.equal(chart.deltaTone(cd, -4 - (-3)), "bad");
   assert.equal(chart.deltaTone(cd, -2.5 - (-3)), "good");

@@ -1,21 +1,23 @@
-﻿task_id: FIX-IGF-DIARIO-WEEKLY-EXECUTIVE-GRID-081-R1
+﻿task_id: FIX-IGF-DIARIO-WEEKLY-EXECUTIVE-UX-081-R2
 status: DONE_PENDING_REVIEW
 phase: IMPLEMENTATION
 
-base_sha: "70acf3ca5ab123949a5557df3e53519e479ee018"
-branch: "fix/igf-diario-weekly-executive-grid-081-r1"
-product_sha: "25964f69a8c6711e1394f22d9d741ef7c3008fa7"
+base_sha: "ecd6ec8f728b72b658926b302a17fd034ab38533"
+branch: "fix/igf-diario-weekly-executive-ux-081-r2"
+product_sha: "5d91d25242f1f76cae0821d0404e1e18a1961a5d"
 
 goal: >
-  Corregir solo el layout de la gráfica ejecutiva semanal para que cada
-  semana tenga su mini-gráfica y el delta quede entre columnas.
+  Corregir los cuatro puntos de UX de la gráfica ejecutiva semanal
+  sin mover la retícula ni la matemática de la tabla.
 
 contract:
-  - "No recalcula métricas ni cambia API, DB, Excel ni los contratos 077 a 081."
-  - "La semana sigue siendo domingo-sábado."
-  - "GASTO conserva los siete componentes."
-  - "Descuento Compra permanece Pendiente."
-  - "HG más negativo es verde y menos negativo es rojo. Los demás deltas no se invierten."
+  - "Gasto corporativo y gasto operativo muestran el importe diario ya repartido, sumado por los grupos CORP_KEYS y OPER_KEYS."
+  - "El faltante sigue null. No se convierte a cero ni se reconstruye desde $/kg."
+  - "Cinco marcos navy envuelven las filas pedidas."
+  - "El selector cierra con segundo click, click fuera y Escape."
+  - "El tooltip es del punto bajo el cursor."
+  - "HG más negativo sigue verde. Descuento Compra sigue Pendiente."
+  - "No hay cambios de DB, Excel ni de la tabla semanal."
 
 completion:
   status: DONE_PENDING_REVIEW
@@ -24,5 +26,5 @@ completion:
   merge: false
   deploy: false
 
-tests: "081-R1 5/5. 081 y regresiones 077, 078-R2, 079, 080 y panel 067: 44/44."
-result_report_path: docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-EXECUTIVE-GRID-081-R1.md
+tests: "081-R2 5/5. Regresiones 067, 077, 078-R2, 079, 080, 081 y 081-R1: 49/49. Build: compile y types PASS. git diff --check limpio."
+result_report_path: docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-EXECUTIVE-UX-081-R2.md

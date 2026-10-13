@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchIgfDiarioSemanal,
   type IgfDiarioSemanalAllResponse,
@@ -82,6 +82,8 @@ export default function IgfDiarioWeeklyExecutiveModal({
   const [weeks, setWeeks] = useState<WeekCard[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [menu, setMenu] = useState(false);
+  const [tip, setTip] = useState<{ fecha: string; label: string; shown: string; x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -151,6 +153,22 @@ export default function IgfDiarioWeeklyExecutiveModal({
   );
   const svg = useMemo(() => renderExecutiveSvg(view), [view]);
 
+  useEffect(() => {
+    if (!menu) return;
+    function onDown(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) setMenu(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenu(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menu]);
+
   function toggle(id: string) {
     setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
@@ -191,16 +209,18 @@ export default function IgfDiarioWeeklyExecutiveModal({
       <header className="sticky top-0 z-10 flex w-full flex-wrap items-center justify-between gap-3 border-b border-[#245074] bg-[#071422] px-4 py-3">
         <h2 className="text-lg font-semibold">{view.title}</h2>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
+          <div ref={menuRef} data-week-menu="1" className="relative">
             <button
               type="button"
+              data-week-toggle="1"
+              aria-expanded={menu}
               onClick={() => setMenu((open) => !open)}
               className="rounded bg-slate-800 px-3 py-1.5 text-sm text-white"
             >
               Semanas ▼
             </button>
             {menu && (
-              <div className="absolute right-0 z-20 mt-1 max-h-72 w-72 overflow-auto rounded border border-sky-800 bg-slate-900 p-2 shadow-xl">
+              <div data-week-panel="1" className="absolute right-0 z-20 mt-1 max-h-72 w-72 overflow-auto rounded border border-sky-800 bg-slate-900 p-2 shadow-xl">
                 {weeks.map((week) => (
                   <label key={week.id} className="flex items-center gap-2 px-2 py-1 text-sm">
                     <input
@@ -227,13 +247,42 @@ export default function IgfDiarioWeeklyExecutiveModal({
           </button>
         </div>
       </header>
-      <div data-grid-scroll="1" className="min-h-0 w-full flex-1 overflow-auto">
+      <div
+        data-grid-scroll="1"
+        className="min-h-0 w-full flex-1 overflow-auto"
+        onMouseMove={(event) => {
+          const node = (event.target as HTMLElement).closest?.("[data-point]");
+          if (!node) {
+            setTip(null);
+            return;
+          }
+          setTip({
+            fecha: node.getAttribute("data-fecha-label") || "",
+            label: node.getAttribute("data-label") || "",
+            shown: node.getAttribute("data-shown") || "",
+            x: event.clientX,
+            y: event.clientY,
+          });
+        }}
+        onMouseLeave={() => setTip(null)}
+      >
         {loading && <p className="px-4 py-3 text-sm text-slate-400">Cargando semanas…</p>}
         {error && <p className="px-4 py-3 text-sm text-red-300">{error}</p>}
         {!loading && !error && (
           <div className="w-full" dangerouslySetInnerHTML={{ __html: svg }} />
         )}
       </div>
+      {tip && (
+        <div
+          data-point-tooltip="1"
+          className="pointer-events-none fixed z-[90] rounded border border-sky-400 bg-[#0b1c30] px-3 py-2 text-xs text-slate-100 shadow-xl"
+          style={{ left: tip.x + 12, top: tip.y + 12 }}
+        >
+          <div>{tip.fecha}</div>
+          <div>{tip.label}</div>
+          <div>{tip.shown}</div>
+        </div>
+      )}
     </div>
   );
 }
