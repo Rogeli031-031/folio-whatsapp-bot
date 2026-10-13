@@ -64,3 +64,14 @@ completion:
   deploy: false
 
 tests: "082 9/9. Regresiones 077, 078-R2, 079, 080, 069-R1, 027 y 036 verdes. 024 líneas 507 y 538 siguen fallando en server.js, sin cambio de esta tarea. git diff --check limpio."
+
+g4:
+  result: PASS
+  product_unchanged_after: "e8211579b593a2318c3b5d0ba74b2ab2135898c3"
+  full_generator: "San Luis y Morelos, mismas hojas previas; solo se agrega DatosPlanta"
+  evidence:
+    - "docs/dev-loop/reports/evidence-082/san-luis-full.xlsx"
+    - "docs/dev-loop/reports/evidence-082/morelos-full.xlsx"
+    - "docs/dev-loop/reports/evidence-082/san-luis-ak.png"
+    - "docs/dev-loop/reports/evidence-082/san-luis-mx.png"
+    - "docs/dev-loop/reports/evidence-082/san-luis-zag.png"
