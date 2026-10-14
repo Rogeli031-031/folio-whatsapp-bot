@@ -162,7 +162,8 @@ test("encabezados A–AG, separadores y columnas vacías autorizadas", () => {
   assert.equal(cell(ws, 2, 7).value, "Total CASA (kg)");
   assert.equal(cell(ws, 1, 8).value, "COMISIONISTA");
   assert.equal(cell(ws, 2, 11).value, "Total COMISIONISTA (kg)");
-  assert.equal(cell(ws, 2, 13).value, "Precio Oficial (kg)");
+  assert.equal(cell(ws, 1, 32).value, "DESCUENTOS");
+  assert.equal(cell(ws, 2, 13).value, "PRECIO ($/kg)");
   assert.equal(cell(ws, 2, 14).value, "Subsidio ($)");
   assert.equal(cell(ws, 1, 16).value, "PEMEX TUXPAN");
   assert.equal(cell(ws, 2, 18).value, "CIRCULAR");
@@ -173,8 +174,8 @@ test("encabezados A–AG, separadores y columnas vacías autorizadas", () => {
   assert.equal(cell(ws, 2, 27).value, "TOMZA TUXPAN");
   assert.equal(cell(ws, 2, 28).value, "TOMZA TEPEJI");
   assert.equal(cell(ws, 2, 30).value, "HG Kilos");
-  assert.equal(cell(ws, 2, 32).value, "CONTADO");
-  assert.equal(cell(ws, 2, 33).value, "CRÉDITO");
+  assert.equal(cell(ws, 2, 32).value, "Descuento CASA ($)");
+  assert.equal(cell(ws, 2, 33).value, "Descuento COMISIONISTA ($)");
   assert.equal(cell(ws, 1, 1).font.bold, true);
   assert.equal(cell(ws, 1, 4).fill.fgColor.argb, "FFFFFFFF");
   assert.equal(ws.getRow(1).height, 22);
