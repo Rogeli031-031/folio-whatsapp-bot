@@ -173,7 +173,7 @@ test("HG más negativo es verde y menos negativo es rojo sin invertir a los dem�
   assert.doesNotMatch(red, /#34d399/);
 });
 
-test("el layout no cambia el contrato de GASTO, Pendiente, planta, TODAS ni el PNG", () => {
+test("el layout no cambia el contrato de GASTO, Pendiente, planta, TODAS ni la descarga", () => {
   assert.deepEqual(chart.GASTO_COMPONENTS, CONCEPTS.map((key) => `${key}_kg`));
   assert.equal(chart.EXCLUDED_FROM_GASTO.includes("costo_kg"), true);
   assert.doesNotMatch(RENDER, /GASTO \(Costo del Gas LP\)/);
@@ -183,9 +183,10 @@ test("el layout no cambia el contrato de GASTO, Pendiente, planta, TODAS ni el P
   assert.match(todas, /IGF Diario semanal · Todas/);
   assert.match(plant, /data-indicator="descuento_compra"[\s\S]*Pendiente/);
   assert.doesNotMatch(plant.slice(plant.indexOf('data-indicator="descuento_compra"'), plant.indexOf('data-indicator="hg"')), /<polyline/);
-  assert.match(MODAL, /image\/png/);
-  assert.match(MODAL, /toBlob/);
-  assert.match(chart.downloadName({ title: "IGF Diario semanal · San Luis" }), /\.png$/);
+  assert.match(MODAL, /application\/pdf/);
+  assert.doesNotMatch(MODAL, /image\/png/);
+  assert.doesNotMatch(MODAL, /toBlob/);
+  assert.match(chart.downloadName({ title: "IGF Diario semanal · San Luis" }), /\.pdf$/);
   const cd = chart.INDICATORS.find((item) => item.id === "com_desc");
   assert.equal(chart.deltaTone(cd, -4 - -3), "bad");
   assert.equal(chart.deltaTone(cd, -2.5 - -3), "good");

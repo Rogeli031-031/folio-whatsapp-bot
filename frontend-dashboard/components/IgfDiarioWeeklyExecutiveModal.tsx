@@ -11,6 +11,8 @@ import {
 } from "@/lib/api";
 import {
   buildExecutiveView,
+  canExportExecutivePdf,
+  createPdfExportGate,
   defaultSelectedIds,
   downloadName,
   renderExecutiveSvg,
@@ -86,6 +88,9 @@ export default function IgfDiarioWeeklyExecutiveModal({
   const menuRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportGateRef = useRef(createPdfExportGate());
 
   useEffect(() => {
     let cancel = false;
@@ -173,35 +178,44 @@ export default function IgfDiarioWeeklyExecutiveModal({
     setSelected((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
   }
 
-  function download() {
-    const stamped = renderExecutiveSvg(view, {
-      exportedAt: new Date().toLocaleString("es-MX"),
-    });
-    const blob = new Blob([stamped], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const image = new Image();
-    image.onload = () => {
-      const scale = 2;
-      const canvas = document.createElement("canvas");
-      canvas.width = image.width * scale;
-      canvas.height = image.height * scale;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.fillStyle = "#020617";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.scale(scale, scale);
-      ctx.drawImage(image, 0, 0);
-      canvas.toBlob((png) => {
-        if (!png) return;
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(png);
-        link.download = downloadName(view);
-        link.click();
-        URL.revokeObjectURL(link.href);
-      }, "image/png");
-      URL.revokeObjectURL(url);
-    };
-    image.src = url;
+  async function download() {
+    const snapshot = view;
+    if (!canExportExecutivePdf({
+      loading,
+      loadError: error,
+      exporting,
+      weekCount: snapshot.weeks.length,
+    })) return;
+    if (!exportGateRef.current.tryBegin()) return;
+    setExporting(true);
+    setExportError(null);
+    let href = "";
+    try {
+      const stamped = renderExecutiveSvg(snapshot, {
+        exportedAt: new Date().toLocaleString("es-MX"),
+        fontFamily: "NotoSans",
+      });
+      const pdf = await import("@/lib/igf-diario-weekly-executive-pdf");
+      const blob = await pdf.svgToExecutivePdf(stamped);
+      if (!(blob instanceof Blob) || blob.size < 8) throw new Error("El PDF generado está vacío");
+      href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = downloadName(snapshot);
+      link.type = "application/pdf";
+      link.rel = "noopener";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      const release = href;
+      window.setTimeout(() => URL.revokeObjectURL(release), 60000);
+    } catch (err: unknown) {
+      if (href) URL.revokeObjectURL(href);
+      setExportError(err instanceof Error ? err.message : "No se pudo generar el PDF");
+    } finally {
+      exportGateRef.current.end();
+      setExporting(false);
+    }
   }
 
   return (
@@ -234,8 +248,14 @@ export default function IgfDiarioWeeklyExecutiveModal({
               </div>
             )}
           </div>
-          <button type="button" onClick={download} className="rounded bg-sky-700 px-3 py-1.5 text-sm font-semibold text-white">
-            Descargar
+          <button
+            type="button"
+            data-download="pdf"
+            disabled={!canExportExecutivePdf({ loading, loadError: error, exporting, weekCount: view.weeks.length })}
+            onClick={() => void download()}
+            className="rounded bg-sky-700 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {exporting ? "Generando PDF…" : "Descargar PDF"}
           </button>
           <button
             type="button"
@@ -268,6 +288,7 @@ export default function IgfDiarioWeeklyExecutiveModal({
       >
         {loading && <p className="px-4 py-3 text-sm text-slate-400">Cargando semanas…</p>}
         {error && <p className="px-4 py-3 text-sm text-red-300">{error}</p>}
+        {exportError && <p className="px-4 py-3 text-sm text-red-300" role="alert">{exportError}</p>}
         {!loading && !error && (
           <div className="w-full" dangerouslySetInnerHTML={{ __html: svg }} />
         )}
