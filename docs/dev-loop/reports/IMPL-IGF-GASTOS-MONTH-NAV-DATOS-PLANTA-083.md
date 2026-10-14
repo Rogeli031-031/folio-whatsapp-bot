@@ -124,3 +124,24 @@ Excel sin cambios: M, AF, AG, N, R y el resto de hojas no se tocaron. El HG ause
 
 Pruebas de comportamiento en `test/impl-igf-gastos-save-inflight-083.test.js`: 7/7, con peticiones diferidas. 083 y 082, más las regresiones de gastos 062, desglose 064 y distribución 064-R1: 67/67 en la corrida conjunta. `tsc --noEmit` exit 0. `npm run build` exit 0. `git diff --check` limpio. Los dos fallos de 024 siguen siendo los ya documentados en BASE y HEAD; esta corrección no tocó `server.js` ni desactivó pruebas.
 
+## G4 fallido en fb1fdee0
+
+Comando, sobre `fb1fdee088b2813601860cfe298daddc3883d14a`:
+
+`node --test` de guardado en curso, 083, 082, 062, 064, 064-R1, 077, 078-R2, 079, 080, 081, 081-R1 y 081-R2.
+
+Resultado: 108 pruebas, 107 en verde, 1 fallo. No es un fallo de 024.
+
+La prueba «el modal usa su periodo visible en lectura, guardado y distribución» buscaba `concepto: operation.concepto` en todo el componente. El código de `saveDistribucionDia` escribe `concepto: String(operation.concepto)`. El concepto sigue saliendo de la operación; la aserción no reconocía la conversión. No se cambió la lógica productiva.
+
+`npx tsc --noEmit` y `npm run build` terminaron en exit 0 sobre ese mismo árbol. `git diff --check` marcó una línea vacía al final de este reporte. No hubo PR ni merge.
+
+## Corrección de la aserción y cierre G4
+
+La comprobación quedó acotada al bloque `execute` de `saveDistribucionDia` y acepta `concepto: String(operation.concepto)`. El harness de peticiones diferidas comprueba que la operación conserva planta Acapulco, año 2026, mes 10 y el concepto exacto `extraordinarios`, aunque el modal visible cambie después.
+
+Commit de pruebas: `5dced61262fa2ee4050ed187b8062be106004833`. Frente a `fb1fdee0` solo cambiaron los dos archivos de test. Frontend, `lib`, `server.js`, dependencias y los XLSX/PNG no cambiaron.
+
+Comando repetido sobre `5dced61262fa2ee4050ed187b8062be106004833`: las mismas suites. Resultado: 109 pruebas, 109 en verde. `node --check` de `lib/dashboard-arr-forecast.js` y `lib/igf-diario-datos-planta.js`: exit 0. `npx tsc --noEmit` y `npm run build`: exit 0.
+
+`server.js` y `test/forecast-excel-plant-compras-024.test.js` siguen iguales a la base. Los dos fallos de 024 no se reejecutaron y no cuentan como PASS.

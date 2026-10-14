@@ -55,10 +55,13 @@ result_report_path: "docs/dev-loop/reports/IMPL-IGF-GASTOS-MONTH-NAV-DATOS-PLANT
 
 completion:
   status: DONE_PENDING_REVIEW
-  product_sha: "3c3557abcdda63fd641b05ab85c3f03b113327b5"
-  prior_product_sha: "0d5cfd0df2d2e15faf41540fd7403d8341076482"
+  product_sha: "5dced61262fa2ee4050ed187b8062be106004833"
+  prior_product_sha: "3c3557abcdda63fd641b05ab85c3f03b113327b5"
+  g4_failed_head: "fb1fdee088b2813601860cfe298daddc3883d14a"
+  g4_failure: "108 pruebas, 107 en verde. La aserción buscaba concepto: operation.concepto y el codigo escribe String(operation.concepto)."
+  g4: "PASS sobre 5dced61262fa2ee4050ed187b8062be106004833: 109/109, typecheck y build en exit 0."
   save_inflight_fix: "Durante el guardado se bloquean mes y cierre, el doble clic no repite la petición, y una respuesta tardía no cierra, no muestra error ni actualiza la caché si la sesión o el periodo actual del dashboard ya no coinciden."
   push_branch_only: true
-  create_pr: false
-  merge: false
+  create_pr: true
+  merge: true
   deploy: false
