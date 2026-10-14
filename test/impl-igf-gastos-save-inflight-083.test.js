@@ -34,8 +34,9 @@ function harness(controller, options) {
   let dashboard = options.dashboard;
   const running = nav.performGuardedSave(controller, {
     identity: options.identity,
-    execute: () => {
+    execute: (operation) => {
       effects.push("patch");
+      if (typeof options.onExecute === "function") options.onExecute(operation);
       return pending.promise;
     },
     readVisible: () => visible,
@@ -173,6 +174,26 @@ test("la distribución no mezcla planta, mes, concepto ni una apertura anterior"
     assert.equal(run.effects.includes("close"), false);
     assert.equal(controller.isSaving(), false);
   }
+});
+
+test("la distribución conserva planta, año, mes y el concepto exacto de la operación", async () => {
+  const controller = nav.createExpenseSaveController();
+  let seen = null;
+  const run = harness(controller, {
+    visible: octoberModal({ concepto: "extraordinarios" }),
+    dashboard: { year: 2026, month: 10 },
+    identity: octoberModal({ concepto: "extraordinarios" }),
+    matches: (operation, modal) => controller.matchesDistribution(operation, modal),
+    onExecute(operation) { seen = operation; },
+  });
+  run.setVisible(octoberModal({ concepto: "otro" }));
+  assert.equal(seen.plant, "Acapulco");
+  assert.equal(seen.year, 2026);
+  assert.equal(seen.month, 10);
+  assert.equal(seen.concepto, "extraordinarios");
+  run.resolve({ days: [] });
+  await run.running;
+  assert.equal(seen.concepto, "extraordinarios");
 });
 
 test("sin guardado pendiente se puede cambiar de mes o cancelar, y la advertencia sigue pidiendo confirmación", () => {
