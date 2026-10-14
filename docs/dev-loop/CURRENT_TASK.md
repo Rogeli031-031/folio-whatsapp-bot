@@ -1,4 +1,4 @@
-﻿task_id: IMPL-IGF-DIARIO-DATOS-PLANTA-082
+﻿task_id: IMPL-IGF-GASTOS-MONTH-NAV-DATOS-PLANTA-083
 status: DONE_PENDING_REVIEW
 phase: IMPLEMENTATION
 
@@ -6,34 +6,38 @@ authorized_by: ""
 authorized_at: ""
 human_authorization: ""
 
-base_sha: "9c9879490c752b55448782c7dcf230d89ef2fc96"
-branch: "implementation/igf-diario-datos-planta-082"
-product_sha: "e8211579b593a2318c3b5d0ba74b2ab2135898c3"
+base_sha: "61330e14e468b853fce12603a53f92f7a1ca12d3"
+branch: "implementation/igf-gastos-month-navigation-datos-planta-083"
 
-objective: "Agregar la hoja DatosPlanta al Excel IGF Diario de una planta, inmediatamente después de RESUMEN."
+objective: "Navegar el mes dentro de los modales de gastos, llenar precio y descuentos por canal en DatosPlanta, y aislar el guardado en curso de respuestas tardías."
 
 in_scope:
+  - "frontend-dashboard/components/IgfForecastClient.tsx"
+  - "frontend-dashboard/lib/igf-gastos-month-nav.js"
   - "lib/igf-diario-datos-planta.js"
   - "lib/dashboard-arr-forecast.js"
+  - "test/impl-igf-gastos-month-navigation-datos-planta-083.test.js"
+  - "test/impl-igf-gastos-save-inflight-083.test.js"
   - "test/impl-igf-diario-datos-planta-082.test.js"
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-DATOS-PLANTA-082.md"
-  - "docs/dev-loop/reports/evidence-082/"
+  - "docs/dev-loop/reports/IMPL-IGF-GASTOS-MONTH-NAV-DATOS-PLANTA-083.md"
+  - "docs/dev-loop/reports/evidence-083/"
 
 out_of_scope:
   - "importación ARR"
-  - "DB y migraciones"
-  - "columnas M, N, R, AF y AG con datos"
+  - "DB, migraciones y escrituras productivas"
+  - "imputar el HG ausente de Acapulco"
   - "TODAS / Provincia"
+  - "cálculos de venta, HG, C&D o resultado"
   - "docs/director-ia/"
   - "PR, merge y deploy"
 
 contracts_in_force:
   - "docs/dev-loop/LOOP_PROTOCOL.md"
-  - "auditoría 082"
+  - "decisión 083 del usuario sobre AF, AG y M"
 
 allowed_actions:
-  - "implementar la hoja"
+  - "implementar la navegación y las columnas"
   - "probar con fixtures"
   - "documentar"
   - "push de la rama autorizada"
@@ -44,34 +48,20 @@ forbidden_actions:
   - "merge"
   - "deploy"
   - "migrations"
-  - "escrituras a DB"
-
-pending_columns:
-  - "M Precio Oficial"
-  - "N Subsidio"
-  - "R CIRCULAR"
-  - "AF CONTADO"
-  - "AG CRÉDITO"
+  - "escrituras a la DB productiva"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-DATOS-PLANTA-082.md"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-GASTOS-MONTH-NAV-DATOS-PLANTA-083.md"
 
 completion:
   status: DONE_PENDING_REVIEW
+  product_sha: "5dced61262fa2ee4050ed187b8062be106004833"
+  prior_product_sha: "3c3557abcdda63fd641b05ab85c3f03b113327b5"
+  g4_failed_head: "fb1fdee088b2813601860cfe298daddc3883d14a"
+  g4_failure: "108 pruebas, 107 en verde. La aserción buscaba concepto: operation.concepto y el codigo escribe String(operation.concepto)."
+  g4: "PASS sobre 5dced61262fa2ee4050ed187b8062be106004833: 109/109, typecheck y build en exit 0."
+  save_inflight_fix: "Durante el guardado se bloquean mes y cierre, el doble clic no repite la petición, y una respuesta tardía no cierra, no muestra error ni actualiza la caché si la sesión o el periodo actual del dashboard ya no coinciden."
   push_branch_only: true
-  create_pr: false
-  merge: false
+  create_pr: true
+  merge: true
   deploy: false
-
-tests: "082 9/9. Regresiones 077, 078-R2, 079, 080, 069-R1, 027 y 036 verdes. 024 líneas 507 y 538 siguen fallando en server.js, sin cambio de esta tarea. git diff --check limpio."
-
-g4:
-  result: PASS
-  product_unchanged_after: "e8211579b593a2318c3b5d0ba74b2ab2135898c3"
-  full_generator: "San Luis y Morelos, mismas hojas previas; solo se agrega DatosPlanta"
-  evidence:
-    - "docs/dev-loop/reports/evidence-082/san-luis-full.xlsx"
-    - "docs/dev-loop/reports/evidence-082/morelos-full.xlsx"
-    - "docs/dev-loop/reports/evidence-082/san-luis-ak.png"
-    - "docs/dev-loop/reports/evidence-082/san-luis-mx.png"
-    - "docs/dev-loop/reports/evidence-082/san-luis-zag.png"

@@ -14,6 +14,18 @@ import {
 import { buildIgfForecastAccionesHref } from "@/lib/igf-to-acciones-href";
 import { sumMoneyCents, usesDetailedExpenseLayout } from "@/lib/igf-expense-layout";
 import {
+  acceptPeriodLoad,
+  canLeaveExpenseModal,
+  canSaveDesglose,
+  createExpenseSaveController,
+  draftsDirty,
+  draftsForGroup,
+  monthLabel,
+  performGuardedSave,
+  samePeriod,
+  shiftMonth,
+} from "@/lib/igf-gastos-month-nav";
+import {
   applyFinancialsToMiniRow,
   closeResultadoFinal,
   expenseInputsFromComponentes,
@@ -455,11 +467,23 @@ export function IgfForecastContent() {
   const [gastosDesglose, setGastosDesglose] = useState<IgfDiarioGastoDesglose[]>([]);
   const [desgloseModal, setDesgloseModal] = useState<{
     plant: string;
+    plantLabel: string;
     group: "corporativos" | "operativos";
+    year: number;
+    month: number;
+    requestId: number;
     drafts: Record<string, string>;
+    baseline: Record<string, string>;
     agregado: number | null;
     hasBreakdown: boolean;
+    loading: boolean;
+    loadError: string | null;
+    contractOk: boolean;
   } | null>(null);
+  const desgloseRequestRef = useRef(0);
+  const expenseSaveRef = useRef(createExpenseSaveController());
+  const desgloseModalRef = useRef(desgloseModal);
+  desgloseModalRef.current = desgloseModal;
   const [gastoEdit, setGastoEdit] = useState<{ plant: string; field: "operativos" | "corporativos"; draft: string } | null>(null);
   const [gastoSaving, setGastoSaving] = useState(false);
   const [gastoEditError, setGastoEditError] = useState<string | null>(null);
@@ -475,11 +499,18 @@ export function IgfForecastContent() {
     plant: string;
     concepto: string;
     label: string;
+    year: number;
+    month: number;
+    requestId: number;
+    loading: boolean;
     schedule: IgfDiarioGastoDistribucion | null;
     editing: string | null;
     draft: string;
     error: string | null;
   } | null>(null);
+  const distribucionRequestRef = useRef(0);
+  const distribucionModalRef = useRef(distribucionModal);
+  distribucionModalRef.current = distribucionModal;
   const [igfExcelUrl, setIgfExcelUrl] = useState("");
   const [uploadDay, setUploadDay] = useState<string>(() => {
     if (typeof window === "undefined") return "";
@@ -721,8 +752,97 @@ export function IgfForecastContent() {
     }
   };
 
+  const loadDesglosePeriod = async (next: {
+    plant: string;
+    plantLabel: string;
+    group: "corporativos" | "operativos";
+    year: number;
+    month: number;
+    agregado: number | null;
+  }) => {
+    const requestId = desgloseRequestRef.current + 1;
+    desgloseRequestRef.current = requestId;
+    const contractOk = usesDetailedExpenseLayout(next.year, next.month);
+    setDistribucionModal(null);
+    setGastoEditError(null);
+    setDesgloseModal({
+      ...next,
+      requestId,
+      contractOk,
+      loading: Boolean(contractOk && token),
+      loadError: contractOk ? null : "Este mes conserva el contrato anterior y no usa el desglose detallado.",
+      drafts: {},
+      baseline: {},
+      hasBreakdown: false,
+    });
+    if (!contractOk || !token) return;
+    try {
+      const data = await fetchIgfDiarioGastosDesglose({ token, year: next.year, month: next.month });
+      const fields = next.group === "corporativos" ? CORP_MODAL_FIELDS : OPER_MODAL_FIELDS;
+      setDesgloseModal((prev) => {
+        if (!prev || !acceptPeriodLoad(prev, { ...next, requestId })) return prev;
+        if (!samePeriod(data.year, data.month, next.year, next.month)) return prev;
+        const hit = desgloseForPlant(data.rows || [], {
+          plant_code: next.plant,
+          empresa: next.plantLabel,
+        } as IgfForecastMiniRow);
+        const built = draftsForGroup(hit, next.group, fields) as { drafts: Record<string, string>; hasBreakdown: boolean };
+        return {
+          ...prev,
+          loading: false,
+          loadError: null,
+          drafts: built.drafts,
+          baseline: { ...built.drafts },
+          hasBreakdown: built.hasBreakdown,
+        };
+      });
+    } catch (error: unknown) {
+      setDesgloseModal((prev) => {
+        if (!prev || prev.requestId !== requestId) return prev;
+        return {
+          ...prev,
+          loading: false,
+          loadError: error instanceof Error ? error.message : "No se pudo cargar el desglose",
+          drafts: {},
+          baseline: {},
+          hasBreakdown: false,
+        };
+      });
+    }
+  };
+
+  const changeDesgloseMonth = (delta: number) => {
+    if (!desgloseModal) return;
+    const allowed = canLeaveExpenseModal(
+      expenseSaveRef.current,
+      draftsDirty(desgloseModal.drafts, desgloseModal.baseline),
+      () => window.confirm("Hay cambios sin guardar. Si cambias de mes, se descartan.")
+    );
+    if (!allowed) return;
+    const next = shiftMonth(desgloseModal.year, desgloseModal.month, delta);
+    void loadDesglosePeriod({
+      plant: desgloseModal.plant,
+      plantLabel: desgloseModal.plantLabel,
+      group: desgloseModal.group,
+      year: next.year,
+      month: next.month,
+      agregado: null,
+    });
+  };
+
+  const closeDesglose = () => {
+    const allowed = canLeaveExpenseModal(
+      expenseSaveRef.current,
+      Boolean(desgloseModal && draftsDirty(desgloseModal.drafts, desgloseModal.baseline)),
+      () => window.confirm("Hay cambios sin guardar. ¿Cerrar sin guardar?")
+    );
+    if (!allowed) return;
+    setDesgloseModal(null);
+    setDistribucionModal(null);
+  };
+
   const saveDesglose = async () => {
-    if (!token || !igfForecast || !desgloseModal || gastoSaving) return;
+    if (!token || !igfForecast || !canSaveDesglose(desgloseModal, false) || !desgloseModal) return;
     const fields = desgloseModal.group === "corporativos" ? CORP_MODAL_FIELDS : OPER_MODAL_FIELDS;
     const numbers: Record<string, number> = {};
     for (const field of fields) {
@@ -739,38 +859,57 @@ export function IgfForecastContent() {
       setGastoEditError("Captura todos los conceptos. 0 es válido.");
       return;
     }
-    setGastoSaving(true);
-    setGastoEditError(null);
-    try {
-      const saved = await patchIgfDiarioGastosDesglose(token, {
-        year: igfForecast.year,
-        month: igfForecast.month,
-        plant_code: desgloseModal.plant,
-        group: desgloseModal.group,
+    const modalAtStart = desgloseModal;
+    await performGuardedSave(expenseSaveRef.current, {
+      identity: {
+        requestId: modalAtStart.requestId,
+        plant: modalAtStart.plant,
+        group: modalAtStart.group,
+        year: modalAtStart.year,
+        month: modalAtStart.month,
+      },
+      execute: (operation) => patchIgfDiarioGastosDesglose(token, {
+        year: operation.year,
+        month: operation.month,
+        plant_code: operation.plant,
+        group: operation.group as "corporativos" | "operativos",
         ...numbers,
-      });
-      setGastosDesglose((prev) => {
-        const rest = prev.filter((row) => foldPlantKey(row.plant_code) !== foldPlantKey(saved.plant_code));
-        return [...rest, saved.row];
-      });
-      setGastosManuales((prev) => {
-        const key = foldPlantKey(saved.plant_code);
-        const current = prev.find((row) => foldPlantKey(row.plant_code) === key);
-        const next = {
-          plant_code: saved.plant_code,
-          year: igfForecast.year,
-          month: igfForecast.month,
-          operativos: desgloseModal.group === "operativos" ? total : (current ? current.operativos : null),
-          corporativos: desgloseModal.group === "corporativos" ? total : (current ? current.corporativos : null),
-        };
-        return [...prev.filter((row) => foldPlantKey(row.plant_code) !== key), next];
-      });
-      setDesgloseModal(null);
-    } catch (error: unknown) {
-      setGastoEditError(error instanceof Error ? error.message : "No se pudo guardar el desglose");
-    } finally {
-      setGastoSaving(false);
-    }
+      }),
+      readVisible: () => desgloseModalRef.current,
+      readDashboard: () => igfForecastRef.current,
+      matches: (operation, visible) => expenseSaveRef.current.matchesDesglose(operation, visible),
+      onLock: () => {
+        setGastoSaving(true);
+        setGastoEditError(null);
+      },
+      onCache: (saved, operation) => {
+        setGastosDesglose((prev) => {
+          const rest = prev.filter((row) => foldPlantKey(row.plant_code) !== foldPlantKey(saved.plant_code));
+          return [...rest, saved.row];
+        });
+        setGastosManuales((prev) => {
+          const key = foldPlantKey(saved.plant_code);
+          const current = prev.find((row) => foldPlantKey(row.plant_code) === key);
+          const next = {
+            plant_code: saved.plant_code,
+            year: operation.year,
+            month: operation.month,
+            operativos: operation.group === "operativos" ? total : (current ? current.operativos : null),
+            corporativos: operation.group === "corporativos" ? total : (current ? current.corporativos : null),
+          };
+          return [...prev.filter((row) => foldPlantKey(row.plant_code) !== key), next];
+        });
+      },
+      onSuccess: (_saved, operation) => {
+        setDesgloseModal((prev) => (
+          expenseSaveRef.current.matchesDesglose(operation, prev) ? null : prev
+        ));
+      },
+      onError: (error) => {
+        setGastoEditError(error instanceof Error ? error.message : "No se pudo guardar el desglose");
+      },
+      onUnlock: () => setGastoSaving(false),
+    });
   };
 
   const openMargenDiario = async (row: IgfForecastMiniRow) => {
@@ -886,12 +1025,21 @@ export function IgfForecastContent() {
   };
 
   const openDistribucion = async (concepto: string, label: string) => {
-    if (!token || !igfForecast || !desgloseModal) return;
+    if (!token || !desgloseModal || !canSaveDesglose(desgloseModal, false)) return;
+    if (expenseSaveRef.current.isSaving()) return;
     const plant = desgloseModal.plant;
+    const year = desgloseModal.year;
+    const month = desgloseModal.month;
+    const requestId = distribucionRequestRef.current + 1;
+    distribucionRequestRef.current = requestId;
     setDistribucionModal({
       plant,
       concepto,
       label,
+      year,
+      month,
+      requestId,
+      loading: true,
       schedule: null,
       editing: null,
       draft: "",
@@ -900,45 +1048,72 @@ export function IgfForecastContent() {
     try {
       const schedule = await fetchIgfDiarioGastosDistribucion({
         token,
-        year: igfForecast.year,
-        month: igfForecast.month,
+        year,
+        month,
         plant_code: plant,
         concepto,
       });
       setDistribucionModal((prev) => (
-        prev && prev.concepto === concepto ? { ...prev, schedule, error: schedule.error } : prev
+        prev && prev.requestId === requestId && prev.concepto === concepto && samePeriod(prev.year, prev.month, year, month)
+          ? { ...prev, loading: false, schedule, error: schedule.error }
+          : prev
       ));
     } catch (error: unknown) {
       setDistribucionModal((prev) => (
-        prev && prev.concepto === concepto
-          ? { ...prev, error: error instanceof Error ? error.message : "No se pudo cargar la distribución" }
+        prev && prev.requestId === requestId
+          ? { ...prev, loading: false, error: error instanceof Error ? error.message : "No se pudo cargar la distribución" }
           : prev
       ));
     }
   };
 
+  const closeDistribucion = () => {
+    if (!canLeaveExpenseModal(expenseSaveRef.current, false, () => true)) return;
+    setDistribucionModal(null);
+  };
+
   const saveDistribucionDia = async (fecha: string, importe: number | null) => {
-    if (!token || !igfForecast || !distribucionModal || gastoSaving) return;
-    setGastoSaving(true);
-    try {
-      const schedule = await patchIgfDiarioGastosDistribucion(token, {
-        year: igfForecast.year,
-        month: igfForecast.month,
-        plant_code: distribucionModal.plant,
-        concepto: distribucionModal.concepto,
+    const visible = distribucionModalRef.current;
+    if (!token || !visible || visible.loading || gastoSaving) return;
+    await performGuardedSave(expenseSaveRef.current, {
+      identity: {
+        requestId: visible.requestId,
+        plant: visible.plant,
+        year: visible.year,
+        month: visible.month,
+        concepto: visible.concepto,
+      },
+      execute: (operation) => patchIgfDiarioGastosDistribucion(token, {
+        year: operation.year,
+        month: operation.month,
+        plant_code: operation.plant,
+        concepto: String(operation.concepto),
         fecha,
         importe,
-      });
-      setDistribucionModal((prev) => (
-        prev ? { ...prev, schedule, editing: null, draft: "", error: schedule.error } : prev
-      ));
-    } catch (error: unknown) {
-      setDistribucionModal((prev) => (
-        prev ? { ...prev, error: error instanceof Error ? error.message : "No se pudo guardar el día" } : prev
-      ));
-    } finally {
-      setGastoSaving(false);
-    }
+      }),
+      readVisible: () => distribucionModalRef.current,
+      matches: (operation, current) => expenseSaveRef.current.matchesDistribution(operation, current),
+      onLock: () => setGastoSaving(true),
+      onSuccess: (schedule, operation) => {
+        setDistribucionModal((prev) => {
+          if (!prev || !expenseSaveRef.current.matchesDistribution(operation, prev)) return prev;
+          return {
+            ...prev,
+            schedule,
+            editing: null,
+            draft: "",
+            error: typeof schedule.error === "string" ? schedule.error : null,
+          };
+        });
+      },
+      onError: (error, operation) => {
+        setDistribucionModal((prev) => {
+          if (!prev || !expenseSaveRef.current.matchesDistribution(operation, prev)) return prev;
+          return { ...prev, error: error instanceof Error ? error.message : "No se pudo guardar el día" };
+        });
+      },
+      onUnlock: () => setGastoSaving(false),
+    });
   };
 
   useEffect(() => {
@@ -2004,23 +2179,14 @@ export function IgfForecastContent() {
                             title="Editar desglose del mes"
                             className="w-full text-right underline decoration-dotted decoration-sky-400/80 text-sky-200 hover:text-sky-100"
                             onClick={() => {
-                              const hit = desgloseForPlant(gastosDesglose, miniRow);
-                              const fields = gastoField === "corporativos" ? CORP_MODAL_FIELDS : OPER_MODAL_FIELDS;
-                              const active = gastoField === "corporativos"
-                                ? Boolean(hit && hit.corporativos_desglosados)
-                                : Boolean(hit && hit.operativos_desglosados);
-                              const drafts: Record<string, string> = {};
-                              for (const field of fields) {
-                                const value = hit && hit.componentes ? hit.componentes[field.key] : null;
-                                drafts[field.key] = active && value != null ? String(value) : "";
-                              }
-                              setGastoEditError(null);
-                              setDesgloseModal({
+                              if (!igfForecast) return;
+                              void loadDesglosePeriod({
                                 plant: plantKey,
+                                plantLabel: String(miniRow.empresa || plantKey),
                                 group: gastoField,
-                                drafts,
+                                year: igfForecast.year,
+                                month: igfForecast.month,
                                 agregado: typeof v === "number" ? v : null,
-                                hasBreakdown: active,
                               });
                             }}
                           >
@@ -2228,10 +2394,37 @@ export function IgfForecastContent() {
                 className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
               >
                 <div className="w-full max-w-md rounded border border-slate-600 bg-slate-900 p-4 text-slate-100">
-                  <h3 className="mb-3 text-lg font-semibold">
+                  <h3 className="mb-2 text-lg font-semibold">
                     {desgloseModal.group === "corporativos" ? "CORPORATIVOS" : "OPERATIVOS"}
                   </h3>
-                  {!desgloseModal.hasBreakdown && desgloseModal.agregado != null ? (
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      aria-label="Mes anterior"
+                      disabled={gastoSaving}
+                      className="rounded bg-slate-700 px-3 py-1 disabled:opacity-50"
+                      onClick={() => changeDesgloseMonth(-1)}
+                    >
+                      ◀ Mes anterior
+                    </button>
+                    <p className="text-center text-sm font-semibold" aria-label="Mes visible">
+                      {monthLabel(desgloseModal.year, desgloseModal.month)}
+                      <span className="block font-normal text-slate-300">{desgloseModal.plantLabel}</span>
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Mes siguiente"
+                      disabled={gastoSaving}
+                      className="rounded bg-slate-700 px-3 py-1 disabled:opacity-50"
+                      onClick={() => changeDesgloseMonth(1)}
+                    >
+                      Mes siguiente ▶
+                    </button>
+                  </div>
+                  {gastoSaving ? <p className="mb-3 text-sm text-sky-200">Guardando…</p> : null}
+                  {desgloseModal.loading ? <p className="mb-3 text-sm text-slate-300">Cargando mes…</p> : null}
+                  {desgloseModal.loadError ? <p className="mb-3 text-sm text-amber-200">{desgloseModal.loadError}</p> : null}
+                  {!desgloseModal.hasBreakdown && desgloseModal.agregado != null && !desgloseModal.loading && !desgloseModal.loadError ? (
                     <p className="mb-3 text-sm text-amber-200">
                       Total actual sin desglose: {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 2 }).format(desgloseModal.agregado)}
                     </p>
@@ -2245,7 +2438,8 @@ export function IgfForecastContent() {
                             value={desgloseModal.drafts[field.key] || ""}
                             inputMode="decimal"
                             aria-label={field.label}
-                            className="w-36 rounded border border-slate-500 bg-slate-950 px-2 py-1 text-right"
+                            disabled={!canSaveDesglose(desgloseModal, gastoSaving)}
+                            className="w-36 rounded border border-slate-500 bg-slate-950 px-2 py-1 text-right disabled:opacity-50"
                             onChange={(event) => {
                               const draft = event.target.value;
                               setDesgloseModal((prev) => (
@@ -2256,7 +2450,8 @@ export function IgfForecastContent() {
                         </label>
                         <button
                           type="button"
-                          className="self-start text-xs text-sky-300 underline"
+                          className="self-start text-xs text-sky-300 underline disabled:opacity-50"
+                          disabled={!canSaveDesglose(desgloseModal, gastoSaving)}
                           onClick={() => void openDistribucion(field.key, field.label)}
                         >
                           Distribución diaria
@@ -2276,18 +2471,19 @@ export function IgfForecastContent() {
                   <div className="mt-4 flex justify-end gap-2">
                     <button
                       type="button"
-                      className="rounded bg-slate-600 px-3 py-1"
-                      onClick={() => setDesgloseModal(null)}
+                      disabled={gastoSaving}
+                      className="rounded bg-slate-600 px-3 py-1 disabled:opacity-50"
+                      onClick={() => closeDesglose()}
                     >
                       Cancelar
                     </button>
                     <button
                       type="button"
-                      disabled={gastoSaving}
-                      className="rounded bg-sky-700 px-3 py-1 text-white"
+                      disabled={!canSaveDesglose(desgloseModal, gastoSaving)}
+                      className="rounded bg-sky-700 px-3 py-1 text-white disabled:opacity-50"
                       onClick={() => void saveDesglose()}
                     >
-                      Guardar
+                      {gastoSaving ? "Guardando…" : "Guardar"}
                     </button>
                   </div>
                 </div>
@@ -2301,6 +2497,7 @@ export function IgfForecastContent() {
               >
                 <div className="max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded border border-slate-600 bg-slate-900 p-4 text-slate-100">
                   <h3 className="mb-2 text-lg font-semibold">Distribución diaria — {distribucionModal.label}</h3>
+                  <p className="mb-2 text-sm text-slate-300">{monthLabel(distribucionModal.year, distribucionModal.month)} · {distribucionModal.plant}</p>
                   {distribucionModal.error ? <p className="mb-2 text-sm text-amber-200">{distribucionModal.error}</p> : null}
                   {distribucionModal.schedule ? (
                     <>
@@ -2358,7 +2555,7 @@ export function IgfForecastContent() {
                                           void saveDistribucionDia(day.fecha, Math.round(n * 100) / 100);
                                         }}
                                       >
-                                        Guardar
+                                        {gastoSaving ? "Guardando…" : "Guardar"}
                                       </button>
                                       <button
                                         type="button"
@@ -2400,14 +2597,17 @@ export function IgfForecastContent() {
                         </tbody>
                       </table>
                     </>
-                  ) : (
+                  ) : distribucionModal.loading ? (
                     <p className="text-sm text-slate-300">Cargando distribución…</p>
+                  ) : (
+                    <p className="text-sm text-slate-300">No hay distribución cargada para este periodo.</p>
                   )}
                   <div className="mt-4 flex justify-end">
                     <button
                       type="button"
-                      className="rounded bg-slate-600 px-3 py-1"
-                      onClick={() => setDistribucionModal(null)}
+                      disabled={gastoSaving}
+                      className="rounded bg-slate-600 px-3 py-1 disabled:opacity-50"
+                      onClick={() => closeDistribucion()}
                     >
                       Cerrar
                     </button>
