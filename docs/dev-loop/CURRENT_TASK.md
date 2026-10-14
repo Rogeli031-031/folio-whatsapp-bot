@@ -1,6 +1,6 @@
 ﻿task_id: IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084
-status: DONE_PENDING_REVIEW
-phase: IMPLEMENTATION
+status: G4_PASS
+phase: G4
 
 authorized_by: ""
 authorized_at: ""
@@ -61,8 +61,21 @@ result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-
 product_sha: "f67b910248637428e4cfee7321d497465e50254d"
 
 completion:
-  status: DONE_PENDING_REVIEW
-  push_branch_only: true
-  create_pr: false
-  merge: false
+  status: G4_PASS
+  tested_product_sha: "f67b910248637428e4cfee7321d497465e50254d"
+  push_branch_only: false
+  create_pr: true
+  merge: true
   deploy: false
+
+g4:
+  result: PASS
+  tested_product_sha: "f67b910248637428e4cfee7321d497465e50254d"
+  standalone: "next start del build local, 127.0.0.1:3477"
+  fonts: "NotoSans-Regular.ttf 27056 y NotoSans-Bold.ttf 27112, HTTP 200"
+  font_failure: "Bold ausente en la copia standalone: alerta «No se pudo cargar la fuente del PDF», botón restaurado, semanas intactas"
+  dependency_review: "lockfile fija jspdf 4.2.1 y svg2pdf.js 2.8.1; npm audit --omit=dev sin hallazgos en esas dependencias; sin npm audit fix"
+  tests: "27/27"
+  typecheck: 0
+  build: 0
+  production_download: "no validada; fixture local"
