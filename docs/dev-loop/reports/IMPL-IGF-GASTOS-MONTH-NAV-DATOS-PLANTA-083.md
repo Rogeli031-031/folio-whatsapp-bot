@@ -111,3 +111,16 @@ XLSX / VISUAL EVIDENCE, fixture local, no producción y sin sesión autenticada:
 - `docs/dev-loop/reports/evidence-083/datosplanta-m-af-ag.png`
 
 Las imágenes muestran el control de mes de OPERATIVOS en octubre 2026, CORPORATIVOS en noviembre 2026 y las columnas M, N, AF y AG releídas del libro de San Luis. M muestra 10.5, N vacía, AF -15.5 y AG 0 en la fecha con captura. No son una captura de la sesión autenticada del dashboard.
+
+## Ajuste de guardado en curso
+
+El primer producto quedó en `0d5cfd0df2d2e15faf41540fd7403d8341076482`. Este ajuste queda en `3c3557abcdda63fd641b05ab85c3f03b113327b5`.
+
+Hallazgo: las flechas y Cancelar seguían activos durante `gastoSaving`, y los handlers no rechazaban esa interacción. Al resolverse el guardado, el modal se cerraba siempre y el error podía publicarse fuera de la sesión que lo originó. El payload ya usaba el periodo capturado al iniciar; el defecto estaba en los efectos tardíos sobre la interfaz y la caché. La comparación de caché usaba el forecast cerrado antes del `await`.
+
+Corrección: un controlador síncrono bloquea el segundo envío antes del siguiente render. Mientras guarda, mes, Cancelar y Cerrar quedan deshabilitados y los handlers no avanzan. Se muestra «Guardando…». Después de la respuesta se exige la misma planta, año, mes, grupo e identificador de sesión. Una reapertura, aunque repita planta y mes, no recibe el cierre ni el error. La caché del dashboard se actualiza solo si el periodo actual, leído al llegar la respuesta, coincide. La distribución aplica la misma regla con planta, año, mes, concepto e identificador de apertura.
+
+Excel sin cambios: M, AF, AG, N, R y el resto de hojas no se tocaron. El HG ausente de Acapulco sigue sin imputarse.
+
+Pruebas de comportamiento en `test/impl-igf-gastos-save-inflight-083.test.js`: 7/7, con peticiones diferidas. 083 y 082, más las regresiones de gastos 062, desglose 064 y distribución 064-R1: 67/67 en la corrida conjunta. `tsc --noEmit` exit 0. `npm run build` exit 0. `git diff --check` limpio. Los dos fallos de 024 siguen siendo los ya documentados en BASE y HEAD; esta corrección no tocó `server.js` ni desactivó pruebas.
+
