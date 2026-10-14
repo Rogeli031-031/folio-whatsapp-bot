@@ -209,7 +209,8 @@ test("el tooltip corresponde solo al punto y a la semana bajo el cursor", () => 
   assert.equal(chart.deltaTone(chart.INDICATORS.find((item) => item.id === "resultado"), -1), "bad");
   assert.match(svg, /IGF Diario semanal · San Luis/);
   assert.match(svg, /data-indicator="descuento_compra"[\s\S]*Pendiente/);
-  assert.match(MODAL, /image\/png/);
-  assert.match(MODAL, /toBlob/);
-  assert.match(chart.downloadName(view), /\.png$/);
+  assert.match(MODAL, /application\/pdf/);
+  assert.doesNotMatch(MODAL, /image\/png/);
+  assert.doesNotMatch(MODAL, /toBlob/);
+  assert.match(chart.downloadName(view), /\.pdf$/);
 });

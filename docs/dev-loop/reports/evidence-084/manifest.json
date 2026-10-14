@@ -1,0 +1,72 @@
+[
+  {
+    "id": "acapulco",
+    "file": "IGF_Diario_Acapulco_2026-10-04_a_2026-10-17.pdf",
+    "fixture": "local",
+    "pages": 1,
+    "mediaBox": [
+      0,
+      0,
+      1260,
+      1513.5
+    ],
+    "bytes": 29945,
+    "images": 0
+  },
+  {
+    "id": "one",
+    "file": "IGF_Diario_Acapulco_2026-10-04_a_2026-10-10.pdf",
+    "fixture": "local",
+    "pages": 1,
+    "mediaBox": [
+      0,
+      0,
+      1260,
+      1513.5
+    ],
+    "bytes": 21778,
+    "images": 0
+  },
+  {
+    "id": "three",
+    "file": "IGF_Diario_Acapulco_2026-10-04_a_2026-10-24.pdf",
+    "fixture": "local",
+    "pages": 1,
+    "mediaBox": [
+      0,
+      0,
+      1260,
+      1513.5
+    ],
+    "bytes": 36644,
+    "images": 0
+  },
+  {
+    "id": "todas",
+    "file": "IGF_Diario_Todas_2026-10-04_a_2026-10-24.pdf",
+    "fixture": "local",
+    "pages": 1,
+    "mediaBox": [
+      0,
+      0,
+      1260,
+      1513.5
+    ],
+    "bytes": 36646,
+    "images": 0
+  },
+  {
+    "id": "max",
+    "file": "IGF_Diario_Acapulco_2026-09-27_a_2026-11-07.pdf",
+    "fixture": "local",
+    "pages": 1,
+    "mediaBox": [
+      0,
+      0,
+      2002.5,
+      1513.5
+    ],
+    "bytes": 63816,
+    "images": 0
+  }
+]

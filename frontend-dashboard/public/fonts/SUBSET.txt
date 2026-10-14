@@ -1,0 +1,7 @@
+Noto Sans Regular and Bold in this folder are a static subset of Noto Sans
+(SIL Open Font License 1.1, see OFL.txt), including Latin letters, Spanish
+accents, punctuation, and U+0394 (Δ).
+
+Noto Sans does not include U+25B2 (▲) or U+25BC (▼). The executive chart
+draws those arrows as vector polygons so the direction stays visible in the
+PDF without rasterizing the page.

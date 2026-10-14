@@ -1,46 +1,50 @@
-﻿task_id: IMPL-IGF-GASTOS-MONTH-NAV-DATOS-PLANTA-083
-status: DONE_PENDING_REVIEW
-phase: IMPLEMENTATION
+﻿task_id: IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084
+status: G4_PASS
+phase: G4
 
 authorized_by: ""
 authorized_at: ""
 human_authorization: ""
 
-base_sha: "61330e14e468b853fce12603a53f92f7a1ca12d3"
-branch: "implementation/igf-gastos-month-navigation-datos-planta-083"
+base_sha: "15983459a28c5d4327746f612a570977013dd514"
+branch: "implementation/igf-diario-weekly-executive-pdf-084"
 
-objective: "Navegar el mes dentro de los modales de gastos, llenar precio y descuentos por canal en DatosPlanta, y aislar el guardado en curso de respuestas tardías."
+objective: "Descargar la gráfica ejecutiva semanal como PDF vectorial, sin cambiar los cálculos financieros."
 
 in_scope:
-  - "frontend-dashboard/components/IgfForecastClient.tsx"
-  - "frontend-dashboard/lib/igf-gastos-month-nav.js"
-  - "lib/igf-diario-datos-planta.js"
-  - "lib/dashboard-arr-forecast.js"
-  - "test/impl-igf-gastos-month-navigation-datos-planta-083.test.js"
-  - "test/impl-igf-gastos-save-inflight-083.test.js"
-  - "test/impl-igf-diario-datos-planta-082.test.js"
+  - "frontend-dashboard/components/IgfDiarioWeeklyExecutiveModal.tsx"
+  - "frontend-dashboard/lib/igf-diario-weekly-executive-chart.js"
+  - "frontend-dashboard/lib/igf-diario-weekly-executive-chart.d.ts"
+  - "frontend-dashboard/lib/igf-diario-weekly-executive-pdf.js"
+  - "frontend-dashboard/public/fonts/"
+  - "frontend-dashboard/package.json"
+  - "frontend-dashboard/package-lock.json"
+  - "test/impl-igf-diario-weekly-executive-pdf-084.test.js"
+  - "test/impl-igf-diario-weekly-executive-chart-081.test.js"
+  - "test/fix-igf-diario-weekly-executive-grid-081-r1.test.js"
+  - "test/fix-igf-diario-weekly-executive-ux-081-r2.test.js"
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-IGF-GASTOS-MONTH-NAV-DATOS-PLANTA-083.md"
-  - "docs/dev-loop/reports/evidence-083/"
+  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084.md"
+  - "docs/dev-loop/reports/evidence-084/"
 
 out_of_scope:
-  - "importación ARR"
-  - "DB, migraciones y escrituras productivas"
-  - "imputar el HG ausente de Acapulco"
-  - "TODAS / Provincia"
-  - "cálculos de venta, HG, C&D o resultado"
-  - "docs/director-ia/"
+  - "APIs, importadores y base de datos"
+  - "Excel y DatosPlanta"
+  - "navegación mensual de gastos 083"
+  - "cálculos de acumulados, cobertura, deltas y color"
+  - "otras descargas PNG"
+  - "envío por WhatsApp"
   - "PR, merge y deploy"
 
 contracts_in_force:
   - "docs/dev-loop/LOOP_PROTOCOL.md"
-  - "decisión 083 del usuario sobre AF, AG y M"
+  - "gráfica ejecutiva 081 y sus revisiones"
 
 allowed_actions:
-  - "implementar la navegación y las columnas"
-  - "probar con fixtures"
-  - "documentar"
-  - "push de la rama autorizada"
+  - "sustituir la descarga PNG de este botón por PDF vectorial"
+  - "agregar jsPDF y svg2pdf.js si no existen"
+  - "probar en un navegador headless"
+  - "documentar y publicar la rama"
 
 forbidden_actions:
   - "escribir AUTHORIZED_BY_HUMAN"
@@ -49,19 +53,29 @@ forbidden_actions:
   - "deploy"
   - "migrations"
   - "escrituras a la DB productiva"
+  - "npm audit fix"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-GASTOS-MONTH-NAV-DATOS-PLANTA-083.md"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084.md"
+
+product_sha: "f67b910248637428e4cfee7321d497465e50254d"
 
 completion:
-  status: DONE_PENDING_REVIEW
-  product_sha: "5dced61262fa2ee4050ed187b8062be106004833"
-  prior_product_sha: "3c3557abcdda63fd641b05ab85c3f03b113327b5"
-  g4_failed_head: "fb1fdee088b2813601860cfe298daddc3883d14a"
-  g4_failure: "108 pruebas, 107 en verde. La aserción buscaba concepto: operation.concepto y el codigo escribe String(operation.concepto)."
-  g4: "PASS sobre 5dced61262fa2ee4050ed187b8062be106004833: 109/109, typecheck y build en exit 0."
-  save_inflight_fix: "Durante el guardado se bloquean mes y cierre, el doble clic no repite la petición, y una respuesta tardía no cierra, no muestra error ni actualiza la caché si la sesión o el periodo actual del dashboard ya no coinciden."
-  push_branch_only: true
+  status: G4_PASS
+  tested_product_sha: "f67b910248637428e4cfee7321d497465e50254d"
+  push_branch_only: false
   create_pr: true
   merge: true
   deploy: false
+
+g4:
+  result: PASS
+  tested_product_sha: "f67b910248637428e4cfee7321d497465e50254d"
+  standalone: "next start del build local, 127.0.0.1:3477"
+  fonts: "NotoSans-Regular.ttf 27056 y NotoSans-Bold.ttf 27112, HTTP 200"
+  font_failure: "Bold ausente en la copia standalone: alerta «No se pudo cargar la fuente del PDF», botón restaurado, semanas intactas"
+  dependency_review: "lockfile fija jspdf 4.2.1 y svg2pdf.js 2.8.1; npm audit --omit=dev sin hallazgos en esas dependencias; sin npm audit fix"
+  tests: "27/27"
+  typecheck: 0
+  build: 0
+  production_download: "no validada; fixture local"

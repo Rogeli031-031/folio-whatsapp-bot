@@ -190,11 +190,12 @@ test("Descuento Compra queda pendiente y TODAS usa el consolidado recibido", () 
   assert.doesNotMatch(MODAL, /plants\.map\(\(plant\) =>/);
 });
 
-test("la descarga es PNG de la visualización y conserva la venta por canal ya resuelta", () => {
-  assert.match(MODAL, /Descargar/);
-  assert.match(MODAL, /image\/png/);
-  assert.match(MODAL, /toBlob/);
-  assert.match(MODAL, /downloadName\(view\)/);
+test("la descarga es PDF de la visualización y conserva la venta por canal ya resuelta", () => {
+  assert.match(MODAL, /Descargar PDF/);
+  assert.match(MODAL, /application\/pdf/);
+  assert.doesNotMatch(MODAL, /image\/png/);
+  assert.doesNotMatch(MODAL, /toBlob/);
+  assert.match(MODAL, /downloadName\(snapshot\)/);
   const days = sevenDays("2026-03-08", () => metrics(), {
     casa: [10, 10, 10, 10, 10, 10, 10],
     com: [5, null, 5, 5, 5, 5, 5],
@@ -210,7 +211,7 @@ test("la descarga es PNG de la visualización y conserva la venta por canal ya r
   const svg = chart.renderExecutiveSvg(view, { exportedAt: "12/10/2026" });
   assert.match(svg, /IGF Diario semanal · San Luis/);
   assert.match(svg, /Exportado 12\/10\/2026/);
-  assert.match(chart.downloadName(view), /\.png$/);
+  assert.match(chart.downloadName(view), /\.pdf$/);
   const record = weekly.weekDayRecords([{
     fecha: "2026-03-08",
     ventaKg: 15,

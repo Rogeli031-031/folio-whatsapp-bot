@@ -317,7 +317,7 @@ function renderExecutiveSvg(view, options) {
   });
   const height = Math.max(cursor + 8, TITLE_H + HEADER_H + 8);
   const stamp = options && options.exportedAt ? `Exportado ${options.exportedAt}` : "";
-  const font = "Segoe UI, sans-serif";
+  const font = (options && options.fontFamily) || "Segoe UI, sans-serif";
   const parts = [];
   parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" data-executive-chart="svg" data-layout="week-grid" data-week-count="${weeks.length}" data-frame-count="${placed.length}" data-full-width="${weeks.length > 0 && weeks.length <= 3 ? "1" : "0"}">`);
   parts.push(`<rect width="${width}" height="${height}" fill="#071422"/>`);
@@ -428,9 +428,19 @@ function renderExecutiveSvg(view, options) {
           parts.push(`<text x="${dx + DELTA_W / 2}" y="${y + 68}" text-anchor="middle" fill="#94a3b8" font-family="${font}" font-size="13">—</text>`);
         } else {
           const pct = formatPercent(next.delta.percent);
-          const arrow = next.delta.absolute > 0 ? "▲" : next.delta.absolute < 0 ? "▼" : "";
-          parts.push(`<text x="${dx + DELTA_W / 2}" y="${y + 58}" text-anchor="middle" fill="${toneColor(next.tone)}" font-family="${font}" font-size="14" font-weight="700" data-delta="${indicator.id}-${next.week_number}">${escapeXml(formatDelta(next.delta.absolute, indicator.unit))}</text>`);
-          parts.push(`<text x="${dx + DELTA_W / 2}" y="${y + 78}" text-anchor="middle" fill="${toneColor(next.tone)}" font-family="${font}" font-size="12">${escapeXml(`${arrow} ${pct || ""}`.trim())}</text>`);
+          const color = toneColor(next.tone);
+          const cx = dx + DELTA_W / 2;
+          parts.push(`<text x="${cx}" y="${y + 58}" text-anchor="middle" fill="${color}" font-family="${font}" font-size="14" font-weight="700" data-delta="${indicator.id}-${next.week_number}">${escapeXml(formatDelta(next.delta.absolute, indicator.unit))}</text>`);
+          if (next.delta.absolute > 0 || next.delta.absolute < 0) {
+            const up = next.delta.absolute > 0;
+            const points = up
+              ? `${cx},${y + 64} ${cx - 4.5},${y + 71} ${cx + 4.5},${y + 71}`
+              : `${cx - 4.5},${y + 64} ${cx + 4.5},${y + 64} ${cx},${y + 71}`;
+            parts.push(`<polygon data-arrow="${up ? "up" : "down"}" points="${points}" fill="${color}"/>`);
+          }
+          if (pct) {
+            parts.push(`<text x="${cx}" y="${y + 86}" text-anchor="middle" fill="${color}" font-family="${font}" font-size="12" data-delta-pct="${indicator.id}-${next.week_number}">${escapeXml(pct)}</text>`);
+          }
         }
         parts.push("</g>");
       }
@@ -443,14 +453,53 @@ function renderExecutiveSvg(view, options) {
   return parts.join("");
 }
 
-function downloadName(view) {
-  const slug = String((view && view.title) || "igf-diario")
-    .toLowerCase()
+function filePart(value) {
+  const clean = String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-  return `${slug || "igf-diario-semanal"}.png`;
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return clean.slice(0, 60);
+}
+
+function downloadSubject(view) {
+  if (view && view.scope === "all") return "Todas";
+  const title = String((view && view.title) || "");
+  const parts = title.split("·");
+  const name = parts.length > 1 ? parts.slice(1).join(" ") : title;
+  if (/todas|provincia/i.test(name)) return "Todas";
+  return filePart(name) || "Planta";
+}
+
+function downloadName(view) {
+  const weeks = (view && view.weeks) || [];
+  const first = weeks[0] || {};
+  const last = weeks[weeks.length - 1] || first;
+  const from = String(first.fecha_desde || "").slice(0, 10) || "sin-inicio";
+  const to = String(last.fecha_hasta || "").slice(0, 10) || "sin-fin";
+  return `IGF_Diario_${downloadSubject(view)}_${from}_a_${to}.pdf`;
+}
+
+function canExportExecutivePdf(state) {
+  if (!state || state.loading || state.loadError || state.exporting) return false;
+  return Number(state.weekCount) > 0;
+}
+
+function createPdfExportGate() {
+  let busy = false;
+  return {
+    isBusy() {
+      return busy;
+    },
+    tryBegin() {
+      if (busy) return false;
+      busy = true;
+      return true;
+    },
+    end() {
+      busy = false;
+    },
+  };
 }
 
 module.exports = {
@@ -470,5 +519,7 @@ module.exports = {
   renderExecutiveSvg,
   gridWidth,
   downloadName,
+  canExportExecutivePdf,
+  createPdfExportGate,
   formatRange,
 };
