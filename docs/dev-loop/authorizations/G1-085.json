@@ -1,0 +1,39 @@
+{
+    "task_id":  "IMPL-IGF-DIARIO-WEEKLY-ANALYTICAL-PDF-085",
+    "authorization_origin":  "INTERACTIVE_HUMAN_LOCAL_SCRIPT",
+    "authorized_by":  "HUMAN_APPROVER",
+    "human_name":  "Luis rogelio Zaragoza Alvarez",
+    "authorized_at":  "2026-10-14T21:13:50.7827226-06:00",
+    "human_authorization":  "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza Alvarez 2026-10-14",
+    "consent_typed":  "CIERRO 084 Y AUTORIZO 085 D1-D6",
+    "accepted_decisions":  [
+                               "D1",
+                               "D2",
+                               "D3",
+                               "D4",
+                               "D5",
+                               "D6"
+                           ],
+    "base_sha":  "c409e3078c636302397557096b118df04a514393",
+    "branch":  "implementation/igf-diario-weekly-analytical-pdf-085",
+    "predecessor_task_id":  "IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084",
+    "predecessor_resolution":  "CLOSED_BY_HUMAN",
+    "production_pdf_validation":  "NOT_VERIFIED_BY_THIS_INSTALLER",
+    "current_task_sha256_at_install":  "4103dd8da7afae632d5c3b0989e7528e960a1c2f82e38cc24fdcf7e38ae05f1e",
+    "predecessor_report_sha256_before":  "c70fbd7f994be49f6493bd6f913f040f303e81c8d4f91db19d4d4ccdab7ecc5d",
+    "predecessor_report_sha256_after":  "16d6a41c4e4ccdcb3f616b7bd9141d20bc7fd1ff9ba24df63ec5a4975adc3cc5",
+    "external_spec_sha256":  "53b26f0d1525bad4dcdd3208a98beebfc2185cb106cc52063bcd0d1f83f7617c",
+    "decisions_document_sha256":  "c6993cb47bada5a7a38f61475a411b273f6120a229aa80fb87dd1de5b6261e68",
+    "installer_sha256":  "f2fc577e9aeff3e77b1a110b6eb2437588bac58b0efdd24c4170cede1680f4db",
+    "administrative_files_uncommitted":  [
+                                             "docs/dev-loop/CURRENT_TASK.md",
+                                             "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084.md",
+                                             "docs/dev-loop/authorizations/G1-085.json"
+                                         ],
+    "original_head":  "b898c073c0922c62196591f1d4554be0ea7280b3",
+    "original_branch":  "fix/igf-diario-puebla-historical-holidays-038",
+    "original_current_task_sha256":  "00D6FD7BD450991A977622663B279C71BE42B870F9ABA88EE54AED33B0524F28",
+    "implementation_executed":  false,
+    "commit_performed_by_installer":  false,
+    "push_performed_by_installer":  false
+}

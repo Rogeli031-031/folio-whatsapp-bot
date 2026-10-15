@@ -1,0 +1,286 @@
+[
+  {
+    "mode": "plant",
+    "pdfs": 1,
+    "error": "",
+    "button": "Descargar PDF",
+    "files": [
+      {
+        "name": "button-plant-1.pdf",
+        "bytes": 143101,
+        "pages": 3,
+        "boxes": [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            1260,
+            1513.5
+          ]
+        ],
+        "images": 0,
+        "dejaVu": true,
+        "noto": true,
+        "sample": "RESULTADO SEMANAL POR PLANTAQué cambió en el resultadoTehuacán | 2026-10-04–2026-10-10 | 2026-10-11–2026-10-17Exportado 14/10/2026, 9:56:33 p.m. | Corte 2026-10-14 | Versión a corte síSemanaVenta kgRESULTADO $/kgPesos2026-10-04–2026-10-101,0002.2002,200.00Clasificación temporal: real. Cobertura del resultado: completa. Cobertura de C&D: completa. Venta total 1,000 kg. Kilos cubiertos1,000 kg.2026-",
+        "hasQueCambio": true,
+        "hasParcial": false,
+        "hasSinComparacion": false,
+        "hasAnexo": true,
+        "hasFallback": true,
+        "hasMetodo": true
+      }
+    ]
+  },
+  {
+    "mode": "single",
+    "pdfs": 1,
+    "error": "",
+    "button": "Descargar PDF",
+    "files": [
+      {
+        "name": "button-single-1.pdf",
+        "bytes": 131260,
+        "pages": 2,
+        "boxes": [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            1260,
+            1513.5
+          ]
+        ],
+        "images": 0,
+        "dejaVu": true,
+        "noto": true,
+        "sample": "RESULTADO SEMANAL POR PLANTAQué cambió en el resultadoTehuacán | 2026-10-04–2026-10-10Exportado 14/10/2026, 9:56:35 p.m. | Corte 2026-10-14 | Versión a corte síSemanaVenta kgRESULTADO $/kgPesos2026-10-04–2026-10-101,0002.2002,200.00Clasificación temporal: real. Cobertura del resultado: completa. Cobertura de C&D: completa. Venta total 1,000 kg. Kilos cubiertos1,000 kg.Sin comparación: una semana s",
+        "hasQueCambio": true,
+        "hasParcial": false,
+        "hasSinComparacion": true,
+        "hasAnexo": true,
+        "hasFallback": true,
+        "hasMetodo": true
+      }
+    ]
+  },
+  {
+    "mode": "partial",
+    "pdfs": 1,
+    "error": "",
+    "button": "Descargar PDF",
+    "files": [
+      {
+        "name": "button-partial-1.pdf",
+        "bytes": 139393,
+        "pages": 2,
+        "boxes": [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            1260,
+            1513.5
+          ]
+        ],
+        "images": 0,
+        "dejaVu": true,
+        "noto": true,
+        "sample": "RESULTADO SEMANAL POR PLANTAQué cambió en el resultadoTehuacán | 2026-10-04–2026-10-10 | 2026-10-11–2026-10-17Exportado 14/10/2026, 9:56:36 p.m. | Corte 2026-10-14 | Versión a corte síSemanaVenta kgRESULTADO $/kgPesos2026-10-04–2026-10-101,0002.2002,200.00Clasificación temporal: real. Cobertura del resultado: completa. Cobertura de C&D: completa. Venta total 1,000 kg. Kilos cubiertos1,000 kg.2026-",
+        "hasQueCambio": true,
+        "hasParcial": true,
+        "hasSinComparacion": false,
+        "hasAnexo": true,
+        "hasFallback": true,
+        "hasMetodo": true
+      }
+    ]
+  },
+  {
+    "mode": "nweeks",
+    "pdfs": 1,
+    "error": "",
+    "button": "Descargar PDF",
+    "files": [
+      {
+        "name": "button-nweeks-1.pdf",
+        "bytes": 147365,
+        "pages": 3,
+        "boxes": [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            1260,
+            1513.5
+          ]
+        ],
+        "images": 0,
+        "dejaVu": true,
+        "noto": true,
+        "sample": "RESULTADO SEMANAL POR PLANTAQué cambió en el resultadoTehuacán | 2026-10-04–2026-10-10 | 2026-10-18–2026-10-24 | 2026-12-27–2027-01-02Exportado 14/10/2026, 9:56:37 p.m. | Corte 2026-10-14 | Versión a corte síSemanaVenta kgRESULTADO $/kgPesos2026-10-04–2026-10-101,0002.2002,200.00Clasificación temporal: real. Cobertura del resultado: completa. Cobertura de C&D: completa. Venta total 1,000 kg. Kilos",
+        "hasQueCambio": true,
+        "hasParcial": false,
+        "hasSinComparacion": false,
+        "hasAnexo": true,
+        "hasFallback": true,
+        "hasMetodo": true
+      }
+    ]
+  },
+  {
+    "mode": "puebla",
+    "pdfs": 1,
+    "error": "",
+    "button": "Descargar PDF",
+    "files": [
+      {
+        "name": "button-puebla-1.pdf",
+        "bytes": 143024,
+        "pages": 3,
+        "boxes": [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            1260,
+            1513.5
+          ]
+        ],
+        "images": 0,
+        "dejaVu": true,
+        "noto": true,
+        "sample": "RESULTADO SEMANAL POR PLANTAQué cambió en el resultadoPuebla | 2026-10-04–2026-10-10 | 2026-10-11–2026-10-17Exportado 14/10/2026, 9:56:38 p.m. | Corte 2026-10-14 | Versión a corte síSemanaVenta kgRESULTADO $/kgPesos2026-10-04–2026-10-101,0002.2002,200.00Clasificación temporal: real. Cobertura del resultado: completa. Cobertura de C&D: completa. Venta total 1,000 kg. Kilos cubiertos1,000 kg.2026-10",
+        "hasQueCambio": true,
+        "hasParcial": false,
+        "hasSinComparacion": false,
+        "hasAnexo": true,
+        "hasFallback": true,
+        "hasMetodo": true
+      }
+    ]
+  },
+  {
+    "mode": "todas",
+    "pdfs": 1,
+    "error": "",
+    "button": "Descargar PDF",
+    "files": [
+      {
+        "name": "button-todas-1.pdf",
+        "bytes": 25114,
+        "pages": 1,
+        "boxes": [
+          [
+            0,
+            0,
+            1260,
+            1513.5
+          ]
+        ],
+        "images": 0,
+        "dejaVu": false,
+        "noto": true,
+        "sample": "IGF Diario semanal · Todas · Exportado 14/10/2026, 9:56:40 p.m.Semana 4104/10/2026–10/10/2026Δ vs. S41Semana 4211/10/2026–17/10/2026RESULTADORESULTADO($)Acumulado: 2,200.002,200.001,700.001,200.00DomLunMarMiéJueVieSáb-1,000.00-45.45%Acumulado: 1,200.002,200.001,700.001,200.00DomLunMarMiéJueVieSábGASTOSGASTO CORPORATIVO($)Acumulado: ——Acumulado: —GASTO OPERATIVO($)Acumulado: ——Acumulado: —MARGEN / ",
+        "hasQueCambio": false,
+        "hasParcial": false,
+        "hasSinComparacion": false,
+        "hasAnexo": true,
+        "hasFallback": false,
+        "hasMetodo": false
+      }
+    ]
+  },
+  {
+    "mode": "double",
+    "pdfs": 1,
+    "error": "",
+    "button": "Descargar PDF",
+    "files": [
+      {
+        "name": "button-double-1.pdf",
+        "bytes": 143099,
+        "pages": 3,
+        "boxes": [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            1260,
+            1513.5
+          ]
+        ],
+        "images": 0,
+        "dejaVu": true,
+        "noto": true,
+        "sample": "RESULTADO SEMANAL POR PLANTAQué cambió en el resultadoTehuacán | 2026-10-04–2026-10-10 | 2026-10-11–2026-10-17Exportado 14/10/2026, 9:56:41 p.m. | Corte 2026-10-14 | Versión a corte síSemanaVenta kgRESULTADO $/kgPesos2026-10-04–2026-10-101,0002.2002,200.00Clasificación temporal: real. Cobertura del resultado: completa. Cobertura de C&D: completa. Venta total 1,000 kg. Kilos cubiertos1,000 kg.2026-",
+        "hasQueCambio": true,
+        "hasParcial": false,
+        "hasSinComparacion": false,
+        "hasAnexo": true,
+        "hasFallback": true,
+        "hasMetodo": true
+      }
+    ]
+  },
+  {
+    "mode": "missing",
+    "pdfs": 0,
+    "error": "No se pudo cargar la fuente del PDF",
+    "button": "Descargar PDF",
+    "files": []
+  }
+]

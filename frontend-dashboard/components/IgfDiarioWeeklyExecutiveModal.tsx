@@ -18,43 +18,78 @@ import {
   renderExecutiveSvg,
 } from "@/lib/igf-diario-weekly-executive-chart";
 import { coverageLines } from "@/lib/igf-diario-weekly-rows";
+import { buildAnalyticalReport, freezePlantExport } from "@/lib/igf-diario-weekly-analytical-report";
+
+type WeekDay = IgfDiarioSemanalDay & {
+  com_desc_source?: string | null;
+  com_desc_source_date?: string | null;
+};
 
 type WeekCard = {
   id: string;
   fecha_desde: string;
   fecha_hasta: string;
   week_number: number;
+  week_year: number | null;
+  estado: "real" | "parcial" | "proyectada" | null;
+  complete: boolean | null;
+  missing_components: string[];
   metrics: IgfDiarioSemanalMetrics;
-  days: IgfDiarioSemanalDay[];
+  days: WeekDay[];
+  coverage: IgfDiarioSemanalCoverageMap | null;
   coverage_note: string | null;
+  plant_code: string | null;
+  empresa: string | null;
+  corte_ymd: string | null;
+  version_as_of_corte: boolean | null;
 };
 
 function noteOf(coverage?: IgfDiarioSemanalCoverageMap | null): string | null {
   return coverageLines(coverage).length ? "Cobertura parcial" : null;
 }
 
-function weekFromPlant(payload: IgfDiarioSemanalResponse): WeekCard {
+function weekFromPlant(payload: IgfDiarioSemanalResponse & { version_as_of_corte?: boolean }): WeekCard {
+  const coverage = payload.coverage || payload.week.coverage || null;
   return {
     id: payload.week.fecha_desde,
     fecha_desde: payload.week.fecha_desde,
     fecha_hasta: payload.week.fecha_hasta,
     week_number: payload.week.week_number,
+    week_year: payload.week.week_year,
+    estado: payload.week.estado,
+    complete: payload.week.complete ?? null,
+    missing_components: payload.week.missing_components || [],
     metrics: payload.metrics,
     days: payload.days || [],
-    coverage_note: noteOf(payload.coverage || payload.week.coverage),
+    coverage,
+    coverage_note: noteOf(coverage),
+    plant_code: payload.plant_code,
+    empresa: payload.empresa,
+    corte_ymd: payload.corte_ymd,
+    version_as_of_corte: payload.version_as_of_corte ?? null,
   };
 }
 
-function weekFromAll(payload: IgfDiarioSemanalAllResponse): WeekCard {
+function weekFromAll(payload: IgfDiarioSemanalAllResponse & { version_as_of_corte?: boolean }): WeekCard {
   const resumen = payload.resumen;
+  const coverage = resumen?.coverage || payload.week.coverage || null;
   return {
     id: payload.week.fecha_desde,
     fecha_desde: payload.week.fecha_desde,
     fecha_hasta: payload.week.fecha_hasta,
     week_number: payload.week.week_number,
+    week_year: payload.week.week_year,
+    estado: payload.week.estado,
+    complete: null,
+    missing_components: [],
     metrics: (resumen?.metrics || {}) as IgfDiarioSemanalMetrics,
     days: resumen?.days || [],
-    coverage_note: noteOf(resumen?.coverage || payload.week.coverage),
+    coverage,
+    coverage_note: noteOf(coverage),
+    plant_code: resumen?.plant_code || null,
+    empresa: resumen?.empresa || null,
+    corte_ymd: payload.corte_ymd,
+    version_as_of_corte: payload.version_as_of_corte ?? null,
   };
 }
 
@@ -180,6 +215,14 @@ export default function IgfDiarioWeeklyExecutiveModal({
 
   async function download() {
     const snapshot = view;
+    const exportedAt = new Date().toLocaleString("es-MX", { timeZone: "America/Mexico_City" });
+    const plantExport = todas ? null : freezePlantExport({
+      weeks,
+      selectedIds: selected,
+      empresa,
+      plantCode,
+    });
+    const analyticalReport = plantExport ? buildAnalyticalReport(plantExport, exportedAt) : null;
     if (!canExportExecutivePdf({
       loading,
       loadError: error,
@@ -192,11 +235,16 @@ export default function IgfDiarioWeeklyExecutiveModal({
     let href = "";
     try {
       const stamped = renderExecutiveSvg(snapshot, {
-        exportedAt: new Date().toLocaleString("es-MX"),
+        exportedAt,
         fontFamily: "NotoSans",
       });
       const pdf = await import("@/lib/igf-diario-weekly-executive-pdf");
-      const blob = await pdf.svgToExecutivePdf(stamped);
+      const blob = analyticalReport
+        ? await (await import("@/lib/igf-diario-weekly-analytical-pdf")).composePlantPdf({
+          report: analyticalReport,
+          svg: stamped,
+        })
+        : await pdf.svgToExecutivePdf(stamped);
       if (!(blob instanceof Blob) || blob.size < 8) throw new Error("El PDF generado está vacío");
       href = URL.createObjectURL(blob);
       const link = document.createElement("a");
