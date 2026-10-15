@@ -42,6 +42,10 @@ function pesos(value) {
   return money(value, 2);
 }
 
+function signedPesos(value) {
+  return value > 0 ? `+${pesos(value)}` : pesos(value);
+}
+
 function kilos(value) {
   return money(value, 0);
 }
@@ -311,7 +315,7 @@ function drawTransition(cursor, report, transition) {
   });
   textBlock(cursor, "Corporativo total = gasto corporativo + inversiones + impuestos. Operativo total = nómina/gastos + IMSS/SUA + extraordinarios + provisiones. Corresponden a M y U del Excel.", { size: 7.7, color: MUTED });
   cursor.y += 8;
-  ensure(cursor, 110);
+  ensure(cursor, 145);
   textBlock(cursor, "Importes semanales y variación real ($)", { size: 12, bold: true });
   headerRow(cursor, [
     { text: "Concepto", x: LEFT + 4 },
@@ -319,43 +323,24 @@ function drawTransition(cursor, report, transition) {
     { text: "Actual", x: 420, align: "right" },
     { text: "Actual - anterior", x: RIGHT - 4, align: "right" },
   ]);
-  for (const [index, label] of [[3, "Gasto corporativo total"], [4, "Gasto operativo total"], [5, "HG (importe)"]]) {
-    const line = transition.displayLines[index];
-    const before = line.anterior == null || transition.previous.V == null ? null : line.anterior * transition.previous.V;
-    const after = line.actual == null || transition.current.V == null ? null : line.actual * transition.current.V;
+  for (const [key, label] of [["corporativo", "Gasto corporativo total"], ["operativo", "Gasto operativo total"], ["hg", "HG (importe)"]]) {
+    const before = transition.previous.amounts[key];
+    const after = transition.current.amounts[key];
     const delta = before == null || after == null ? null : after - before;
     bandRow(cursor, [
       { text: label, x: LEFT + 4 },
       { text: pesos(before), x: 330, align: "right" },
       { text: pesos(after), x: 420, align: "right" },
-      { text: pesos(delta), x: RIGHT - 4, align: "right" },
-    ], { fill: index % 2 ? BAND : WHITE, size: 8.2 });
+      { text: signedPesos(delta), x: RIGHT - 4, align: "right" },
+    ], { fill: key === "operativo" ? WHITE : BAND, size: 8.2 });
   }
-  if (transition.conciliable) {
-    cursor.y += 4;
-    ensure(cursor, 240);
-    textBlock(cursor, "Aporte al resultado por cambio de tasas ($)", { size: 12, bold: true });
-    textBlock(cursor, "Aporte = cambio firmado de $/kg × kilos promedio de ambas semanas. La tabla anterior muestra la variación real del importe; esta atribución separa el efecto de tasa del efecto de volumen. En HG se aplica el signo de resta del resultado.", { size: 8, color: MUTED });
-    transition.displayEffects.forEach((line) => {
-      if (line.aporte == null || Math.abs(line.aporte) < 0.0005) return;
-      bandRow(cursor, [
-        { text: line.label, x: LEFT + 4 },
-        { text: pesos(line.pesos), x: RIGHT - 4, align: "right", color: line.pesos < 0 ? NEGATIVE : INK },
-      ], { fill: WHITE, size: 8.2 });
-    });
-    bandRow(cursor, [
-      { text: "Volumen sobre kilos cubiertos", x: LEFT + 4 },
-      { text: pesos(transition.volume_effect), x: RIGHT - 4, align: "right" },
-    ], { fill: BAND, size: 8.2 });
-    bandRow(cursor, [
-      { text: "Cambio del RESULTADO", x: LEFT + 4 },
-      { text: pesos(transition.official.delta_R), x: RIGHT - 4, align: "right", color: transition.official.delta_R < 0 ? NEGATIVE : INK },
-    ], { fill: WHITE, bold: true, size: 8.2 });
-    textBlock(cursor, `Residual ${pesos(transition.residual)}. La identidad es algebraica y no demuestra causa comercial ni ahorro pagado.`, {
-      size: 7.7,
-      color: MUTED,
-    });
-  }
+  textBlock(cursor, "Variación = importe actual menos importe anterior, con el mismo signo que la gráfica semanal.", { size: 7.7, color: MUTED });
+  cursor.y += 6;
+  bandRow(cursor, [
+    { text: "Cambio del RESULTADO total", x: LEFT + 4 },
+    { text: signedPesos(transition.official.delta_R), x: RIGHT - 4, align: "right", color: transition.official.delta_R < 0 ? NEGATIVE : INK },
+  ], { fill: WHITE, bold: true, size: 8.2 });
+  textBlock(cursor, "El cambio del resultado incluye todas las partidas del informe.", { size: 7.7, color: MUTED });
   const sources = transition.current.provenance.com_desc;
   textBlock(cursor, `Procedencia de C&D: ${sources.length ? sources.join("; ") : "no informada"}. Las demás partidas: ${transition.current.provenance.otras}.`, {
     size: 7.7,
@@ -364,11 +349,10 @@ function drawTransition(cursor, report, transition) {
 }
 
 function drawMethod(cursor) {
+  ensure(cursor, 50);
   cursor.y += 8;
   textBlock(cursor, "Método y límites", { size: 12, bold: true });
-  textBlock(cursor, "El RESULTADO es el oficial del Dashboard, después de inversiones y del resto de partidas. No es utilidad antes de inversiones. El informe histórico de referencia usa RESULTADO final; la utilidad antes de inversiones pertenece a otro documento que ese informe cita.", { size: 8.2 });
-  textBlock(cursor, "Las cifras salen del snapshot ya cargado del Dashboard. Q es el kilo cubierto del resultado y V es la venta total. Se agrupan los componentes corporativos y operativos como en Excel. La conciliación de las doce partidas fuente se conserva y el puente solo aparece cuando Q=V, la base de C&D coincide y las identidades cierran.", { size: 8.2 });
-  textBlock(cursor, "El anexo siguiente es la gráfica vectorial de las semanas seleccionadas, en su tamaño original.", { size: 8.2 });
+  textBlock(cursor, "Resultado oficial del Dashboard, después de inversiones. Variación monetaria = actual menos anterior. Cascada en $/kg solo con bases completas y conciliadas. Anexo semanal en tamaño original.", { size: 8.2 });
 }
 
 function drawAnalytical(pdf, report) {

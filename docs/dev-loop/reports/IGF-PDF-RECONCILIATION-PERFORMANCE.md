@@ -47,3 +47,28 @@ el exportador Excel ni sustituye esas cifras para forzar concordancia.
 Requiere backend actualizado para HG fisico; ante un backend anterior se
 muestra ausencia, nunca kilos de venta. Sin merge, deploy manual, migraciones
 ni escrituras en DB en esta revision.
+
+## Revision tras observaciones de la muestra
+
+La persona usuaria rechazo la segunda tabla de atribucion monetaria: necesita
+las diferencias de importes que muestra la grafica. Esta revision sustituye
+la presentacion descrita arriba: se elimina del PDF la tabla de aportes por
+tasas, su efecto de volumen y su residual. Se conserva la cascada en $/kg.
+
+La tabla monetaria usa los mismos datos que la grafica semanal: suma de los
+importes diarios corporativos y operativos, y hg_mxn semanal. Ya no reconstruye
+estos importes multiplicando tasas por venta total. Cada variacion es actual
+menos anterior; ausencia y cero conservan su significado. El cambio oficial
+del resultado se muestra separado, pues incluye todas las partidas.
+
+Se compacta la nota de metodo para conservarla junto a su titulo y evitar una
+pagina adicional casi vacia. La muestra privada de Acapulco queda en cuatro
+paginas: analisis, grafica semanal, CASA y COMISIONISTA. Los dos anexos ARR
+de esta muestra se conservan del PDF original del usuario; las primeras dos
+paginas usan las semanas del Excel local. No se agregan datos reales al repo.
+
+Validacion de esta revision: 27 pruebas especificas aprobadas, incluidas la
+paridad entre importes del informe y de las graficas, ausencia/ceros y el
+render del PDF sin atribucion monetaria. Build con tipos aprobado. PDF final
+revisado por extraccion de texto y render: variaciones coincidentes, cifras
+cuestionadas ausentes y cuatro paginas legibles. Sin merge ni publicacion.

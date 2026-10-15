@@ -1,10 +1,13 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { buildAnalyticalReport, freezePlantExport, PARTIDAS } = require("../frontend-dashboard/lib/igf-diario-weekly-analytical-report");
 const { buildExecutiveView } = require("../frontend-dashboard/lib/igf-diario-weekly-executive-chart");
 const weekly = require("../lib/igf-diario-weekly-plant");
 const grafica = require("../lib/igf-diario-grafica");
+const analyticalPdf = require("../frontend-dashboard/lib/igf-diario-weekly-analytical-pdf");
 
 function syntheticWeeks() {
   return [
@@ -63,4 +66,55 @@ test("Unavailable physical HG is not replaced by sales, and captured zero remain
     { id: "b", metrics: { venta_kg: 8000 }, days: [{ fecha: "2026-10-11", metrics: { venta_kg: 8000 }, hg_kilos: 0 }] }];
   const hg = buildExecutiveView({ weeks, selectedIds: ["a", "b"] }).indicators.find((i) => i.id === "kilos");
   assert.equal(hg.columns[0].value, null); assert.equal(hg.columns[1].value, 0);
+});
+
+test("Weekly monetary amounts use the same source as the charts, including partial data and zero", () => {
+  const weeks = syntheticWeeks();
+  weeks[0].days = [
+    { gasto_corporativo_mxn: 100, gasto_operativo_mxn: 200 },
+    { gasto_corporativo_mxn: 50, gasto_operativo_mxn: null },
+  ];
+  weeks[1].days = [{ gasto_corporativo_mxn: 0, gasto_operativo_mxn: null }];
+  // Amounts must not be inferred from the rates or the total sales volume.
+  weeks[1].metrics.hg_mxn = null;
+  const selectedIds = ["w0", "w1"];
+  const frozen = freezePlantExport({ weeks, selectedIds });
+  const r = buildAnalyticalReport(frozen);
+  const view = buildExecutiveView({ weeks, selectedIds });
+  for (const [key, indicator] of [["corporativo", "gasto_corporativo"], ["operativo", "gasto_operativo"], ["hg", "hg"]]) {
+    assert.deepEqual(r.weeks.map((w) => w.amounts[key]), view.indicators.find((i) => i.id === indicator).columns.map((c) => c.value));
+  }
+  assert.deepEqual(r.weeks[0].amounts, { corporativo: 150, operativo: 200, hg: -2000 });
+  assert.deepEqual(r.weeks[1].amounts, { corporativo: 0, operativo: null, hg: null });
+  weeks[0].days[0].gasto_corporativo_mxn = 999;
+  assert.equal(buildAnalyticalReport(frozen).weeks[0].amounts.corporativo, 150);
+  assert.equal(buildAnalyticalReport(freezePlantExport({ weeks: syntheticWeeks(), selectedIds })).weeks[0].amounts.corporativo, null);
+});
+
+test("PDF shows actual monetary differences and omits the average-volume attribution table", () => {
+  const weeks = syntheticWeeks();
+  weeks[0].days = [{ gasto_corporativo_mxn: 12000, gasto_operativo_mxn: 4000 }];
+  weeks[1].days = [{ gasto_corporativo_mxn: 12000, gasto_operativo_mxn: 9000 }];
+  const report = buildAnalyticalReport(freezePlantExport({ weeks, selectedIds: ["w0", "w1"] }));
+  const { jsPDF } = require("../frontend-dashboard/node_modules/jspdf");
+  const pdf = new jsPDF({ unit: "pt", format: "a4" });
+  for (const [file, style] of [["DejaVuSans.ttf", "normal"], ["DejaVuSans-Bold.ttf", "bold"]]) {
+    analyticalPdf.installFace(pdf, fs.readFileSync(path.join(__dirname, "../frontend-dashboard/public/fonts", file)), file, "DejaVuSans", style);
+  }
+  const text = [];
+  const original = pdf.text.bind(pdf);
+  pdf.text = (value, ...args) => {
+    text.push(...(Array.isArray(value) ? value : [value]));
+    return original(value, ...args);
+  };
+  analyticalPdf.drawAnalytical(pdf, report);
+  const start = text.indexOf("Importes semanales y variación real ($)");
+  assert.ok(start >= 0);
+  assert.deepEqual(text.slice(start + 5, start + 17), [
+    "Gasto corporativo total", "12,000.00", "12,000.00", "0.00",
+    "Gasto operativo total", "4,000.00", "9,000.00", "+5,000.00",
+    "HG (importe)", "-2,000.00", "-600.00", "+1,400.00",
+  ]);
+  assert.equal(text[text.indexOf("Cambio del RESULTADO total") + 1], "+2,100.00");
+  assert.doesNotMatch(text.join("\n"), /Aporte al resultado por cambio de tasas|Efectos en pesos|Volumen sobre kilos cubiertos|kilos promedio|Residual/);
 });

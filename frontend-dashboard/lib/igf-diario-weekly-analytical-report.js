@@ -63,6 +63,8 @@ function cloneDay(day) {
     weekday: day && day.weekday ? String(day.weekday) : null,
     estado: day && day.estado ? String(day.estado) : null,
     metrics: day && day.metrics ? { ...day.metrics } : {},
+    gasto_corporativo_mxn: finite(day && day.gasto_corporativo_mxn),
+    gasto_operativo_mxn: finite(day && day.gasto_operativo_mxn),
     missing_components: Array.isArray(day && day.missing_components) ? day.missing_components.slice() : [],
     com_desc_source: day && day.com_desc_source ? String(day.com_desc_source) : null,
     com_desc_source_date: day && day.com_desc_source_date ? String(day.com_desc_source_date) : null,
@@ -147,6 +149,11 @@ function assessWeek(week) {
   const V = finite(metrics.venta_kg);
   const Q = resultCoverage ? finite(resultCoverage.kg_covered) : null;
   const qCd = cdCoverage ? finite(cdCoverage.kg_covered) : null;
+  // Match the weekly chart: sum captured daily amounts, preserving missing data.
+  const sumAmount = (key) => {
+    const values = (week.days || []).map((day) => finite(day && day[key])).filter((value) => value != null);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+  };
   const rates = PARTIDAS.map((partida, index) => ({
     index,
     key: partida.key,
@@ -188,6 +195,11 @@ function assessWeek(week) {
     qCd,
     rates,
     displayRates: groupLines(rates),
+    amounts: {
+      corporativo: sumAmount("gasto_corporativo_mxn"),
+      operativo: sumAmount("gasto_operativo_mxn"),
+      hg: finite(metrics.hg_mxn),
+    },
     signedSum,
     reasons,
     compatible: reasons.length === 0,
