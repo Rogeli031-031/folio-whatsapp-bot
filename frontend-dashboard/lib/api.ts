@@ -155,6 +155,7 @@ export type IgfDiarioSemanalDay = {
   weekday: string;
   estado: "real" | "parcial" | "proyectada";
   metrics: IgfDiarioSemanalMetrics;
+  hg_kilos?: number | null;
   missing_components?: string[];
 };
 

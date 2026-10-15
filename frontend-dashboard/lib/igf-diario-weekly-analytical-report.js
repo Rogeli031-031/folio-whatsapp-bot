@@ -20,6 +20,27 @@ const KG_TOLERANCE = 1e-6;
 const VISIBLE_RATE = 0.0005;
 const PARTIAL_LABEL = "Análisis parcial / No conciliable con el detalle disponible";
 
+// Presentation groups follow Excel M (J+K+L) and U (Q+R+S+T).
+// The original twelve components remain available for reconciliation.
+function groupLines(lines) {
+  const groups = [[0], [1], [2], [3, 4, 5], [6, 7, 8, 9], [10], [11]];
+  return groups.map((indices, index) => {
+    const parts = indices.map((i) => lines[i]);
+    const grouped = { ...parts[0], index };
+    if (indices.length > 1) {
+      grouped.key = index === 3 ? "corporativo_total" : "operativo_total";
+      grouped.label = index === 3 ? "Gasto corporativo total" : "Gasto operativo total";
+    }
+    for (const field of ["value", "anterior", "actual", "aporte", "pesos"]) {
+      if (parts.some((p) => Object.prototype.hasOwnProperty.call(p, field))) {
+        grouped[field] = parts.every((p) => finite(p[field]) != null)
+          ? parts.reduce((sum, p) => sum + p[field], 0) : null;
+      }
+    }
+    return grouped;
+  });
+}
+
 function finite(value) {
   if (value == null || value === "") return null;
   const number = Number(value);
@@ -166,6 +187,7 @@ function assessWeek(week) {
     Q,
     qCd,
     rates,
+    displayRates: groupLines(rates),
     signedSum,
     reasons,
     compatible: reasons.length === 0,
@@ -222,6 +244,7 @@ function transitionOf(previous, current) {
     consecutive,
     year_change: yearChange,
     lines,
+    displayLines: groupLines(lines),
     official,
     previous,
     current,
@@ -263,11 +286,12 @@ function transitionOf(previous, current) {
       support: null,
     };
   }
-  const ranked = rankLines(effects);
+  const displayEffects = groupLines(effects);
+  const ranked = rankLines(displayEffects);
   const top = ranked.slice(0, 5);
   const rest = ranked.slice(5);
   const otras = rest.reduce((sum, line) => sum + line.aporte, 0);
-  const visible = effects.filter((line) => Math.abs(line.aporte) >= VISIBLE_RATE);
+  const visible = displayEffects.filter((line) => Math.abs(line.aporte) >= VISIBLE_RATE);
   const support = visible.filter((line) => line.aporte > 0).sort((left, right) => right.aporte - left.aporte || left.index - right.index)[0] || null;
   const pressure = visible.filter((line) => line.aporte < 0).sort((left, right) => left.aporte - right.aporte || left.index - right.index)[0] || null;
   return {
@@ -276,6 +300,7 @@ function transitionOf(previous, current) {
     label: "Conciliada",
     reasons: [],
     effects,
+    displayEffects,
     volume_effect: volume,
     residual,
     waterfall: {
@@ -316,4 +341,5 @@ module.exports = {
   freezePlantExport,
   buildAnalyticalReport,
   assessWeek,
+  groupLines,
 };

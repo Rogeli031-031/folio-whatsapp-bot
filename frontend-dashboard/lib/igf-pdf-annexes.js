@@ -1,6 +1,5 @@
 "use strict";
 
-const { DAILY_COLUMNS } = require("./igf-pdf-workbook");
 const W = 841.89, H = 595.28, M = 28, BOTTOM = H - 38;
 const TEAL = [22, 107, 104], INK = [23, 48, 66], MUTED = [94, 106, 114];
 const RED = [165, 42, 54], GREEN = [0, 136, 91], BAND = [239, 245, 246];
@@ -139,24 +138,9 @@ function drawChannel(pdf, data, plant, exportedAt) {
   table(pdf, [{ title: "Cliente", width: 145 }, { title: "Δ venta", width: 55 }, { title: "Últimos comentarios", width: 185 }], rows, 425, W - M - 425, 112, next, { size: 7 });
 }
 
-function drawDaily(pdf, data, plant, exportedAt) {
-  const subtitle = `${plant} · Mes ${String(data.month).padStart(2, "0")}/${data.year} · Datos de la hoja ${data.sheet}`;
-  const source = "Fuente: Excel IGF Diario · A, B, H, AD, Z, M, U, AF, AG, AI, AJ, AK · — = sin dato";
-  const next = () => page(pdf, "IGF DIARIO · DETALLE POR FECHA", subtitle, source, exportedAt);
-  next();
-  const rows = data.rows.map((values) => values.map((v, i) => {
-    const kind = DAILY_COLUMNS[i].kind;
-    if (kind === "date") return { text: dateLabel(v) };
-    if (kind === "text") return { text: v == null || v === "" ? "—" : String(v) };
-    return { text: format(v, kind === "kg" ? 0 : 2), align: "right", color: typeof v === "number" && v < 0 ? RED : INK };
-  }));
-  table(pdf, DAILY_COLUMNS, rows, M, W - 2 * M, 93, next, { size: 7.2, pad: 2 });
-}
-
 function drawAnnexes(pdf, annexes, plant, exportedAt) {
   drawChannel(pdf, annexes.casa, plant, exportedAt);
   drawChannel(pdf, annexes.comisionista, plant, exportedAt);
-  drawDaily(pdf, annexes.daily, plant, exportedAt);
 }
 
-module.exports = { drawAnnexes, drawChannel, drawDaily, trend };
+module.exports = { drawAnnexes, drawChannel, trend };
