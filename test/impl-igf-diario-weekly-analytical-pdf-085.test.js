@@ -251,3 +251,38 @@ test("P01 dibuja páginas A4 con DejaVu y texto del informe", () => {
   assert.equal((raw.match(/\/Type\s*\/Page\b/g) || []).length >= 1, true);
   assert.equal(raw.includes("NotoSans"), false);
 });
+
+test("R2 deja las etiquetas de la cascada por encima de la tabla", () => {
+  const jsPdfPath = [
+    path.join(FRONT, "node_modules", "jspdf"),
+    path.join(__dirname, "..", "..", "folio-084-wt", "frontend-dashboard", "node_modules", "jspdf"),
+    path.join(__dirname, "..", "..", "folio-whatsapp-bot", "frontend-dashboard", "node_modules", "jspdf"),
+  ].find((candidate) => fs.existsSync(candidate));
+  assert.ok(jsPdfPath, "jspdf no está instalado");
+  const { jsPDF } = require(jsPdfPath);
+  const built = pair(
+    weekFromRates("s0", "2026-10-04", "2026-10-10", BASE_RATES, 1000),
+    weekFromRates("s1", "2026-10-18", "2026-10-24", BASE_RATES, 900),
+  );
+  const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
+  const regular = fs.readFileSync(path.join(FRONT, "public", "fonts", "DejaVuSans.ttf"));
+  const bold = fs.readFileSync(path.join(FRONT, "public", "fonts", "DejaVuSans-Bold.ttf"));
+  analyticalPdf.installFace(pdf, regular, "DejaVuSans.ttf", "DejaVuSans", "normal");
+  analyticalPdf.installFace(pdf, bold, "DejaVuSans-Bold.ttf", "DejaVuSans", "bold");
+  const marks = [];
+  const original = pdf.text.bind(pdf);
+  pdf.text = (text, x, y, options) => {
+    const lines = Array.isArray(text) ? text : [String(text)];
+    pdf.setFontSize(pdf.getFontSize());
+    const step = typeof pdf.getLineHeight === "function" ? pdf.getLineHeight() : 8;
+    lines.forEach((line, index) => marks.push({ line: String(line), y: y + index * step }));
+    return original(text, x, y, options);
+  };
+  analyticalPdf.drawAnalytical(pdf, built);
+  const labels = marks.filter((mark) => mark.line === "Gasto" || mark.line === "corporativo" || mark.line === "Comisiones y" || mark.line === "descuentos");
+  const header = marks.find((mark) => mark.line === "Partida ($/kg)");
+  assert.ok(labels.length >= 1);
+  assert.ok(header);
+  const lowest = Math.max(...labels.map((mark) => mark.y));
+  assert.ok(lowest + 2 < header.y - 11, `etiqueta ${lowest} entra en la tabla ${header.y}`);
+});

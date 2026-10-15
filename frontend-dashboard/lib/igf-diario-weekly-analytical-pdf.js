@@ -138,8 +138,6 @@ function drawWaterfall(cursor, transition) {
   const chart = transition.waterfall;
   if (!chart) return;
   const pdf = cursor.pdf;
-  ensure(cursor, 148);
-  const bottom = cursor.y + 96;
   const labels = [
     { name: "Anterior", value: chart.anterior, kind: "end" },
     ...chart.top.map((line) => ({
@@ -162,6 +160,16 @@ function drawWaterfall(cursor, transition) {
   const max = Math.max(...values);
   const span = max - min || 1;
   const slot = (RIGHT - LEFT) / labels.length;
+  const plot = 96;
+  const axisGap = 12;
+  pdf.setFont("DejaVuSans", "normal");
+  pdf.setFontSize(7);
+  const names = spans.map((item) => pdf.splitTextToSize(item.name, Math.max(8, slot - 2)).slice(0, 2));
+  const lineHeight = typeof pdf.getLineHeight === "function" ? pdf.getLineHeight() : 8.05;
+  const maxLines = names.reduce((count, lines) => Math.max(count, lines.length), 1);
+  const belowLabels = 12;
+  ensure(cursor, plot + axisGap + maxLines * lineHeight + belowLabels);
+  const bottom = cursor.y + plot;
   const yOf = (value) => bottom - ((value - min) / span) * 90;
   pdf.setDrawColor(MUTED[0], MUTED[1], MUTED[2]);
   pdf.setLineWidth(0.4);
@@ -196,11 +204,10 @@ function drawWaterfall(cursor, transition) {
     setInk(pdf, item.value < 0 ? NEGATIVE : INK);
     pdf.text(signedRate(item.value), x + width / 2, Math.max(cursor.y, top - 3), { align: "center" });
     setInk(pdf, MUTED);
-    const name = pdf.splitTextToSize(item.name, slot - 2).slice(0, 2);
-    pdf.text(name, x + width / 2, bottom + 12, { align: "center" });
+    pdf.text(names[index], x + width / 2, bottom + axisGap, { align: "center" });
   });
   resetGraphics(pdf);
-  cursor.y = bottom + 30;
+  cursor.y = bottom + axisGap + maxLines * lineHeight + belowLabels;
 }
 
 function drawOpening(cursor, report) {
