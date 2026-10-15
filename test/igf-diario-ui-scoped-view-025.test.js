@@ -132,7 +132,7 @@ describe("IMPL-IGF-DIARIO-UI-SCOPED-VIEW-025 UI", () => {
     const loadingAt = CLIENT.indexOf("{igfLoading &&");
     assert.doesNotMatch(CLIENT.slice(loadingAt - 120, loadingAt), /!plantaFilter/);
     assert.match(CLIENT, /label: "Empresa"|Empresa<\/th>/);
-    assert.match(CLIENT, /plantaFilter\s*\?\s*igfMini\.rows\.filter/);
+    assert.match(CLIENT, /plantaFilter\s*\?\s*miniView\.rows\.filter/);
   });
 
   it("K–M) Puebla filtra la fila y Zona Provincia solo con Todas", () => {

@@ -90,6 +90,7 @@ import {
   decideOpenPronosticoFromQuery,
   findPronosticoMiniRow,
   forecastRowsForRender,
+  pronosticoDaysKey,
 } from "@/lib/igf-open-pronostico";
 
 function lastYmdOfMonth(year: number, month: number): string {
@@ -607,7 +608,7 @@ export function IgfForecastContent() {
   useEffect(() => {
     if (igfTableMode !== "igf_diario" || !token || !igfForecast || !igfMini) return;
     const up = uploadDay.trim();
-    const cacheKey = `${igfForecast.year}|${igfForecast.month}|${up}|${versionAsOfCorte ? "1" : "0"}`;
+    const cacheKey = `${token}|${igfForecast.year}|${igfForecast.month}|${up}|${versionAsOfCorte ? "1" : "0"}|${acumuladoNonce}`;
     const cached = acumuladoCacheRef.current;
     if (cached && cached.key === cacheKey) {
       const cachedMissing = missingAcumuladoPlants(igfMini.rows || [], cached.byPlant);
@@ -1166,6 +1167,8 @@ export function IgfForecastContent() {
   const [pronosticoLoading, setPronosticoLoading] = useState(false);
   const [pronosticoError, setPronosticoError] = useState<string | null>(null);
   const [pronosticoSaving, setPronosticoSaving] = useState(false);
+  const pronosticoSaveRef = useRef(false);
+  const pronosticoSavedDaysRef = useRef("");
   const openedPronosticoFromQueryRef = useRef(false);
 
   const pronosticoSheetDisplay = useMemo(() => {
@@ -1244,6 +1247,13 @@ export function IgfForecastContent() {
 
   useEffect(() => {
     lastIgfFetchKeyRef.current = "";
+    igfForecastRef.current = null;
+    acumuladoCacheRef.current = null;
+    setIgfForecast(null);
+    setIgfMini(null);
+    setAcumuladoByPlant(null);
+    setAcumuladoMissing([]);
+    setPlantaFilter("");
   }, [token]);
 
   const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -1308,6 +1318,13 @@ export function IgfForecastContent() {
   useEffect(() => {
     igfForecastRef.current = igfForecast;
   }, [igfForecast]);
+
+  useEffect(() => {
+    if (!token || !igfForecast || tokenHasGlobalPlantScope(token)) return;
+    // Rows have already been scoped by the server to this authenticated session.
+    const plants = igfForecast.rows.map((row) => String(row.empresa || "").trim()).filter(Boolean);
+    setPlantaFilter((current) => plants.includes(current) ? current : plants[0] || "");
+  }, [token, igfForecast]);
 
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked) return;
@@ -1516,6 +1533,7 @@ export function IgfForecastContent() {
         ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
       });
       setPronosticoDetail(data);
+      pronosticoSavedDaysRef.current = pronosticoDaysKey(data.days);
     } catch (e: unknown) {
       setPronosticoError(e instanceof Error ? e.message : "Error al cargar pronóstico");
     } finally {
@@ -1677,6 +1695,8 @@ export function IgfForecastContent() {
     setForecastRecalcMsg(null);
     try {
       await postForecastProvincia(token, { year: igfForecast.year, month: igfForecast.month });
+      acumuladoCacheRef.current = null;
+      setAcumuladoNonce((value) => value + 1);
       const up = uploadDay.trim();
       const data = await fetchIgfForecast(token, {
         year: igfForecast.year,
@@ -1750,7 +1770,7 @@ export function IgfForecastContent() {
   };
 
   const togglePronosticoDayByFecha = (fecha: string) => {
-    if (!fecha) return;
+    if (!fecha || pronosticoSaveRef.current) return;
     setPronosticoDetail((prev) => {
       if (!prev?.days?.length) return prev;
       const days = prev.days.map((d) =>
@@ -1761,7 +1781,8 @@ export function IgfForecastContent() {
   };
 
   const savePronosticoMiniDays = async () => {
-    if (!pronosticoDetail || !token || !igfForecast) return;
+    if (!pronosticoDetail || !token || !igfForecast || pronosticoSaveRef.current) return false;
+    pronosticoSaveRef.current = true;
     setPronosticoSaving(true);
     setPronosticoError(null);
     try {
@@ -1775,6 +1796,12 @@ export function IgfForecastContent() {
           ? pronosticoDetail.days.map((d) => ({ fecha: d.fecha, selected: d.selected }))
           : [],
       });
+      // The accumulated financials depend on the selected projection days too.
+      acumuladoCacheRef.current = null;
+      setAcumuladoByPlant(null);
+      setAcumuladoLoading(true);
+      setAcumuladoNonce((value) => value + 1);
+      lastIgfFetchKeyRef.current = "";
       const data = await fetchIgfForecast(token, {
         year: igfForecast.year,
         month: igfForecast.month,
@@ -1783,6 +1810,7 @@ export function IgfForecastContent() {
         include_mini: true,
       });
       setIgfForecast(data);
+      igfForecastRef.current = data;
       if (data.mini) setIgfMini(data.mini);
       const refreshed = await fetchPronosticoDetalle(token, {
         year: igfForecast.year,
@@ -1791,11 +1819,24 @@ export function IgfForecastContent() {
         ...(up && /^\d{4}-\d{2}-\d{2}$/.test(up) ? { upload_day: up } : {}),
       });
       setPronosticoDetail(refreshed);
+      pronosticoSavedDaysRef.current = pronosticoDaysKey(refreshed.days);
+      return true;
     } catch (e: unknown) {
       setPronosticoError(e instanceof Error ? e.message : "Error al guardar");
+      return false;
     } finally {
+      pronosticoSaveRef.current = false;
       setPronosticoSaving(false);
     }
+  };
+
+  const closePronostico = async () => {
+    if (pronosticoSaveRef.current) return;
+    const dirty = pronosticoDetail && pronosticoDaysKey(pronosticoDetail.days) !== pronosticoSavedDaysRef.current;
+    if (dirty && !(await savePronosticoMiniDays())) return;
+    setPronosticoModal(null);
+    setPronosticoDetail(null);
+    setPronosticoError(null);
   };
 
   const forecastRows: IgfForecastRow[] = forecastRowsForRender(igfForecast);
@@ -1972,7 +2013,7 @@ export function IgfForecastContent() {
                       onChange={(e) => setPlantaFilter(e.target.value)}
                       className="rounded border border-slate-600 bg-slate-700 px-2 py-1 text-slate-200 text-xs"
                     >
-                      <option value="">Todas</option>
+                      {tokenHasGlobalPlantScope(token) && <option value="">Todas</option>}
                       {Array.from(new Set(forecastRows.map((r) => r.empresa?.trim()).filter(Boolean))).sort().map((emp) => (
                         <option key={emp} value={emp}>{emp}</option>
                       ))}
@@ -2070,7 +2111,7 @@ export function IgfForecastContent() {
                 { key: "utilOperImporte" as const, label: "Util. Operación - Importe", fmt: (v: number) => fmtNum(v, 0), money: true },
                 { key: "resultadoFinalImporte" as const, label: "Resultado Final - Importe", fmt: (v: number) => fmtNum(v, 0), money: true },
               ];
-              const renderRow = (r: (typeof plantRows)[0] | typeof zona, isZona: boolean) => (
+              const renderRow = (r: IgfForecastMiniRow, isZona: boolean) => (
                 <tr
                   key={r.empresa}
                   className={
@@ -2906,6 +2947,7 @@ export function IgfForecastContent() {
         </section>
         {!plantaFilter && igfTableMode === "igf_diario" && token && igfForecast && (
           <IgfDiarioWeeklyAllPlantsPanel
+            refreshKey={acumuladoNonce}
             token={token}
             year={igfForecast.year}
             month={igfForecast.month}
@@ -2922,6 +2964,7 @@ export function IgfForecastContent() {
         )}
         {plantaFilter && igfTableMode === "igf_diario" && token && igfForecast && (
           <IgfDiarioWeeklyPlantPanel
+            refreshKey={acumuladoNonce}
             token={token}
             year={igfForecast.year}
             month={igfForecast.month}
@@ -3476,11 +3519,7 @@ export function IgfForecastContent() {
       {pronosticoModal && (
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => {
-            setPronosticoModal(null);
-            setPronosticoDetail(null);
-            setPronosticoError(null);
-          }}
+          onClick={() => void closePronostico()}
         >
           <div
             className="w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col rounded-lg border border-slate-700 bg-slate-900 p-5 shadow-xl"
@@ -3496,11 +3535,9 @@ export function IgfForecastContent() {
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setPronosticoModal(null);
-                  setPronosticoDetail(null);
-                  setPronosticoError(null);
-                }}
+                onClick={() => void closePronostico()}
+                disabled={pronosticoSaving}
+                aria-label="Guardar cambios y cerrar pronóstico"
                 className="rounded p-1 text-slate-400 hover:bg-slate-700 hover:text-white"
               >
                 ×
@@ -3508,7 +3545,7 @@ export function IgfForecastContent() {
             </div>
             {pronosticoLoading && <p className="text-sm text-slate-400">Cargando…</p>}
             {pronosticoError && <p className="text-sm text-red-400">{pronosticoError}</p>}
-            {!pronosticoLoading && !pronosticoError && pronosticoDetail && (
+            {!pronosticoLoading && pronosticoDetail && (
               <>
                 <p className="text-xs text-slate-400 mb-2">
                   Ventana PROM: {pronosticoDetail.lookback_start || "—"} → {pronosticoDetail.lookback_end || "—"} · Corte:{" "}
@@ -3522,7 +3559,7 @@ export function IgfForecastContent() {
                     <p className="text-[0.65rem] text-slate-500 px-2 py-1 border-b border-slate-700/80">
                       Amarillo: histórico (desde el lunes de la semana del lookback hasta el corte). Azul: mes pendiente.
                       Borde rojo: día incluido en el PROM — pulse la celda para quitarlo o añadirlo (o use la lista
-                      abajo). Guarde para persistir y actualizar descuento / mini-resumen.
+                      abajo). Los cambios se guardan al cerrar y actualizan la pantalla principal.
                     </p>
                     <table className="w-full min-w-[720px] text-[0.65rem] border-collapse">
                       <thead>
@@ -3658,6 +3695,7 @@ export function IgfForecastContent() {
                           <input
                             type="checkbox"
                             checked={d.selected}
+                            disabled={pronosticoSaving}
                             onChange={() =>
                               setPronosticoDetail((prev) =>
                                 prev
