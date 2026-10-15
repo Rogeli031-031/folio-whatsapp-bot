@@ -116,6 +116,57 @@ async function svgToExecutivePdf(svgText) {
   return blob;
 }
 
+async function appendExecutiveSvg(pdf, svgText) {
+  const source = assertControlledSvg(svgText);
+  const svgModule = await import("svg2pdf.js");
+  const svg2pdf = svgModule.svg2pdf || svgModule.default;
+  if (typeof svg2pdf !== "function") throw new Error("No está disponible la conversión vectorial");
+  const parsed = new DOMParser().parseFromString(source, "image/svg+xml");
+  if (parsed.querySelector("parsererror")) throw new Error("No se pudo leer el SVG de la gráfica");
+  const svg = parsed.documentElement;
+  const width = Number(svg.getAttribute("width"));
+  const height = Number(svg.getAttribute("height"));
+  if (!(width > 0) || !(height > 0)) throw new Error("La gráfica no tiene tamaño");
+  const box = pageBox(width, height);
+  pdf.addPage([box.pageW, box.pageH], box.orientation);
+  const gotW = pdf.internal.pageSize.getWidth();
+  const gotH = pdf.internal.pageSize.getHeight();
+  if (Math.abs(gotW - box.pageW) > 0.6 || Math.abs(gotH - box.pageH) > 0.6) {
+    throw new Error("El tamaño de página PDF no coincide con la gráfica");
+  }
+  const fonts = pdf.getFontList() || {};
+  if (!fonts[FONT_FAMILY]) {
+    const regular = await loadFace(pdf, "/fonts/NotoSans-Regular.ttf", "NotoSans-Regular.ttf", "normal");
+    const bold = await loadFace(pdf, "/fonts/NotoSans-Bold.ttf", "NotoSans-Bold.ttf", "bold");
+    await ensureCanvasFont("400", regular);
+    await ensureCanvasFont("700", bold);
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  }
+  pdf.setLineDashPattern([], 0);
+  pdf.setFillColor(0, 0, 0);
+  pdf.setDrawColor(0, 0, 0);
+  pdf.setTextColor(0, 0, 0);
+  pdf.setFont(FONT_FAMILY, "normal");
+  const host = document.createElement("div");
+  host.setAttribute("data-pdf-export", "1");
+  host.style.position = "fixed";
+  host.style.left = "0";
+  host.style.top = "0";
+  host.style.width = `${width}px`;
+  host.style.height = `${height}px`;
+  host.style.overflow = "hidden";
+  host.style.pointerEvents = "none";
+  host.style.opacity = "0";
+  host.appendChild(document.importNode(svg, true));
+  document.body.appendChild(host);
+  const live = host.querySelector("svg");
+  try {
+    await svg2pdf(live, pdf, { x: 0, y: 0, width: box.pageW, height: box.pageH });
+  } finally {
+    host.remove();
+  }
+}
+
 module.exports = {
   FONT_FAMILY,
   SVG_PX_TO_PT,
@@ -123,4 +174,5 @@ module.exports = {
   assertControlledSvg,
   pageBox,
   svgToExecutivePdf,
+  appendExecutiveSvg,
 };
