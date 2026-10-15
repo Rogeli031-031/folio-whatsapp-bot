@@ -401,6 +401,10 @@ async function composePlantPdf(options) {
   installFace(pdf, bold, "DejaVuSans-Bold.ttf", "DejaVuSans", "bold");
   drawAnalytical(pdf, report);
   await executive.appendExecutiveSvg(pdf, svg);
+  if (options.annexes) {
+    const { drawAnnexes } = require("./igf-pdf-annexes");
+    drawAnnexes(pdf, options.annexes, report.plant, report.exportedAt);
+  }
   const blob = pdf.output("blob");
   if (!(blob instanceof Blob) || blob.size < 8) throw new Error("El PDF generado está vacío");
   return blob;

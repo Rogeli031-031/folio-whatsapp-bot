@@ -2213,6 +2213,7 @@ export interface ArrVentaSerieResponse {
   fecha_prev_hasta?: string;
   points: ArrVentaSeriePoint[];
   clientes_top?: ArrVentaClienteTop[];
+  top_limit?: number;
   cliente_norm?: string | null;
 }
 
@@ -2224,6 +2225,7 @@ export function fetchArrVentaSerie(
     canal?: ArrVentaSerieCanal;
     cliente_norm?: string | null;
     provincia?: boolean;
+    top_limit?: 6 | 15;
   },
   init?: { signal?: AbortSignal }
 ): Promise<ArrVentaSerieResponse> {
@@ -2234,6 +2236,7 @@ export function fetchArrVentaSerie(
   };
   if (params.cliente_norm) q.cliente_norm = params.cliente_norm;
   if (params.provincia) q.provincia = "1";
+  if (params.top_limit) q.top_limit = String(params.top_limit);
   return apiFetch<ArrVentaSerieResponse>("/api/arr/venta-serie", {
     token,
     params: q,
