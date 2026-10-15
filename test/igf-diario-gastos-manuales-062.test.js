@@ -341,7 +341,7 @@ test("API usa la auth financiera y el alcance de planta existente", () => {
   const block = SERVER.slice(start, end);
   assert.match(block, /dashboardBlockGAFinancialKpis/);
   assert.match(block, /dashboardBlockGVForbidden/);
-  assert.match(block, /assertPlantaPermitidaDashboard/);
+  assert.match(block, /igfDashboardScope\.canAccessPlant/);
   assert.match(block, /filterIgfDiarioGastosManuales/);
   assert.equal(gastos.overrideVisible({ role: "ZP", plantas_permitidas: [] }, null), true);
   assert.equal(gastos.overrideVisible({ role: "GG", plantas_permitidas: [4] }, 4), true);

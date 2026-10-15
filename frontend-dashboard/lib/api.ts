@@ -2014,7 +2014,7 @@ export interface IgfForecastMiniResponse {
   month: number;
   upload_day: string | null;
   rows: IgfForecastMiniRow[];
-  zona: IgfForecastMiniRow;
+  zona: IgfForecastMiniRow | null;
 }
 
 export interface PronosticoDetalleDay {

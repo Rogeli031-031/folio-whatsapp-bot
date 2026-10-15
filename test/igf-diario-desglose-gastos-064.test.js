@@ -484,7 +484,7 @@ test("API exige auth financiera y no amplia permisos", () => {
   const block = SERVER.slice(start, end);
   assert.match(block, /dashboardBlockGAFinancialKpis/);
   assert.match(block, /dashboardBlockGVForbidden/);
-  assert.match(block, /assertPlantaPermitidaDashboard/);
+  assert.match(block, /igfDashboardScope\.canAccessPlant/);
   assert.doesNotMatch(block, /INSERT INTO|UPDATE |DELETE FROM/);
 });
 

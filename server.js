@@ -47,6 +47,7 @@ const arrRefreshProvincia = require("./lib/arr-refresh-provincia");
 const forecastMensual = require("./lib/forecast-mensual");
 const dashboardArrForecast = require("./lib/dashboard-arr-forecast");
 const igfDiarioGastosManuales = require("./lib/igf-diario-gastos-manuales");
+const igfDashboardScope = require("./lib/igf-dashboard-scope");
 const igfDiarioGastosDesglose = require("./lib/igf-diario-gastos-desglose");
 const igfDiarioGastosDistribucion = require("./lib/igf-diario-gastos-distribucion");
 const igfDiarioMargenManual = require("./lib/igf-diario-margen-manual");
@@ -12304,7 +12305,7 @@ app.get("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, res)
         console.error("[Dashboard IGF Forecast include_mini]", e);
       }
     }
-    res.json(payload);
+    res.json(await igfDashboardScope.scopeForecast(client, req.dashboardAuth, payload, dashboardArrForecast));
   } catch (e) {
     console.error("[Dashboard IGF Forecast]", e);
     res.status(500).json({ error: e.message });
@@ -12353,7 +12354,7 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
       Object.keys(buildOpts).length ? buildOpts : undefined
     );
     const mini = await computeIgfForecastMiniPayload(client, igf, year, month, uploadDay);
-    res.json(mini);
+    res.json(await igfDashboardScope.scopeMini(client, req.dashboardAuth, mini, igf.rows, dashboardArrForecast));
   } catch (e) {
     console.error("[Dashboard IGF Forecast mini]", e);
     res.status(500).json({ error: e.message });
@@ -12363,14 +12364,7 @@ app.get("/api/dashboard/igf-forecast-mini", dashboardAuthMiddleware, async (req,
 });
 
 async function filterIgfDiarioGastosManuales(client, auth, rows) {
-  if (igfDiarioGastosManuales.overrideVisible(auth, null)) return rows;
-  const visible = [];
-  for (const row of rows || []) {
-    const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, row.plant_code);
-    const plantaId = resolved ? resolved.plantaId : null;
-    if (igfDiarioGastosManuales.overrideVisible(auth, plantaId)) visible.push(row);
-  }
-  return visible;
+  return igfDashboardScope.filterRows(client, auth, rows, dashboardArrForecast.resolveForecastExportPlant);
 }
 
 app.get("/api/dashboard/igf-diario-gastos-manuales", dashboardAuthMiddleware, async (req, res) => {
@@ -12400,7 +12394,8 @@ app.patch("/api/dashboard/igf-diario-gastos-manuales", dashboardAuthMiddleware, 
   try {
     const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, patch.plantCode);
     if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
-    const denied = assertPlantaPermitidaDashboard(req, resolved.plantaId);
+    const denied = igfDashboardScope.canAccessPlant(req.dashboardAuth, resolved.plantaId)
+      ? null : "Sin permiso para esta planta";
     if (denied) return res.status(403).json({ error: denied });
     const updatedBy = req.dashboardAuth && req.dashboardAuth.actor_id != null
       ? `Dashboard:${req.dashboardAuth.actor_id}`
@@ -12423,14 +12418,7 @@ app.patch("/api/dashboard/igf-diario-gastos-manuales", dashboardAuthMiddleware, 
 });
 
 async function filterIgfDiarioGastosDesglose(client, auth, rows) {
-  if (igfDiarioGastosManuales.overrideVisible(auth, null)) return rows;
-  const visible = [];
-  for (const row of rows || []) {
-    const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, row.plant_code);
-    const plantaId = resolved ? resolved.plantaId : null;
-    if (igfDiarioGastosManuales.overrideVisible(auth, plantaId)) visible.push(row);
-  }
-  return visible;
+  return igfDashboardScope.filterRows(client, auth, rows, dashboardArrForecast.resolveForecastExportPlant);
 }
 
 app.get("/api/dashboard/igf-diario-gastos-desglose", dashboardAuthMiddleware, async (req, res) => {
@@ -12465,7 +12453,8 @@ app.patch("/api/dashboard/igf-diario-gastos-desglose", dashboardAuthMiddleware, 
   try {
     const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, patch.plantCode);
     if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
-    const denied = assertPlantaPermitidaDashboard(req, resolved.plantaId);
+    const denied = igfDashboardScope.canAccessPlant(req.dashboardAuth, resolved.plantaId)
+      ? null : "Sin permiso para esta planta";
     if (denied) return res.status(403).json({ error: denied });
     const updatedBy = req.dashboardAuth && req.dashboardAuth.actor_id != null
       ? `Dashboard:${req.dashboardAuth.actor_id}`
@@ -12495,7 +12484,7 @@ app.get("/api/dashboard/igf-diario-gastos-distribucion", dashboardAuthMiddleware
   try {
     const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, query.plantCode);
     if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
-    if (!igfDiarioGastosManuales.overrideVisible(req.dashboardAuth, resolved.plantaId)) {
+    if (!igfDashboardScope.canAccessPlant(req.dashboardAuth, resolved.plantaId)) {
       return res.status(403).json({ error: "Planta no permitida" });
     }
     const schedule = await igfDiarioGastosDistribucion.getSchedule(client, query);
@@ -12517,7 +12506,8 @@ app.patch("/api/dashboard/igf-diario-gastos-distribucion", dashboardAuthMiddlewa
   try {
     const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, patch.plantCode);
     if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
-    const denied = assertPlantaPermitidaDashboard(req, resolved.plantaId);
+    const denied = igfDashboardScope.canAccessPlant(req.dashboardAuth, resolved.plantaId)
+      ? null : "Sin permiso para esta planta";
     if (denied) return res.status(403).json({ error: denied });
     const updatedBy = req.dashboardAuth && req.dashboardAuth.actor_id != null
       ? `Dashboard:${req.dashboardAuth.actor_id}`
@@ -12551,6 +12541,10 @@ app.get("/api/dashboard/pronostico-detalle", dashboardAuthMiddleware, async (req
   }
   const client = await pool.connect();
   try {
+    const plant = await dashboardArrForecast.resolveForecastExportPlant(client, plantCode);
+    if (!plant || !igfDashboardScope.canAccessPlant(req.dashboardAuth, plant.plantaId)) {
+      return res.status(403).json({ error: "Sin permiso para esta planta" });
+    }
     const detail = await dashboardArrForecast.getPronosticoPlantDetail(client, year, month, plantCode, uploadDay || "");
     if (!detail) {
       return res.status(404).json({ error: "Planta no encontrada o sin datos de pronóstico" });
@@ -12584,14 +12578,17 @@ app.post("/api/dashboard/pronostico-dias", dashboardAuthMiddleware, async (req, 
   }
   const client = await pool.connect();
   try {
+    const plant = await dashboardArrForecast.resolveForecastExportPlant(client, plantCode);
+    if (!plant || !igfDashboardScope.canAccessPlant(req.dashboardAuth, plant.plantaId)) {
+      return res.status(403).json({ error: "Sin permiso para esta planta" });
+    }
     await client.query("BEGIN");
     const ctxMaps = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, uploadDay || "");
     const corteYmd = ctxMaps.corteYmdStr;
     let resolvedPlant = plantCode;
     const plants = ctxMaps.plants || [];
-    const pNorm = plantCode.toLowerCase();
     if (!plants.some((p) => String(p).trim() === plantCode)) {
-      const hit = plants.find((p) => String(p).toLowerCase() === pNorm);
+      const hit = plants.find((p) => dashboardArrForecast.plantsEquivalent(p, plantCode));
       if (hit) resolvedPlant = String(hit).trim();
     }
     for (const d of days) {
@@ -12607,7 +12604,10 @@ app.post("/api/dashboard/pronostico-dias", dashboardAuthMiddleware, async (req, 
       );
     }
     const proyByPlant = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, { fechaCorte: uploadDay || "" });
-    await dashboardArrForecast.savePronosticoMiniSnapshot(client, year, month, corteYmd, proyByPlant);
+    const scopedProy = igfDashboardScope.hasGlobalScope(req.dashboardAuth) ? proyByPlant : new Map(
+      [...proyByPlant].filter(([code]) => dashboardArrForecast.plantsEquivalent(code, plant.canon))
+    );
+    await dashboardArrForecast.savePronosticoMiniSnapshot(client, year, month, corteYmd, scopedProy);
     await client.query("COMMIT");
     res.json({ ok: true, year, month, upload_day: uploadDay, plant_code: resolvedPlant, corte_day: corteYmd });
   } catch (e) {
@@ -12766,6 +12766,10 @@ app.patch("/api/dashboard/igf-forecast", dashboardAuthMiddleware, async (req, re
   }
   const client = await pool.connect();
   try {
+    const plant = await dashboardArrForecast.resolveForecastExportPlant(client, empresa);
+    if (!plant || !igfDashboardScope.canAccessPlant(req.dashboardAuth, plant.plantaId)) {
+      return res.status(403).json({ error: "Sin permiso para esta planta" });
+    }
     const uploadOpts = {};
     if (uploadDayBody && /^\d{4}-\d{2}-\d{2}$/.test(uploadDayBody)) uploadOpts.upload_day = uploadDayBody;
     if (versionAsOfCorteBody) uploadOpts.version_as_of_corte = true;
@@ -15589,7 +15593,7 @@ app.post("/api/arr/forecast", dashboardAuthMiddleware, async (req, res) => {
   }
 });
 
-/** Recalcula arr.forecast_mensual para todas las plantas provincia (mismo mes). Útil para refrescar sin resubir archivo. */
+/** Recalcula arr.forecast_mensual para las plantas provincia autorizadas (mismo mes). */
 app.post("/api/arr/forecast-provincia", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;
@@ -15601,7 +15605,11 @@ app.post("/api/arr/forecast-provincia", dashboardAuthMiddleware, async (req, res
   const client = await pool.connect();
   try {
     const r = await client.query(`SELECT plant_code FROM arr.provincia_plants ORDER BY plant_code`);
-    const plants = (r.rows || []).map((row) => (row.plant_code || "").trim()).filter(Boolean);
+    const visible = await igfDashboardScope.filterRows(client, req.dashboardAuth, r.rows || [], dashboardArrForecast.resolveForecastExportPlant);
+    const plants = visible.map((row) => (row.plant_code || "").trim()).filter(Boolean);
+    if (!plants.length && !igfDashboardScope.hasGlobalScope(req.dashboardAuth)) {
+      return res.status(403).json({ error: "Sin plantas autorizadas para recalcular" });
+    }
     const results = [];
     for (const p of plants) {
       try {
@@ -15662,7 +15670,7 @@ app.get("/api/dashboard/igf-diario-acumulado", dashboardAuthMiddleware, async (r
   const client = await pool.connect();
   try {
     const listed = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
-    const plants = listed.filter((plant) => igfDiarioGastosManuales.overrideVisible(req.dashboardAuth, plant && plant.plantaId));
+    const plants = listed.filter((plant) => igfDashboardScope.canAccessPlant(req.dashboardAuth, plant && plant.plantaId));
     let projection = null;
     try {
       projection = await dashboardArrForecast.buildPronosticoProjectionContext(client, year, month, uploadDay);
@@ -15724,7 +15732,7 @@ app.get("/api/dashboard/igf-diario-margen-diario", dashboardAuthMiddleware, asyn
   try {
     const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, plantCode);
     if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
-    if (!igfDiarioGastosManuales.overrideVisible(req.dashboardAuth, resolved.plantaId)) {
+    if (!igfDashboardScope.canAccessPlant(req.dashboardAuth, resolved.plantaId)) {
       return res.status(403).json({ error: "Planta no permitida" });
     }
     let projection = null;
@@ -15762,7 +15770,8 @@ app.patch("/api/dashboard/igf-diario-margen-diario", dashboardAuthMiddleware, as
   try {
     const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, patch.plantCode);
     if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
-    const denied = assertPlantaPermitidaDashboard(req, resolved.plantaId);
+    const denied = igfDashboardScope.canAccessPlant(req.dashboardAuth, resolved.plantaId)
+      ? null : "Sin permiso para esta planta";
     if (denied) return res.status(403).json({ error: denied });
     const updatedBy = req.dashboardAuth && req.dashboardAuth.actor_id != null
       ? `Dashboard:${req.dashboardAuth.actor_id}`

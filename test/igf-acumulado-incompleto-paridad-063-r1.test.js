@@ -229,7 +229,7 @@ test("una sola request, sin Forecast, gastos 062 y endpoint de solo lectura", ()
   assert.match(route, /dashboardAuthMiddleware/);
   assert.match(route, /dashboardBlockGAFinancialKpis/);
   assert.match(route, /dashboardBlockGVForbidden/);
-  assert.match(route, /overrideVisible/);
+  assert.match(route, /igfDashboardScope\.canAccessPlant/);
   assert.doesNotMatch(route, /INSERT |UPDATE |DELETE /);
   assert.match(GASTOS, /manual != null/);
   assert.doesNotMatch(GASTOS, /operativos \|\|/);

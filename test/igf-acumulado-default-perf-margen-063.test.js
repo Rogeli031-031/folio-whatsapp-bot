@@ -105,7 +105,7 @@ test("el endpoint ligero es de solo lectura y no arma la gráfica", async () => 
   assert.match(route, /dashboardAuthMiddleware/);
   assert.match(route, /dashboardBlockGAFinancialKpis/);
   assert.match(route, /dashboardBlockGVForbidden/);
-  assert.match(route, /overrideVisible/);
+  assert.match(route, /igfDashboardScope\.canAccessPlant/);
   assert.doesNotMatch(route, /INSERT |UPDATE |DELETE /);
   assert.doesNotMatch(loader, /newClientsPanel|buildMonthClose|loadCdMonthIndex|gastosForMonth|descuentos_diarios|INSERT |UPDATE |DELETE /);
   assert.match(loader, /loadSalesRows/);

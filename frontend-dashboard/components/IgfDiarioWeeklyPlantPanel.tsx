@@ -15,6 +15,7 @@ export default function IgfDiarioWeeklyPlantPanel({
   uploadDay,
   versionAsOfCorte,
   excelUrl,
+  refreshKey = 0,
 }: {
   token: string;
   year: number;
@@ -24,6 +25,7 @@ export default function IgfDiarioWeeklyPlantPanel({
   uploadDay?: string | null;
   versionAsOfCorte?: boolean;
   excelUrl: string;
+  refreshKey?: number;
 }) {
   const [anchor, setAnchor] = useState((uploadDay || "").trim());
   const [data, setData] = useState<IgfDiarioSemanalResponse | null>(null);
@@ -63,7 +65,7 @@ export default function IgfDiarioWeeklyPlantPanel({
     return () => {
       cancel = true;
     };
-  }, [token, year, month, plantCode, anchor, uploadDay, versionAsOfCorte]);
+  }, [token, year, month, plantCode, anchor, uploadDay, versionAsOfCorte, refreshKey]);
 
   const selectedRow = WEEKLY_ROWS.find((row) => row.key === selected) || WEEKLY_ROWS[WEEKLY_ROWS.length - 1];
   const estado = data?.week.estado === "proyectada" ? "PROYECTADA" : data?.week.estado === "parcial" ? "PARCIAL" : "REAL";

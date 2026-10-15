@@ -86,6 +86,10 @@ function canOpenPronosticoMiniRow(row, token, igfForecast) {
   return true;
 }
 
+function pronosticoDaysKey(days) {
+  return JSON.stringify((days || []).map((day) => [day.fecha, day.selected !== false]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
+}
+
 module.exports = {
   normalizePlantLabel,
   safeMiniRows,
@@ -94,4 +98,5 @@ module.exports = {
   decideOpenPronosticoFromQuery,
   buildOpenPronosticoHref,
   canOpenPronosticoMiniRow,
+  pronosticoDaysKey,
 };

@@ -11,12 +11,14 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
   month,
   uploadDay,
   versionAsOfCorte,
+  refreshKey = 0,
 }: {
   token: string;
   year: number;
   month: number;
   uploadDay?: string | null;
   versionAsOfCorte?: boolean;
+  refreshKey?: number;
 }) {
   const [anchor, setAnchor] = useState((uploadDay || "").trim());
   const [data, setData] = useState<IgfDiarioSemanalAllResponse | null>(null);
@@ -53,7 +55,7 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
     return () => {
       cancel = true;
     };
-  }, [token, year, month, anchor, uploadDay, versionAsOfCorte]);
+  }, [token, year, month, anchor, uploadDay, versionAsOfCorte, refreshKey]);
 
   const estado = data?.week.estado === "proyectada" ? "PROYECTADA" : data?.week.estado === "parcial" ? "PARCIAL" : "REAL";
   const plants = data?.plants || [];
