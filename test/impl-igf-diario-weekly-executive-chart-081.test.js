@@ -119,6 +119,7 @@ test("las escalas de cada indicador son independientes", () => {
     precio_kg: 10 + index,
     venta_kg: 1000 + index * 100,
   }));
+  days.forEach((day, i) => { day.hg_kilos = 1000 + i * 100; });
   const view = chart.buildExecutiveView({
     scope: "plant",
     plant: "San Luis",

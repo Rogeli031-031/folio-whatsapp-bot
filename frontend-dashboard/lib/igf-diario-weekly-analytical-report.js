@@ -19,6 +19,51 @@ const PESO_TOLERANCE = 0.01;
 const KG_TOLERANCE = 1e-6;
 const VISIBLE_RATE = 0.0005;
 const PARTIAL_LABEL = "Análisis parcial / No conciliable con el detalle disponible";
+const MONEY_LINES = [
+  { key: "ingreso", label: "Ingresos por venta", sign: 1 },
+  { key: "costo", label: "Costo del gas", sign: -1 },
+  { key: "flete", label: "Flete", sign: -1 },
+  { key: "corporativo", label: "Gasto corporativo total", sign: -1 },
+  { key: "operativo", label: "Gasto operativo total", sign: -1 },
+  { key: "hg", label: "HG (importe)", sign: -1 },
+  { key: "com_desc", label: "Comisiones y descuentos", sign: 1 },
+];
+
+function dailyRateAmount(days, key) {
+  let total = 0;
+  let any = false;
+  for (const day of days || []) {
+    const kg = finite(day && day.metrics && day.metrics.venta_kg);
+    if (kg == null) return null;
+    if (kg <= 0) continue;
+    const value = finite(day.metrics[key]);
+    if (value == null) return null;
+    total += value * kg;
+    any = true;
+  }
+  return any ? total : null;
+}
+
+// Presentation groups follow Excel M (J+K+L) and U (Q+R+S+T).
+// The original twelve components remain available for reconciliation.
+function groupLines(lines) {
+  const groups = [[0], [1], [2], [3, 4, 5], [6, 7, 8, 9], [10], [11]];
+  return groups.map((indices, index) => {
+    const parts = indices.map((i) => lines[i]);
+    const grouped = { ...parts[0], index };
+    if (indices.length > 1) {
+      grouped.key = index === 3 ? "corporativo_total" : "operativo_total";
+      grouped.label = index === 3 ? "Gasto corporativo total" : "Gasto operativo total";
+    }
+    for (const field of ["value", "anterior", "actual", "aporte", "pesos"]) {
+      if (parts.some((p) => Object.prototype.hasOwnProperty.call(p, field))) {
+        grouped[field] = parts.every((p) => finite(p[field]) != null)
+          ? parts.reduce((sum, p) => sum + p[field], 0) : null;
+      }
+    }
+    return grouped;
+  });
+}
 
 function finite(value) {
   if (value == null || value === "") return null;
@@ -42,6 +87,8 @@ function cloneDay(day) {
     weekday: day && day.weekday ? String(day.weekday) : null,
     estado: day && day.estado ? String(day.estado) : null,
     metrics: day && day.metrics ? { ...day.metrics } : {},
+    gasto_corporativo_mxn: finite(day && day.gasto_corporativo_mxn),
+    gasto_operativo_mxn: finite(day && day.gasto_operativo_mxn),
     missing_components: Array.isArray(day && day.missing_components) ? day.missing_components.slice() : [],
     com_desc_source: day && day.com_desc_source ? String(day.com_desc_source) : null,
     com_desc_source_date: day && day.com_desc_source_date ? String(day.com_desc_source_date) : null,
@@ -126,6 +173,11 @@ function assessWeek(week) {
   const V = finite(metrics.venta_kg);
   const Q = resultCoverage ? finite(resultCoverage.kg_covered) : null;
   const qCd = cdCoverage ? finite(cdCoverage.kg_covered) : null;
+  // Match the weekly chart: sum captured daily amounts, preserving missing data.
+  const sumAmount = (key) => {
+    const values = (week.days || []).map((day) => finite(day && day[key])).filter((value) => value != null);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) : null;
+  };
   const rates = PARTIDAS.map((partida, index) => ({
     index,
     key: partida.key,
@@ -149,6 +201,18 @@ function assessWeek(week) {
   if (signedSum != null && r != null && Q != null && Math.abs((signedSum - r) * Q) > PESO_TOLERANCE) {
     reasons.push("la suma firmada de las doce partidas no reproduce r");
   }
+  const amounts = {
+    ingreso: finite(metrics.ingreso_mxn),
+    costo: dailyRateAmount(week.days, "costo_kg"),
+    flete: dailyRateAmount(week.days, "flete_kg"),
+    corporativo: sumAmount("gasto_corporativo_mxn"),
+    operativo: sumAmount("gasto_operativo_mxn"),
+    hg: finite(metrics.hg_mxn),
+    com_desc: dailyRateAmount(week.days, "com_desc_kg"),
+  };
+  const amountsReconciled = reasons.length === 0
+    && MONEY_LINES.every((line) => amounts[line.key] != null)
+    && Math.abs(MONEY_LINES.reduce((sum, line) => sum + line.sign * amounts[line.key], 0) - R) <= PESO_TOLERANCE;
   return {
     id: week.id,
     fecha_desde: week.fecha_desde,
@@ -166,6 +230,9 @@ function assessWeek(week) {
     Q,
     qCd,
     rates,
+    displayRates: groupLines(rates),
+    amounts,
+    amountsReconciled,
     signedSum,
     reasons,
     compatible: reasons.length === 0,
@@ -222,6 +289,12 @@ function transitionOf(previous, current) {
     consecutive,
     year_change: yearChange,
     lines,
+    displayLines: groupLines(lines),
+    amountLines: MONEY_LINES.map((line) => {
+      const anterior = previous.amounts[line.key];
+      const actual = current.amounts[line.key];
+      return { ...line, anterior, actual, delta: anterior == null || actual == null ? null : actual - anterior };
+    }),
     official,
     previous,
     current,
@@ -263,11 +336,12 @@ function transitionOf(previous, current) {
       support: null,
     };
   }
-  const ranked = rankLines(effects);
+  const displayEffects = groupLines(effects);
+  const ranked = rankLines(displayEffects);
   const top = ranked.slice(0, 5);
   const rest = ranked.slice(5);
   const otras = rest.reduce((sum, line) => sum + line.aporte, 0);
-  const visible = effects.filter((line) => Math.abs(line.aporte) >= VISIBLE_RATE);
+  const visible = displayEffects.filter((line) => Math.abs(line.aporte) >= VISIBLE_RATE);
   const support = visible.filter((line) => line.aporte > 0).sort((left, right) => right.aporte - left.aporte || left.index - right.index)[0] || null;
   const pressure = visible.filter((line) => line.aporte < 0).sort((left, right) => left.aporte - right.aporte || left.index - right.index)[0] || null;
   return {
@@ -276,6 +350,7 @@ function transitionOf(previous, current) {
     label: "Conciliada",
     reasons: [],
     effects,
+    displayEffects,
     volume_effect: volume,
     residual,
     waterfall: {
@@ -316,4 +391,5 @@ module.exports = {
   freezePlantExport,
   buildAnalyticalReport,
   assessWeek,
+  groupLines,
 };

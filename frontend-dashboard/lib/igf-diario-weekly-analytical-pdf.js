@@ -42,6 +42,10 @@ function pesos(value) {
   return money(value, 2);
 }
 
+function signedPesos(value) {
+  return value > 0 ? `+${pesos(value)}` : pesos(value);
+}
+
 function kilos(value) {
   return money(value, 0);
 }
@@ -297,7 +301,7 @@ function drawTransition(cursor, report, transition) {
     { text: "Actual", x: 420, align: "right" },
     { text: "Aporte al cambio", x: RIGHT - 4, align: "right" },
   ]);
-  transition.lines.forEach((line, index) => {
+  transition.displayLines.forEach((line, index) => {
     bandRow(cursor, [
       { text: line.label, x: LEFT + 4 },
       { text: rate(line.anterior), x: 330, align: "right", color: line.anterior < 0 ? NEGATIVE : INK },
@@ -309,28 +313,34 @@ function drawTransition(cursor, report, transition) {
     size: 7.7,
     color: MUTED,
   });
-  if (transition.conciliable) {
-    cursor.y += 4;
-    textBlock(cursor, "Efectos en pesos", { size: 12, bold: true });
-    transition.effects.forEach((line) => {
-      if (line.aporte == null || Math.abs(line.aporte) < 0.0005) return;
-      bandRow(cursor, [
-        { text: line.label, x: LEFT + 4 },
-        { text: pesos(line.pesos), x: RIGHT - 4, align: "right", color: line.pesos < 0 ? NEGATIVE : INK },
-      ], { fill: WHITE, size: 8.2 });
-    });
+  textBlock(cursor, "Corporativo total = gasto corporativo + inversiones + impuestos. Operativo total = nómina/gastos + IMSS/SUA + extraordinarios + provisiones. Corresponden a M y U del Excel.", { size: 7.7, color: MUTED });
+  cursor.y += 8;
+  ensure(cursor, 220);
+  textBlock(cursor, "Importes semanales y variación real ($)", { size: 12, bold: true });
+  headerRow(cursor, [
+    { text: "Concepto", x: LEFT + 4 },
+    { text: "Anterior", x: 330, align: "right" },
+    { text: "Actual", x: 420, align: "right" },
+    { text: "Actual - anterior", x: RIGHT - 4, align: "right" },
+  ]);
+  transition.amountLines.forEach((line, index) => {
     bandRow(cursor, [
-      { text: "Volumen sobre kilos cubiertos", x: LEFT + 4 },
-      { text: pesos(transition.volume_effect), x: RIGHT - 4, align: "right" },
-    ], { fill: BAND, size: 8.2 });
-    bandRow(cursor, [
-      { text: "Cambio del RESULTADO", x: LEFT + 4 },
-      { text: pesos(transition.official.delta_R), x: RIGHT - 4, align: "right", color: transition.official.delta_R < 0 ? NEGATIVE : INK },
-    ], { fill: WHITE, bold: true, size: 8.2 });
-    textBlock(cursor, `Residual ${pesos(transition.residual)}. La identidad es algebraica y no demuestra causa comercial ni ahorro pagado.`, {
-      size: 7.7,
-      color: MUTED,
-    });
+      { text: line.label, x: LEFT + 4 },
+      { text: pesos(line.anterior), x: 330, align: "right" },
+      { text: pesos(line.actual), x: 420, align: "right" },
+      { text: signedPesos(line.delta), x: RIGHT - 4, align: "right" },
+    ], { fill: index % 2 ? WHITE : BAND, size: 8.2 });
+  });
+  bandRow(cursor, [
+    { text: "RESULTADO total", x: LEFT + 4 },
+    { text: pesos(transition.previous.R), x: 330, align: "right" },
+    { text: pesos(transition.current.R), x: 420, align: "right" },
+    { text: signedPesos(transition.official.delta_R), x: RIGHT - 4, align: "right", color: transition.official.delta_R < 0 ? NEGATIVE : INK },
+  ], { fill: WHITE, bold: true, size: 8.2 });
+  textBlock(cursor, "Variación = importe actual menos importe anterior. Resultado = ingresos - costo - flete - corporativo - operativo - HG + C&D.", { size: 7.7, color: MUTED });
+  textBlock(cursor, "Las diferencias se calculan antes de redondear; los importes se muestran con dos decimales.", { size: 7.7, color: MUTED });
+  if (!transition.previous.amountsReconciled || !transition.current.amountsReconciled) {
+    textBlock(cursor, "Importes incompletos o sin conciliación con el resultado. Se conserva el resultado oficial; — indica un importe no disponible.", { size: 7.7, color: NEGATIVE });
   }
   const sources = transition.current.provenance.com_desc;
   textBlock(cursor, `Procedencia de C&D: ${sources.length ? sources.join("; ") : "no informada"}. Las demás partidas: ${transition.current.provenance.otras}.`, {
@@ -340,11 +350,10 @@ function drawTransition(cursor, report, transition) {
 }
 
 function drawMethod(cursor) {
+  ensure(cursor, 50);
   cursor.y += 8;
   textBlock(cursor, "Método y límites", { size: 12, bold: true });
-  textBlock(cursor, "El RESULTADO es el oficial del Dashboard, después de inversiones y del resto de partidas. No es utilidad antes de inversiones. El informe histórico de referencia usa RESULTADO final; la utilidad antes de inversiones pertenece a otro documento que ese informe cita.", { size: 8.2 });
-  textBlock(cursor, "Las cifras salen del snapshot ya cargado del Dashboard. No se recalcularon tasas diarias ni se usaron celdas de Excel. Q es el kilo cubierto del resultado y V es la venta total. El puente de doce partidas solo aparece cuando, dentro de cada semana, Q=V, la base de C&D coincide y las identidades cierran.", { size: 8.2 });
-  textBlock(cursor, "El anexo siguiente es la gráfica vectorial de las semanas seleccionadas, en su tamaño original.", { size: 8.2 });
+  textBlock(cursor, "Resultado oficial del Dashboard, después de inversiones. Variación monetaria = actual menos anterior. Cascada en $/kg solo con bases completas y conciliadas. Anexo semanal en tamaño original.", { size: 8.2 });
 }
 
 function drawAnalytical(pdf, report) {
@@ -352,7 +361,7 @@ function drawAnalytical(pdf, report) {
   drawOpening(cursor, report);
   if (report.single_week && report.weeks[0]) {
     textBlock(cursor, "Partidas oficiales de la semana seleccionada", { size: 12, bold: true });
-    report.weeks[0].rates.forEach((line, index) => {
+    report.weeks[0].displayRates.forEach((line, index) => {
       bandRow(cursor, [
         { text: line.label, x: LEFT + 4 },
         { text: rate(line.value), x: RIGHT - 4, align: "right", color: line.value < 0 ? NEGATIVE : INK },
@@ -394,9 +403,11 @@ async function composePlantPdf(options) {
     orientation: "portrait",
     compress: true,
     putOnlyUsedFonts: true,
+    floatPrecision: 3,
   });
-  const regular = await fetchBytes("/fonts/DejaVuSans.ttf");
-  const bold = await fetchBytes("/fonts/DejaVuSans-Bold.ttf");
+  const [regular, bold] = await Promise.all([
+    fetchBytes("/fonts/DejaVuSans.ttf"), fetchBytes("/fonts/DejaVuSans-Bold.ttf"),
+  ]);
   installFace(pdf, regular, "DejaVuSans.ttf", "DejaVuSans", "normal");
   installFace(pdf, bold, "DejaVuSans-Bold.ttf", "DejaVuSans", "bold");
   drawAnalytical(pdf, report);

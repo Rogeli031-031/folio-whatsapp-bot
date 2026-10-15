@@ -155,7 +155,7 @@ test("F11 desempatar el top cinco por el orden de la tabla", () => {
   ).transitions[0];
   assert.equal(transition.conciliable, true);
   const names = transition.waterfall.top.map((line) => line.key);
-  assert.deepEqual(names.slice(0, 2), ["flete_kg", "inversiones_kg"]);
+  assert.deepEqual(names.slice(0, 2), ["flete_kg", "corporativo_total"]);
 });
 
 test("F12 no inventa apoyo ni presión cuando todos los aportes son cero", () => {

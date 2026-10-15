@@ -88,7 +88,7 @@ test("Formula reader handles precedence, sheet references, lazy IF, ranges and r
   assert.equal(read(ws.name, "C1"), "Uno dos");
 });
 
-test("PDF keeps all 15 clients, full long comments and every day inside landscape page bounds", () => {
+test("PDF keeps all 15 clients and long comments, and stops at COMISIONISTA", () => {
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
   for (const [file, style] of [["DejaVuSans.ttf", "normal"], ["DejaVuSans-Bold.ttf", "bold"]]) {
     installFace(pdf, fs.readFileSync(path.join(__dirname, "../frontend-dashboard/public/fonts", file)), file, "DejaVuSans", style);
@@ -104,7 +104,7 @@ test("PDF keeps all 15 clients, full long comments and every day inside landscap
   daily.rows[0][9] = "Detalle diario extenso. ".repeat(200) + "FIN-DETALLE";
   drawAnnexes(pdf, { casa, comisionista, daily }, "Puebla - MUESTRA", "15/10/2026");
   const text = marks.map((m) => m.text).join("\n");
-  assert.match(text, /FIN-COMENTARIO/); assert.match(text, /FIN-DETALLE/); assert.match(text, /31\/10\/2026/);
+  assert.match(text, /FIN-COMENTARIO/); assert.doesNotMatch(text, /FIN-DETALLE|DETALLE POR FECHA|31\/10\/2026/);
   assert.equal((text.match(/CLIENTE DE MUESTRA 15/g) || []).length, 2);
   for (const m of marks) { assert.ok(m.y >= 0 && m.y < 595.28, `${m.text} y=${m.y}`); assert.ok(m.x >= 0 && m.x < 841.89); }
   assert.deepEqual(trend([1, 3, 5]), { a: 1, b: 2 });
