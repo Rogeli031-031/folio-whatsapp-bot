@@ -66,3 +66,16 @@ Con `NotoSans-Bold.ttf` retirado solo de la copia standalone, el botón mostró 
 `npm audit --omit=dev` no reporta hallazgos en `jspdf` 4.2.1, `svg2pdf.js` 2.8.1, `cssesc` 3.0.0, `font-family-papandreou` 0.2.0-patch2, `specificity` 0.4.1 ni `svgpath` 2.6.0. El lockfile fija esas versiones. No se ejecutó `npm audit fix` ni se actualizó ninguna dependencia. Los hallazgos de `next`, `exceljs`, `xlsx` y otras dependencias ya presentes quedan fuera de este cambio.
 
 No se inició un despliegue manual.
+
+## Resolucion administrativa humana 084 y transicion a 085
+
+- Estado de la tarea saliente: CLOSED.
+- Decisor humano: Luis rogelio Zaragoza Alvarez.
+- Fecha/hora local con zona: 2026-10-14T21:13:50.7827226-06:00.
+- Base integrada examinada: c409e3078c636302397557096b118df04a514393.
+- Se acepta el cierre administrativo de 084 sobre la publicacion y evidencia G4 reportadas.
+- Validacion del PDF productivo: NO comprobada por este instalador; no se declara PRODUCTION PASS.
+- No se cerraron ni modificaron las tareas 038/080 del checkout antiguo.
+- G1 de 085 y D1-D6 aceptadas mediante confirmacion escrita por el operador humano.
+- Alcance 085: implementacion/pruebas y commits/push solo de rama; sin PR/merge/deploy ni DB productiva.
+- Registro: docs/dev-loop/authorizations/G1-085.json.

@@ -1,81 +1,85 @@
-﻿task_id: IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084
-status: G4_PASS
-phase: G4
-
-authorized_by: ""
-authorized_at: ""
-human_authorization: ""
-
-base_sha: "15983459a28c5d4327746f612a570977013dd514"
-branch: "implementation/igf-diario-weekly-executive-pdf-084"
-
-objective: "Descargar la gráfica ejecutiva semanal como PDF vectorial, sin cambiar los cálculos financieros."
-
+task_id: "IMPL-IGF-DIARIO-WEEKLY-ANALYTICAL-PDF-085"
+status: "DONE_PENDING_REVIEW"
+authorized_by: "HUMAN_APPROVER"
+authorized_at: "2026-10-14T21:13:50.7827226-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza Alvarez 2026-10-14"
+base_sha: "c409e3078c636302397557096b118df04a514393"
+branch: "implementation/igf-diario-weekly-analytical-pdf-085"
+objective: "Anteponer el informe analítico de la planta y semanas seleccionadas, fiel al maestro, y conservar íntegro el anexo vectorial 084 en una sola descarga."
 in_scope:
   - "frontend-dashboard/components/IgfDiarioWeeklyExecutiveModal.tsx"
-  - "frontend-dashboard/lib/igf-diario-weekly-executive-chart.js"
-  - "frontend-dashboard/lib/igf-diario-weekly-executive-chart.d.ts"
   - "frontend-dashboard/lib/igf-diario-weekly-executive-pdf.js"
-  - "frontend-dashboard/public/fonts/"
-  - "frontend-dashboard/package.json"
-  - "frontend-dashboard/package-lock.json"
+  - "frontend-dashboard/lib/igf-diario-weekly-analytical-report.js"
+  - "frontend-dashboard/lib/igf-diario-weekly-analytical-report.d.ts"
+  - "frontend-dashboard/lib/igf-diario-weekly-analytical-pdf.js"
+  - "frontend-dashboard/lib/igf-diario-weekly-analytical-pdf.d.ts"
+  - "frontend-dashboard/public/fonts/DejaVuSans.ttf"
+  - "frontend-dashboard/public/fonts/DejaVuSans-Bold.ttf"
+  - "frontend-dashboard/public/fonts/DejaVuSans-LICENSE.txt"
+  - "test/impl-igf-diario-weekly-analytical-pdf-085.test.js"
   - "test/impl-igf-diario-weekly-executive-pdf-084.test.js"
-  - "test/impl-igf-diario-weekly-executive-chart-081.test.js"
-  - "test/fix-igf-diario-weekly-executive-grid-081-r1.test.js"
-  - "test/fix-igf-diario-weekly-executive-ux-081-r2.test.js"
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084.md"
-  - "docs/dev-loop/reports/evidence-084/"
-
+  - "docs/dev-loop/authorizations/G1-085.json" # solo versionar el registro humano intacto
+  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084.md" # solo versionar la anotacion humana preexistente
+  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-ANALYTICAL-PDF-085.md"
+  - "docs/dev-loop/reports/evidence-085/"
 out_of_scope:
-  - "APIs, importadores y base de datos"
-  - "Excel y DatosPlanta"
-  - "navegación mensual de gastos 083"
-  - "cálculos de acumulados, cobertura, deltas y color"
-  - "otras descargas PNG"
-  - "envío por WhatsApp"
-  - "PR, merge y deploy"
-
+  - "Motor financiero, API, DB, importadores y Excel"
+  - "Rediseño de pantalla, selector, renderer 084 y salida TODAS"
+  - "frontend-dashboard/lib/igf-diario-weekly-executive-chart.js y su .d.ts"
+  - "lib/igf-diario-weekly-plant.js"
+  - "Navegación de gastos 083, permisos y otras descargas"
+  - "Ranking de otras plantas, clientes, Laynes, Pemex, IA remota y WhatsApp"
+  - "PDF maestro o sus páginas como activos/evidencia del repositorio"
+  - "Dependencias npm, package/lockfiles y cambios de Noto Sans"
+  - "Contratos, AGENTS, LOOP_PROTOCOL y TASK_TEMPLATE"
+  - "Checkout antiguo, cambios de 080 y archivos ajenos"
+  - "PR, merge, push a main, migrations y deploy"
 contracts_in_force:
+  - "AGENTS.md"
+  - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
   - "docs/dev-loop/LOOP_PROTOCOL.md"
-  - "gráfica ejecutiva 081 y sus revisiones"
-
+  - "docs/dev-loop/TASK_TEMPLATE.md"
+  - "Gráfica ejecutiva 081, sus revisiones y exportación 084"
+  - "ESPECIFICACION_PDF_SEMANAL_POR_PLANTA.md del paquete G1 revisado, aceptada expresamente en el acto humano"
 allowed_actions:
-  - "sustituir la descarga PNG de este botón por PDF vectorial"
-  - "agregar jsPDF y svg2pdf.js si no existen"
-  - "probar en un navegador headless"
-  - "documentar y publicar la rama"
-
+  - "Con G1 vigente, implementar solo las rutas exactas aprobadas"
+  - "Derivar un informe determinista del snapshot sin alterar cifras fuente"
+  - "Obtener DejaVu Sans/Bold y conservar licencia en las rutas permitidas"
+  - "Componer páginas analíticas y anexo usando jsPDF/svg2pdf existentes"
+  - "Ejecutar pruebas locales/headless/standalone con fixtures sintéticos"
+  - "Versionar sin editar G1-085.json y la anotacion de cierre humano 084 recibidos al iniciar"
+  - "Crear commit de producto/tests y congelar PRODUCT_SHA"
+  - "Crear commit posterior de documentación/evidencia y FINAL_SHA"
+  - "Publicar con push únicamente la rama implementation/igf-diario-weekly-analytical-pdf-085"
 forbidden_actions:
-  - "escribir AUTHORIZED_BY_HUMAN"
-  - "PR"
-  - "merge"
-  - "deploy"
-  - "migrations"
-  - "escrituras a la DB productiva"
-  - "npm audit fix"
-
+  - "Crear o modificar campos de autorización, autoaprobar gates o cerrar/rechazar tareas"
+  - "Modificar G1-085.json o la anotacion/cierre humano 084; esos archivos se reciben ya preparados"
+  - "Implementar desde DRAFT o reutilizar el G1 de 084"
+  - "Alterar datos/denominadores para forzar conciliación"
+  - "Inventar ceros, causas, procedencia, capturas o validación productiva"
+  - "Ocultar residuales en Otras partidas"
+  - "Copiar archivos de fuente extraídos del maestro o publicar el maestro"
+  - "Escribir en la DB productiva o usar cifras reales como fixture público"
+  - "Instalar dependencias no autorizadas o ejecutar npm audit fix"
+  - "Git reset destructivo, git clean o stash automático del trabajo antiguo"
+  - "Commit/push a main, PR, merge, auto-merge o deploy"
+  - "Encadenar tareas, watchers o seguir automáticamente hasta pasar"
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084.md"
-
-product_sha: "f67b910248637428e4cfee7321d497465e50254d"
-
-completion:
-  status: G4_PASS
-  tested_product_sha: "f67b910248637428e4cfee7321d497465e50254d"
-  push_branch_only: false
-  create_pr: true
-  merge: true
-  deploy: false
-
-g4:
-  result: PASS
-  tested_product_sha: "f67b910248637428e4cfee7321d497465e50254d"
-  standalone: "next start del build local, 127.0.0.1:3477"
-  fonts: "NotoSans-Regular.ttf 27056 y NotoSans-Bold.ttf 27112, HTTP 200"
-  font_failure: "Bold ausente en la copia standalone: alerta «No se pudo cargar la fuente del PDF», botón restaurado, semanas intactas"
-  dependency_review: "lockfile fija jspdf 4.2.1 y svg2pdf.js 2.8.1; npm audit --omit=dev sin hallazgos en esas dependencias; sin npm audit fix"
-  tests: "27/27"
-  typecheck: 0
-  build: 0
-  production_download: "no validada; fixture local"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-ANALYTICAL-PDF-085.md"
+accepted_decisions:
+  D1: true
+  D2: true
+  D3: true
+  D4: true
+  D5: true
+  D6: true
+human_setup:
+  record_path: "docs/dev-loop/authorizations/G1-085.json"
+  predecessor_task: "IMPL-IGF-DIARIO-WEEKLY-EXECUTIVE-PDF-084"
+  predecessor_resolution: "CLOSED_BY_HUMAN"
+  production_pdf_validation: "NOT_VERIFIED_BY_THIS_INSTALLER"
+  implementation_started: false
+  expected_initial_head: "c409e3078c636302397557096b118df04a514393"
+  administrative_files_may_be_uncommitted: true
