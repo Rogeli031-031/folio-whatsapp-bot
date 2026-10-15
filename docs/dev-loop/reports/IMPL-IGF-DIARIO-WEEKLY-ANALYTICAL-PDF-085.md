@@ -107,6 +107,15 @@ Fixtures sintéticos en `docs/dev-loop/reports/evidence-085/`. No son cifras pro
 | button-double-1.pdf | 143099 |
 | button-manifest.json | 8189 |
 
+## R2 — aire bajo la cascada
+
+Producto de este arreglo: `3d5ca8f4b143af3a20c504366dce972c882074da`.
+El producto anterior sigue siendo `73bfa2f3cabd856944b37afbcea4e49b4a8fd26c`.
+
+Las etiquetas de dos líneas se medían con un hueco fijo de 30 pt y la segunda línea entraba en el encabezado de la tabla. `drawWaterfall` ahora usa la altura real de esas líneas (`getLineHeight`) y deja 12 pt debajo antes de la tabla. No cambian cifras, signos, el top cinco, Otras partidas, TODAS ni el anexo.
+
+La evidencia R1 conserva los PNG `tehuacan-p*.png`, `puebla-p*.png`, `parcial-p*.png`, `nsemanas-p*.png` y `anexo-084.png`. La evidencia R2 está en `r2-tehuacan.pdf`, `r2-puebla.pdf`, `r2-nsemanas.pdf`, `r2-parcial.pdf` y los PNG `r2-*.png`. El anexo R2 se volvió a renderizar desde la página ya generada, sin recomponerla.
+
 ## Límites
 
 No hay PR, merge ni deploy. No hubo escrituras a la base. La descarga productiva no queda validada. El checkout antiguo sigue en su rama con su `CURRENT_TASK` previa sin commit.
