@@ -16,8 +16,9 @@ function syntheticWeeks() {
   ].map(({ kg, rates }, i) => {
     const metrics = Object.fromEntries(PARTIDAS.map((p, j) => [p.key, rates[j]]));
     const result = PARTIDAS.reduce((sum, p, j) => sum + p.sign * rates[j], 0);
-    Object.assign(metrics, { venta_kg: kg, resultado_kg: result, resultado_mxn: kg * result, hg_mxn: kg * rates[10] });
+    Object.assign(metrics, { venta_kg: kg, ingreso_mxn: kg * rates[0], resultado_kg: result, resultado_mxn: kg * result, hg_mxn: kg * rates[10] });
     return { id: `w${i}`, fecha_desde: `2026-10-${i ? "11" : "04"}`, fecha_hasta: `2026-10-${i ? "17" : "10"}`, metrics,
+      days: [{ metrics: { ...metrics }, gasto_corporativo_mxn: kg * (rates[3] + rates[4] + rates[5]), gasto_operativo_mxn: kg * (rates[6] + rates[7] + rates[8] + rates[9]) }],
       coverage: { resultado: { kg_covered: kg }, com_desc_kg: { kg_covered: kg } } };
   });
 }
@@ -84,17 +85,16 @@ test("Weekly monetary amounts use the same source as the charts, including parti
   for (const [key, indicator] of [["corporativo", "gasto_corporativo"], ["operativo", "gasto_operativo"], ["hg", "hg"]]) {
     assert.deepEqual(r.weeks.map((w) => w.amounts[key]), view.indicators.find((i) => i.id === indicator).columns.map((c) => c.value));
   }
-  assert.deepEqual(r.weeks[0].amounts, { corporativo: 150, operativo: 200, hg: -2000 });
-  assert.deepEqual(r.weeks[1].amounts, { corporativo: 0, operativo: null, hg: null });
+  assert.deepEqual(r.weeks[0].amounts, { ingreso: 40000, costo: null, flete: null, corporativo: 150, operativo: 200, hg: -2000, com_desc: null });
+  assert.deepEqual(r.weeks[1].amounts, { ingreso: 60000, costo: null, flete: null, corporativo: 0, operativo: null, hg: null, com_desc: null });
   weeks[0].days[0].gasto_corporativo_mxn = 999;
   assert.equal(buildAnalyticalReport(frozen).weeks[0].amounts.corporativo, 150);
-  assert.equal(buildAnalyticalReport(freezePlantExport({ weeks: syntheticWeeks(), selectedIds })).weeks[0].amounts.corporativo, null);
+  const absent = syntheticWeeks(); absent[0].days = [];
+  assert.equal(buildAnalyticalReport(freezePlantExport({ weeks: absent, selectedIds })).weeks[0].amounts.corporativo, null);
 });
 
 test("PDF shows actual monetary differences and omits the average-volume attribution table", () => {
   const weeks = syntheticWeeks();
-  weeks[0].days = [{ gasto_corporativo_mxn: 12000, gasto_operativo_mxn: 4000 }];
-  weeks[1].days = [{ gasto_corporativo_mxn: 12000, gasto_operativo_mxn: 9000 }];
   const report = buildAnalyticalReport(freezePlantExport({ weeks, selectedIds: ["w0", "w1"] }));
   const { jsPDF } = require("../frontend-dashboard/node_modules/jspdf");
   const pdf = new jsPDF({ unit: "pt", format: "a4" });
@@ -110,11 +110,53 @@ test("PDF shows actual monetary differences and omits the average-volume attribu
   analyticalPdf.drawAnalytical(pdf, report);
   const start = text.indexOf("Importes semanales y variación real ($)");
   assert.ok(start >= 0);
-  assert.deepEqual(text.slice(start + 5, start + 17), [
+  assert.deepEqual(text.slice(start + 5, start + 37), [
+    "Ingresos por venta", "40,000.00", "60,000.00", "+20,000.00",
+    "Costo del gas", "20,000.00", "30,000.00", "+10,000.00",
+    "Flete", "2,000.00", "3,000.00", "+1,000.00",
     "Gasto corporativo total", "12,000.00", "12,000.00", "0.00",
     "Gasto operativo total", "4,000.00", "9,000.00", "+5,000.00",
     "HG (importe)", "-2,000.00", "-600.00", "+1,400.00",
+    "Comisiones y descuentos", "-1,000.00", "-1,500.00", "-500.00",
+    "RESULTADO total", "3,000.00", "5,100.00", "+2,100.00",
   ]);
-  assert.equal(text[text.indexOf("Cambio del RESULTADO total") + 1], "+2,100.00");
   assert.doesNotMatch(text.join("\n"), /Aporte al resultado por cambio de tasas|Efectos en pesos|Volumen sobre kilos cubiertos|kilos promedio|Residual/);
+});
+
+test("All seven monetary lines reconcile each week and the result change with their accounting signs", () => {
+  const r = buildAnalyticalReport(freezePlantExport({ weeks: syntheticWeeks(), selectedIds: ["w0", "w1"] }));
+  const t = r.transitions[0];
+  assert.ok(r.weeks.every((w) => w.amountsReconciled));
+  assert.equal(t.amountLines.length, 7);
+  for (const [field, expected] of [["anterior", t.previous.R], ["actual", t.current.R], ["delta", t.official.delta_R]]) {
+    assert.ok(Math.abs(t.amountLines.reduce((sum, line) => sum + line.sign * line[field], 0) - expected) < 0.01);
+  }
+});
+
+test("Cost, freight and C&D use daily kilograms and preserve missing amounts, signs and zero", () => {
+  const weeks = syntheticWeeks();
+  weeks[0].days = [
+    { metrics: { venta_kg: 100, costo_kg: 2, flete_kg: 1, com_desc_kg: -1 } },
+    { metrics: { venta_kg: 300, costo_kg: 4, flete_kg: 2, com_desc_kg: 0 } },
+  ];
+  const read = () => buildAnalyticalReport(freezePlantExport({ weeks, selectedIds: ["w0", "w1"] }));
+  const amounts = read().weeks[0].amounts;
+  assert.equal(amounts.costo, 1400); assert.equal(amounts.flete, 700); assert.equal(amounts.com_desc, -100);
+  assert.equal(read().weeks[0].amountsReconciled, false);
+  weeks[0].days[0].metrics.com_desc_kg = null;
+  assert.equal(read().weeks[0].amounts.com_desc, null);
+  assert.equal(read().transitions[0].amountLines.find((l) => l.key === "com_desc").delta, null);
+  weeks[0].days[0].metrics.com_desc_kg = 0;
+  assert.equal(read().weeks[0].amounts.com_desc, 0);
+  weeks[0].days[1].metrics.venta_kg = null;
+  assert.equal(read().weeks[0].amounts.costo, null);
+  weeks[0].metrics.ingreso_mxn = null;
+  assert.equal(read().weeks[0].amounts.ingreso, null);
+});
+
+test("Physical HG decreases are red, increases green and unchanged values neutral", () => {
+  const weeks = [20, 10, 30, 30].map((value, i) => ({ id: String(i), fecha_desde: `2026-10-${i + 1}`, days: [{ hg_kilos: value }] }));
+  const hg = buildExecutiveView({ weeks, selectedIds: weeks.map((w) => w.id) }).indicators.find((i) => i.id === "kilos");
+  assert.deepEqual(hg.columns.map((c) => c.tone), ["neutral", "bad", "good", "neutral"]);
+  assert.deepEqual(hg.columns.slice(1).map((c) => c.delta.absolute), [-10, 20, 0]);
 });

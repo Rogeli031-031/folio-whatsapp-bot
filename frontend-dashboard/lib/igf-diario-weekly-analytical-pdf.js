@@ -315,7 +315,7 @@ function drawTransition(cursor, report, transition) {
   });
   textBlock(cursor, "Corporativo total = gasto corporativo + inversiones + impuestos. Operativo total = nómina/gastos + IMSS/SUA + extraordinarios + provisiones. Corresponden a M y U del Excel.", { size: 7.7, color: MUTED });
   cursor.y += 8;
-  ensure(cursor, 145);
+  ensure(cursor, 220);
   textBlock(cursor, "Importes semanales y variación real ($)", { size: 12, bold: true });
   headerRow(cursor, [
     { text: "Concepto", x: LEFT + 4 },
@@ -323,24 +323,25 @@ function drawTransition(cursor, report, transition) {
     { text: "Actual", x: 420, align: "right" },
     { text: "Actual - anterior", x: RIGHT - 4, align: "right" },
   ]);
-  for (const [key, label] of [["corporativo", "Gasto corporativo total"], ["operativo", "Gasto operativo total"], ["hg", "HG (importe)"]]) {
-    const before = transition.previous.amounts[key];
-    const after = transition.current.amounts[key];
-    const delta = before == null || after == null ? null : after - before;
+  transition.amountLines.forEach((line, index) => {
     bandRow(cursor, [
-      { text: label, x: LEFT + 4 },
-      { text: pesos(before), x: 330, align: "right" },
-      { text: pesos(after), x: 420, align: "right" },
-      { text: signedPesos(delta), x: RIGHT - 4, align: "right" },
-    ], { fill: key === "operativo" ? WHITE : BAND, size: 8.2 });
-  }
-  textBlock(cursor, "Variación = importe actual menos importe anterior, con el mismo signo que la gráfica semanal.", { size: 7.7, color: MUTED });
-  cursor.y += 6;
+      { text: line.label, x: LEFT + 4 },
+      { text: pesos(line.anterior), x: 330, align: "right" },
+      { text: pesos(line.actual), x: 420, align: "right" },
+      { text: signedPesos(line.delta), x: RIGHT - 4, align: "right" },
+    ], { fill: index % 2 ? WHITE : BAND, size: 8.2 });
+  });
   bandRow(cursor, [
-    { text: "Cambio del RESULTADO total", x: LEFT + 4 },
+    { text: "RESULTADO total", x: LEFT + 4 },
+    { text: pesos(transition.previous.R), x: 330, align: "right" },
+    { text: pesos(transition.current.R), x: 420, align: "right" },
     { text: signedPesos(transition.official.delta_R), x: RIGHT - 4, align: "right", color: transition.official.delta_R < 0 ? NEGATIVE : INK },
   ], { fill: WHITE, bold: true, size: 8.2 });
-  textBlock(cursor, "El cambio del resultado incluye todas las partidas del informe.", { size: 7.7, color: MUTED });
+  textBlock(cursor, "Variación = importe actual menos importe anterior. Resultado = ingresos - costo - flete - corporativo - operativo - HG + C&D.", { size: 7.7, color: MUTED });
+  textBlock(cursor, "Las diferencias se calculan antes de redondear; los importes se muestran con dos decimales.", { size: 7.7, color: MUTED });
+  if (!transition.previous.amountsReconciled || !transition.current.amountsReconciled) {
+    textBlock(cursor, "Importes incompletos o sin conciliación con el resultado. Se conserva el resultado oficial; — indica un importe no disponible.", { size: 7.7, color: NEGATIVE });
+  }
   const sources = transition.current.provenance.com_desc;
   textBlock(cursor, `Procedencia de C&D: ${sources.length ? sources.join("; ") : "no informada"}. Las demás partidas: ${transition.current.provenance.otras}.`, {
     size: 7.7,

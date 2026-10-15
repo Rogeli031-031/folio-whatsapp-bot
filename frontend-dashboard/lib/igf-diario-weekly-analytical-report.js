@@ -19,6 +19,30 @@ const PESO_TOLERANCE = 0.01;
 const KG_TOLERANCE = 1e-6;
 const VISIBLE_RATE = 0.0005;
 const PARTIAL_LABEL = "Análisis parcial / No conciliable con el detalle disponible";
+const MONEY_LINES = [
+  { key: "ingreso", label: "Ingresos por venta", sign: 1 },
+  { key: "costo", label: "Costo del gas", sign: -1 },
+  { key: "flete", label: "Flete", sign: -1 },
+  { key: "corporativo", label: "Gasto corporativo total", sign: -1 },
+  { key: "operativo", label: "Gasto operativo total", sign: -1 },
+  { key: "hg", label: "HG (importe)", sign: -1 },
+  { key: "com_desc", label: "Comisiones y descuentos", sign: 1 },
+];
+
+function dailyRateAmount(days, key) {
+  let total = 0;
+  let any = false;
+  for (const day of days || []) {
+    const kg = finite(day && day.metrics && day.metrics.venta_kg);
+    if (kg == null) return null;
+    if (kg <= 0) continue;
+    const value = finite(day.metrics[key]);
+    if (value == null) return null;
+    total += value * kg;
+    any = true;
+  }
+  return any ? total : null;
+}
 
 // Presentation groups follow Excel M (J+K+L) and U (Q+R+S+T).
 // The original twelve components remain available for reconciliation.
@@ -177,6 +201,18 @@ function assessWeek(week) {
   if (signedSum != null && r != null && Q != null && Math.abs((signedSum - r) * Q) > PESO_TOLERANCE) {
     reasons.push("la suma firmada de las doce partidas no reproduce r");
   }
+  const amounts = {
+    ingreso: finite(metrics.ingreso_mxn),
+    costo: dailyRateAmount(week.days, "costo_kg"),
+    flete: dailyRateAmount(week.days, "flete_kg"),
+    corporativo: sumAmount("gasto_corporativo_mxn"),
+    operativo: sumAmount("gasto_operativo_mxn"),
+    hg: finite(metrics.hg_mxn),
+    com_desc: dailyRateAmount(week.days, "com_desc_kg"),
+  };
+  const amountsReconciled = reasons.length === 0
+    && MONEY_LINES.every((line) => amounts[line.key] != null)
+    && Math.abs(MONEY_LINES.reduce((sum, line) => sum + line.sign * amounts[line.key], 0) - R) <= PESO_TOLERANCE;
   return {
     id: week.id,
     fecha_desde: week.fecha_desde,
@@ -195,11 +231,8 @@ function assessWeek(week) {
     qCd,
     rates,
     displayRates: groupLines(rates),
-    amounts: {
-      corporativo: sumAmount("gasto_corporativo_mxn"),
-      operativo: sumAmount("gasto_operativo_mxn"),
-      hg: finite(metrics.hg_mxn),
-    },
+    amounts,
+    amountsReconciled,
     signedSum,
     reasons,
     compatible: reasons.length === 0,
@@ -257,6 +290,11 @@ function transitionOf(previous, current) {
     year_change: yearChange,
     lines,
     displayLines: groupLines(lines),
+    amountLines: MONEY_LINES.map((line) => {
+      const anterior = previous.amounts[line.key];
+      const actual = current.amounts[line.key];
+      return { ...line, anterior, actual, delta: anterior == null || actual == null ? null : actual - anterior };
+    }),
     official,
     previous,
     current,

@@ -30,7 +30,7 @@ const INDICATORS = [
   { id: "flete", frame: "margen", label: "FLETE", tip: "Flete", unit: "$/kg", weeklyKey: "flete_kg", dailyKey: "flete_kg", sense: "down" },
   { id: "descuento_compra", frame: "margen", label: "DESCUENTO COMPRA", tip: "Descuento Compra", unit: "$/kg", pending: true },
   { id: "hg", frame: "hg", label: "HG", tip: "HG", unit: "$", weeklyKey: "hg_mxn", dailyKey: "hg_mxn", sense: "down" },
-  { id: "kilos", frame: "hg", label: "HG EN KILOS", tip: "HG en kilos (Control de compras)", unit: "kg", channel: "hg_kilos", sense: "down" },
+  { id: "kilos", frame: "hg", label: "HG EN KILOS", tip: "HG en kilos (Control de compras)", unit: "kg", channel: "hg_kilos", sense: "up" },
   { id: "venta_casa", frame: "canal", label: "VENTA CASA", tip: "Venta Casa", unit: "kg", channel: "venta_casa_kg", sense: "up" },
   { id: "venta_comisionista", frame: "canal", label: "VENTA COMISIONISTA", tip: "Venta Comisionista", unit: "kg", channel: "venta_comisionista_kg", sense: "up" },
 ];

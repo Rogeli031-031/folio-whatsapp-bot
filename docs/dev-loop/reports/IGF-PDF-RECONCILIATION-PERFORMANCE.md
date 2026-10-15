@@ -72,3 +72,29 @@ paridad entre importes del informe y de las graficas, ausencia/ceros y el
 render del PDF sin atribucion monetaria. Build con tipos aprobado. PDF final
 revisado por extraccion de texto y render: variaciones coincidentes, cifras
 cuestionadas ausentes y cuatro paginas legibles. Sin merge ni publicacion.
+
+## Ampliacion de importes y color de HG fisico
+
+Por solicitud humana, la tabla monetaria ahora muestra las siete partidas:
+ingresos por venta, costo del gas, flete, corporativo total, operativo total,
+HG y comisiones/descuentos. El resultado oficial agrega tambien anterior,
+actual y diferencia. Ingresos usa ingreso_mxn; costo, flete y C&D suman el
+importe de cada dia (tasa de ese dia por sus kilos). No se usa volumen medio
+entre semanas. Un dato diario faltante deja el importe correspondiente sin
+valor, sin extrapolarlo a kilos de otros dias.
+
+Se verifica la identidad monetaria de las siete partidas con sus signos
+contables y el resultado oficial. Si no cierra o faltan datos, se avisa sin
+alterar el resultado. El PDF aclara que calcula diferencias con precision
+completa y muestra dos decimales, por las diferencias visibles de redondeo.
+
+HG EN KILOS sigue la regla solicitada: delta negativo rojo, positivo verde,
+cero neutro. La regla corresponde al volumen fisico; conserva la semantica
+existente de HG en pesos y de los demas indicadores.
+
+Validacion: 40 pruebas de informe, conciliacion y graficas, mas una prueba de
+navegador; build con tipos aprobado. La muestra privada de Acapulco concilia
+las siete partidas, sus dos semanas y su variacion total. Revision visual de
+la tabla completa sin cortes y del delta fisico HG en rojo. La muestra tiene
+cinco paginas para mantener la tabla completa unida y legible. Mantiene los
+anexos ARR del documento original y termina en COMISIONISTA. Sin merge.
