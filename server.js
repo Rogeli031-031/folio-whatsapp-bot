@@ -15476,12 +15476,14 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
       range: rangeOk,
       canal: canalFilter,
       cliente_norm: clienteNorm || null,
+      topLimit: String(req.query.top_limit) === "15" ? 15 : 6,
       resolvePlantCodes: provincia ? commercialTrendEngine.resolveAllProvinciaPlantCodes : undefined,
     });
     if (engineResult && engineResult.ok === false) {
       return res.status(engineResult.status || 500).json({ error: engineResult.error || "Error venta-serie" });
     }
     const body = commercialTrendEngine.toVentaSerieHttpBody(engineResult || {}, empresa);
+    body.top_limit = String(req.query.top_limit) === "15" ? 15 : 6;
     const clientes_top = Array.isArray(body.clientes_top) ? body.clientes_top : [];
     const plantCode = body.plant_code || "";
 

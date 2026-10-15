@@ -223,6 +223,7 @@ export default function IgfDiarioWeeklyExecutiveModal({
       plantCode,
     });
     const analyticalReport = plantExport ? buildAnalyticalReport(plantExport, exportedAt) : null;
+    const annexRequest = { token, year, month, plantCode: plantCode || "", empresa, uploadDay, versionAsOfCorte, weekAnchor };
     if (!canExportExecutivePdf({
       loading,
       loadError: error,
@@ -239,10 +240,14 @@ export default function IgfDiarioWeeklyExecutiveModal({
         fontFamily: "NotoSans",
       });
       const pdf = await import("@/lib/igf-diario-weekly-executive-pdf");
+      const annexes = analyticalReport
+        ? await (await import("@/lib/igf-pdf-annexes-loader")).loadPdfAnnexes(annexRequest)
+        : null;
       const blob = analyticalReport
         ? await (await import("@/lib/igf-diario-weekly-analytical-pdf")).composePlantPdf({
           report: analyticalReport,
           svg: stamped,
+          annexes,
         })
         : await pdf.svgToExecutivePdf(stamped);
       if (!(blob instanceof Blob) || blob.size < 8) throw new Error("El PDF generado está vacío");
