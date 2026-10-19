@@ -2,6 +2,9 @@
 -- Sustituye solo CHECK (kg > 0) por CHECK (kg >= 0).
 -- No modifica compras_importe_check ni arr.compras_hg.
 -- NO ejecutar en producción desde el loop.
+-- Una sola transacción: si algo falla, el CHECK de kg no queda cambiado a medias.
+
+BEGIN;
 
 CREATE SCHEMA IF NOT EXISTS arr;
 
@@ -112,3 +115,5 @@ CREATE TABLE IF NOT EXISTS arr.compras_import_meta (
 
 CREATE INDEX IF NOT EXISTS idx_compras_import_meta_importacion
   ON arr.compras_import_meta (importacion_id);
+
+COMMIT;
