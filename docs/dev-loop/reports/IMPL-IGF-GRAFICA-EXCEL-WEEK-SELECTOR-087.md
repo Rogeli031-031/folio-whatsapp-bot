@@ -33,3 +33,6 @@ Con corte `2026-10-19`, los libros generados por `fillResumen` muestran:
 ## Límites
 
 No hay API nueva, cambio financiero, PR, merge, deploy ni escrituras a la base.
+
+## Cierre humano para apertura de 088
+CLOSED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-19

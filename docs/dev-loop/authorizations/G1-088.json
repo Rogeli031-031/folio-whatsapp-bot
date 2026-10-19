@@ -1,0 +1,21 @@
+{
+  "task_id": "IMPL-COMPRAS-EXCEL-AUTHORITATIVE-IMPORT-088",
+  "authorized_by": "HUMAN_APPROVER",
+  "approver_name": "Luis rogelio Zaragoza alvarez",
+  "authorized_at": "2026-10-19T16:33:33.0989162-06:00",
+  "human_authorization": "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-19",
+  "predecessor_task": "IMPL-IGF-GRAFICA-EXCEL-WEEK-SELECTOR-087",
+  "predecessor_resolution": "CLOSED_BY_HUMAN",
+  "base_sha": "71aa5be0aca465671e1cd8220b13b29f15aed582",
+  "branch": "implementation/compras-excel-authoritative-import-088",
+  "decisions": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true,
+    "D6": true,
+    "D7": true,
+    "D8": true
+  }
+}
