@@ -11,6 +11,8 @@ import {
   deleteComprasPurchase,
   downloadComprasFacturaBlob,
   downloadComprasExcel,
+  previewComprasExcelImport,
+  commitComprasExcelImport,
   fetchComprasMonth,
   upsertComprasHg,
   upsertComprasFleteTarifa,
@@ -23,6 +25,12 @@ import {
   type ComprasProvider,
   type ComprasPurchase,
 } from "@/lib/api";
+import {
+  COMPRAS_EXCEL_HG_NOTICE,
+  comprasImportConfirmPhrase,
+  newComprasImportRequestId,
+  type ComprasExcelPreview,
+} from "@/lib/compras-import";
 import {
   COMPRAS_MESES,
   formatCosto,
@@ -137,6 +145,13 @@ export function ComprasClient() {
   const [newProviderName, setNewProviderName] = useState("");
   const [providerSaving, setProviderSaving] = useState(false);
   const [excelBusy, setExcelBusy] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importDesde, setImportDesde] = useState("");
+  const [importHasta, setImportHasta] = useState("");
+  const [importPreview, setImportPreview] = useState<ComprasExcelPreview | null>(null);
+  const [importBusy, setImportBusy] = useState(false);
+  const [importRequestId, setImportRequestId] = useState("");
+  const [importConfirm, setImportConfirm] = useState("");
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -237,6 +252,58 @@ export function ComprasClient() {
 
   const igfHref = token ? `/igf-forecast?t=${encodeURIComponent(token)}` : "/igf-forecast";
   const plantaNombre = plantas.find((p) => p.id === plantaId)?.nombre || "";
+  const importPhrase = comprasImportConfirmPhrase(plantaNombre || "PLANTA", importDesde, importHasta);
+
+  async function reviewImport() {
+    if (!token || !plantaId || !importFile || importBusy) return;
+    setImportBusy(true);
+    setError(null);
+    try {
+      const fileBase64 = await fileToBase64(importFile);
+      const preview = await previewComprasExcelImport(token, {
+        planta_id: plantaId,
+        desde: importDesde,
+        hasta: importHasta,
+        file_name: importFile.name,
+        fileBase64,
+      });
+      setImportPreview(preview);
+      setImportRequestId(newComprasImportRequestId());
+      setImportConfirm("");
+    } catch (e: unknown) {
+      setImportPreview(null);
+      setError(friendlyError(e));
+    } finally {
+      setImportBusy(false);
+    }
+  }
+
+  async function commitImport() {
+    if (!token || !plantaId || !importFile || importBusy || !importPreview?.ok) return;
+    if (importConfirm.trim() !== importPhrase) return;
+    const requestId = importRequestId || newComprasImportRequestId();
+    setImportBusy(true);
+    setError(null);
+    try {
+      const fileBase64 = await fileToBase64(importFile);
+      await commitComprasExcelImport(token, {
+        planta_id: plantaId,
+        desde: importDesde,
+        hasta: importHasta,
+        file_name: importFile.name,
+        fileBase64,
+        request_id: requestId,
+      });
+      setImportFile(null);
+      setImportPreview(null);
+      setImportConfirm("");
+      await loadMonth();
+    } catch (e: unknown) {
+      setError(friendlyError(e));
+    } finally {
+      setImportBusy(false);
+    }
+  }
 
   async function handleCreateProvider() {
     if (!token || !plantaId || !newProviderName.trim() || providerSaving) return;
@@ -358,6 +425,29 @@ export function ComprasClient() {
           >
             {excelBusy ? "Descargando…" : "Descargar Excel"}
           </button>
+          <button
+            type="button"
+            disabled={!token || !plantaId}
+            onClick={() => document.getElementById("compras-excel-import-file")?.click()}
+            className="rounded bg-amber-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+          >
+            Importar compras Excel
+          </button>
+          <input
+            id="compras-excel-import-file"
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0] || null;
+              e.target.value = "";
+              if (!file) return;
+              setImportFile(file);
+              setImportPreview(null);
+              setImportConfirm("");
+              setImportRequestId(newComprasImportRequestId());
+            }}
+          />
           <button
             type="button"
             aria-expanded={fleteExpanded}
@@ -666,6 +756,63 @@ export function ComprasClient() {
         </div>
         <p className="mt-2 text-xs text-slate-400">Haz clic en las celdas de un proveedor para agregar, editar o adjuntar facturas. El consolidado y los costos se calculan solos.</p>
       </main>
+
+      {importFile && (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-3 sm:items-center">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-amber-700 bg-slate-950 p-4 text-sm text-slate-100">
+            <h2 className="text-base font-semibold">Importar compras Excel</h2>
+            <p className="mt-2 text-amber-200">{COMPRAS_EXCEL_HG_NOTICE}</p>
+            <p className="mt-2">Archivo: {importFile.name}</p>
+            <p>Planta destino: {plantaNombre || "—"}</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              <label className="text-xs">
+                Fecha desde
+                <input type="date" value={importDesde} onChange={(e) => { setImportDesde(e.target.value); setImportPreview(null); }} className="mt-1 block rounded border border-slate-600 bg-slate-900 px-2 py-1" />
+              </label>
+              <label className="text-xs">
+                Fecha hasta
+                <input type="date" value={importHasta} onChange={(e) => { setImportHasta(e.target.value); setImportPreview(null); }} className="mt-1 block rounded border border-slate-600 bg-slate-900 px-2 py-1" />
+              </label>
+            </div>
+            <button type="button" disabled={importBusy || !importDesde || !importHasta} onClick={() => void reviewImport()} className="mt-3 rounded bg-slate-700 px-3 py-1.5 text-xs disabled:opacity-50">
+              {importBusy ? "Revisando…" : "Revisar sustitución"}
+            </button>
+            {importPreview && (
+              <div className="mt-3 space-y-1 text-xs">
+                <p>A1: {importPreview.a1 || "—"} · planta {importPreview.plant || "—"}{importPreview.source_company ? ` · ${importPreview.source_company}` : ""}</p>
+                <p>Hojas: {(importPreview.sheets || []).join(", ") || "—"}</p>
+                <p>Filas Excel: {importPreview.inserts ?? 0} · se eliminan: {importPreview.deletes ?? 0} · permanecen: {importPreview.remaining ?? 0}</p>
+                <p>Kg antes {importPreview.kg_before ?? 0} · kg Excel {importPreview.kg_excel ?? 0}</p>
+                <p>Importe antes {importPreview.importe_before ?? 0} · importe Excel {importPreview.importe_excel ?? 0}</p>
+                <p>Notas de cargo: {importPreview.notas ?? 0}</p>
+                {Object.entries(importPreview.by_provider || {}).map(([name, cell]) => (
+                  <p key={name}>{name}: {cell.rows} filas · {cell.kg} kg · {cell.importe}</p>
+                ))}
+                {(importPreview.legacy_unclassified_count || 0) > 0 && <p className="text-amber-300">LEGACY_ACAPULCO_UNCLASSIFIED</p>}
+                {(importPreview.document_blockers || 0) > 0 && <p className="text-red-300">Hay facturas en el rango. No se sustituye.</p>}
+                {!importPreview.ok && <p className="text-red-300">{importPreview.error || importPreview.message || "Importación bloqueada"}</p>}
+              </div>
+            )}
+            {importPreview?.ok && (
+              <div className="mt-3">
+                <p className="text-xs text-amber-200">Escribe exactamente: {importPhrase}</p>
+                <input value={importConfirm} onChange={(e) => setImportConfirm(e.target.value)} className="mt-1 w-full rounded border border-amber-700 bg-slate-900 px-2 py-1 text-xs" />
+                <button
+                  type="button"
+                  disabled={importBusy || importConfirm.trim() !== importPhrase}
+                  onClick={() => void commitImport()}
+                  className="mt-2 rounded bg-red-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {importBusy ? "Sustituyendo…" : "Sustituir compras"}
+                </button>
+              </div>
+            )}
+            <button type="button" className="mt-3 text-xs text-slate-300" onClick={() => { if (importBusy) return; setImportFile(null); setImportPreview(null); }}>
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
       {detail && token && plantaId && data && (
         <ComprasDetailModal
