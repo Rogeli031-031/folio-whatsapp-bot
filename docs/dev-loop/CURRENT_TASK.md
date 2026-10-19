@@ -1,49 +1,50 @@
-task_id: "IMPL-IGF-GRAFICA-EXCEL-WEEK-SELECTOR-087"
+task_id: "FIX-COMPRAS-EXCEL-AUTHORITATIVE-IMPORT-088-R2"
 status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-10-19T14:34:49.3852055-06:00"
+authorized_at: "2026-10-19T17:34:54.0290798-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-19"
 
-base_sha: "bc06a7cc2f2753f329ec6aba0ca2773cb92ae0b9"
-branch: "implementation/igf-grafica-excel-week-selector-087"
+integration_base_sha: "71aa5be0aca465671e1cd8220b13b29f15aed582"
+starting_head_sha: "9925b877887dd899c33e58ee240b3c8220157ccf"
+branch: "implementation/compras-excel-authoritative-import-088"
+parent_task: "FIX-COMPRAS-EXCEL-AUTHORITATIVE-IMPORT-088-R1"
 
-objective: "Permitir elegir qué semana domingo-sábado descargar en Excel desde la gráfica IGF Diario, incluyendo semanas reales, parciales y proyectadas."
+objective: "Evitar omitir filas con fecha ilegible durante una sustitución autoritativa y hacer atómica la migración 024."
+
+decisions:
+  D1_bad_date_in_target_month_blocks: true
+  D2_migration_atomic_transaction: true
 
 in_scope:
-  - "frontend-dashboard/components/IgfDiarioGraficaModal.tsx"
-  - "frontend-dashboard/lib/igf-diario-weekly-rows.ts"
-  - "test/impl-igf-grafica-excel-week-selector-087.test.js"
+  - "lib/compras-dashboard.js"
+  - "sql/024_compras_excel_import_088.sql"
+  - "test/impl-compras-excel-authoritative-import-088.test.js"
+  - "test/fix-compras-excel-authoritative-import-088-r1.test.js"
+  - "test/fix-compras-excel-authoritative-import-088-r2.test.js"
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/authorizations/G1-087.json"
-  - "docs/dev-loop/reports/IMPL-IGF-GRAFICA-EXCEL-WEEK-SELECTOR-087.md"
-  - "docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-VENTA-PROM-PARITY-086.md"
+  - "docs/dev-loop/authorizations/G1-088-R2.json"
+  - "docs/dev-loop/reports/FIX-COMPRAS-EXCEL-AUTHORITATIVE-IMPORT-088-R2.md"
 
 out_of_scope:
-  - "Cálculos financieros"
-  - "lib/igf-diario-weekly-plant.js"
-  - "Pronóstico"
-  - "Excel financiero salvo selección de la semana"
-  - "DB, migrations e importadores"
-  - "APIs nuevas"
-  - "PDF"
-  - "PR, merge y deploy"
-
-allowed_actions:
-  - "Agregar selector local de semana en IgfDiarioGraficaModal"
-  - "Reutilizar week_anchor existente"
-  - "Crear helpers puros domingo-sábado si son necesarios"
-  - "Validar por lectura que el backend existente consume week_anchor"
-  - "Crear pruebas y build"
-  - "Commit producto/tests y documentación"
-  - "Push únicamente de la rama implementation/igf-grafica-excel-week-selector-087"
+  - "Cambiar contrato funcional de la 088"
+  - "Frontend salvo que una prueba demuestre necesidad directa"
+  - "Ejecutar migración productiva"
+  - "DB writes productivos"
+  - "Modificar arr.compras_hg"
+  - "Clasificar legacy Acapulco"
+  - "Borrar facturas"
+  - "Cambiar fletes"
+  - "PR"
+  - "merge"
+  - "deploy"
 
 forbidden_actions:
-  - "Cambiar cifras del Excel"
-  - "Cambiar fórmulas financieras"
-  - "Cambiar la gráfica al seleccionar semana para Excel"
-  - "Crear una segunda definición de semana incompatible"
-  - "Escribir DB productiva"
+  - "Ignorar BAD_DATE dentro de un mes objetivo"
+  - "Inventar fechas"
+  - "DDL productivo"
+  - "Modificar G1-088 o G1-088-R1"
+  - "Crear otra rama"
   - "PR, merge o deploy"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-GRAFICA-EXCEL-WEEK-SELECTOR-087.md"
+result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-EXCEL-AUTHORITATIVE-IMPORT-088-R2.md"

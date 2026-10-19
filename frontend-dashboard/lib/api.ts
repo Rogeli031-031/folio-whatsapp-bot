@@ -3862,6 +3862,7 @@ export type ComprasCell = {
 };
 
 export type ComprasMonthResponse = {
+  import_ready?: boolean;
   plant: { id: number };
   year: number;
   month: number;
@@ -4083,6 +4084,28 @@ export async function downloadComprasFacturaBlob(
     throw new Error((err as { error?: string }).error || `HTTP ${res.status}`);
   }
   return res.blob();
+}
+
+export function previewComprasExcelImport(
+  token: string,
+  body: { planta_id: number; desde: string; hasta: string; file_name: string; fileBase64: string }
+): Promise<import("./compras-import").ComprasExcelPreview> {
+  return apiFetch("/api/compras/import/preview", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function commitComprasExcelImport(
+  token: string,
+  body: { planta_id: number; desde: string; hasta: string; file_name: string; fileBase64: string; request_id: string }
+): Promise<{ ok: boolean; idempotent?: boolean; inserted?: number; deleted?: number; error?: string; hg_notice?: string }> {
+  return apiFetch("/api/compras/import/commit", {
+    token,
+    method: "POST",
+    body: JSON.stringify(body),
+  });
 }
 
 export async function downloadComprasExcel(
