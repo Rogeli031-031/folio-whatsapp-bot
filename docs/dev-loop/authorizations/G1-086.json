@@ -1,0 +1,19 @@
+{
+  "task_id": "FIX-IGF-DIARIO-WEEKLY-VENTA-PROM-PARITY-086",
+  "authorized_by": "HUMAN_APPROVER",
+  "approver_name": "Luis Rogelio Zaragoza Alvarez",
+  "authorized_at": "2026-10-19T12:29:45.6052483-06:00",
+  "human_authorization": "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-10-19",
+  "predecessor_task": "IMPL-IGF-DIARIO-WEEKLY-ANALYTICAL-PDF-085",
+  "predecessor_resolution": "CLOSED_BY_HUMAN",
+  "base_sha": "14afd8b0b9deda77e9be1de8083e78995144880f",
+  "branch": "fix/igf-diario-weekly-venta-prom-parity-086",
+  "decisions": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true,
+    "D6": true
+  }
+}
