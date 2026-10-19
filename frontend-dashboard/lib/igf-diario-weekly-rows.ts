@@ -94,3 +94,128 @@ export function coverageLines(coverage: IgfDiarioSemanalCoverageMap | null | und
   if (result && commission && result === commission) return [result];
   return [result, commission].filter((line): line is string => Boolean(line));
 }
+
+export type ExcelWeekEstado = "REAL" | "PARCIAL" | "PROYECTADA";
+
+export type ExcelWeekChoice = {
+  week_number: number;
+  week_year: number;
+  fecha_desde: string;
+  fecha_hasta: string;
+  estado: ExcelWeekEstado;
+  label: string;
+};
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function parseUtc(value: string): Date | null {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+  return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+}
+
+function formatUtc(date: Date): string {
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+}
+
+function addUtcDays(value: string, days: number): string | null {
+  const date = parseUtc(value);
+  if (!date) return null;
+  date.setUTCDate(date.getUTCDate() + days);
+  return formatUtc(date);
+}
+
+function sundayOf(value: string): string | null {
+  const date = parseUtc(value);
+  if (!date) return null;
+  return addUtcDays(String(value).slice(0, 10), -date.getUTCDay());
+}
+
+function saturdayOf(value: string): string | null {
+  const sunday = sundayOf(value);
+  return sunday ? addUtcDays(sunday, 6) : null;
+}
+
+function weekYearOf(value: string): number | null {
+  const sunday = sundayOf(value);
+  const saturday = saturdayOf(value);
+  if (!sunday || !saturday) return null;
+  const startYear = Number(sunday.slice(0, 4));
+  const endYear = Number(saturday.slice(0, 4));
+  return startYear === endYear ? startYear : endYear;
+}
+
+function weekNumberOf(value: string): number | null {
+  const year = weekYearOf(value);
+  const sunday = sundayOf(value);
+  const first = year == null ? null : sundayOf(`${year}-01-01`);
+  const start = first ? parseUtc(first) : null;
+  const cursor = sunday ? parseUtc(sunday) : null;
+  if (!start || !cursor) return null;
+  return Math.round((cursor.getTime() - start.getTime()) / 86400000 / 7) + 1;
+}
+
+function monthEndOf(year: number, month: number): string {
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return `${year}-${pad2(month)}-${pad2(last)}`;
+}
+
+function weekIntersects(weekStart: string, year: number, month: number): boolean {
+  const weekEnd = addUtcDays(weekStart, 6);
+  const start = `${year}-${pad2(month)}-01`;
+  const end = monthEndOf(year, month);
+  return Boolean(weekStart && weekEnd && weekStart <= end && weekEnd >= start);
+}
+
+function shortDay(value: string): string {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return value;
+  return `${match[3]}/${match[2]}`;
+}
+
+function excelWeekEstado(desde: string, hasta: string, corte: string): ExcelWeekEstado {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(corte)) return "REAL";
+  if (hasta < corte) return "REAL";
+  if (desde >= corte) return "PROYECTADA";
+  return "PARCIAL";
+}
+
+export function excelWeekChoices(year: number, month: number, corte?: string | null): ExcelWeekChoice[] {
+  const y = Number(year);
+  const m = Number(month);
+  const first = sundayOf(`${y}-${pad2(m)}-01`);
+  if (!y || !m || !first) return [];
+  const cut = String(corte || "").slice(0, 10);
+  const out: ExcelWeekChoice[] = [];
+  for (let cursor: string | null = first; cursor && weekIntersects(cursor, y, m); cursor = addUtcDays(cursor, 7)) {
+    const hasta = saturdayOf(cursor);
+    const number = weekNumberOf(cursor);
+    const weekYear = weekYearOf(cursor);
+    if (!hasta || number == null || weekYear == null) continue;
+    const estado = excelWeekEstado(cursor, hasta, cut);
+    out.push({
+      week_number: number,
+      week_year: weekYear,
+      fecha_desde: cursor,
+      fecha_hasta: hasta,
+      estado,
+      label: `Semana ${number} · ${shortDay(cursor)}–${shortDay(hasta)} · ${estado}`,
+    });
+  }
+  return out;
+}
+
+export function defaultExcelWeekAnchor(
+  choices: ExcelWeekChoice[],
+  weekAnchor?: string | null,
+  corte?: string | null,
+): string {
+  if (!choices.length) return "";
+  const preferred = sundayOf(String(weekAnchor || "").slice(0, 10));
+  if (preferred && choices.some((item) => item.fecha_desde === preferred)) return preferred;
+  const corteSunday = sundayOf(String(corte || "").slice(0, 10));
+  if (corteSunday && choices.some((item) => item.fecha_desde === corteSunday)) return corteSunday;
+  return choices[choices.length - 1].fecha_desde;
+}
