@@ -119,3 +119,7 @@ La evidencia R1 conserva los PNG `tehuacan-p*.png`, `puebla-p*.png`, `parcial-p*
 ## Límites
 
 No hay PR, merge ni deploy. No hubo escrituras a la base. La descarga productiva no queda validada. El checkout antiguo sigue en su rama con su `CURRENT_TASK` previa sin commit.
+
+## Cierre humano para apertura de 086
+CLOSED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-10-19
+La apertura de 086 no constituye una nueva validación productiva de 085.
