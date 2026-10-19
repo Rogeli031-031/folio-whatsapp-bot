@@ -1,69 +1,49 @@
-task_id: "FIX-IGF-DIARIO-WEEKLY-VENTA-PROM-PARITY-086"
+task_id: "IMPL-IGF-GRAFICA-EXCEL-WEEK-SELECTOR-087"
 status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-10-19T12:29:45.6052483-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-10-19"
+authorized_at: "2026-10-19T14:34:49.3852055-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-19"
 
-base_sha: "14afd8b0b9deda77e9be1de8083e78995144880f"
-branch: "fix/igf-diario-weekly-venta-prom-parity-086"
+base_sha: "bc06a7cc2f2753f329ec6aba0ca2773cb92ae0b9"
+branch: "implementation/igf-grafica-excel-week-selector-087"
 
-objective: "Hacer que Venta en Kilos proyectada del IGF Diario semanal use exactamente PROM Venta Total desde el corte inclusive, sin cambiar el contrato global de venta."
+objective: "Permitir elegir qué semana domingo-sábado descargar en Excel desde la gráfica IGF Diario, incluyendo semanas reales, parciales y proyectadas."
 
 in_scope:
-  - "lib/igf-diario-weekly-plant.js"
-  - "test/fix-igf-diario-weekly-venta-prom-parity-086.test.js"
+  - "frontend-dashboard/components/IgfDiarioGraficaModal.tsx"
+  - "frontend-dashboard/lib/igf-diario-weekly-rows.ts"
+  - "test/impl-igf-grafica-excel-week-selector-087.test.js"
   - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/authorizations/G1-086.json"
+  - "docs/dev-loop/authorizations/G1-087.json"
+  - "docs/dev-loop/reports/IMPL-IGF-GRAFICA-EXCEL-WEEK-SELECTOR-087.md"
   - "docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-VENTA-PROM-PARITY-086.md"
-  - "docs/dev-loop/reports/IMPL-IGF-DIARIO-WEEKLY-ANALYTICAL-PDF-085.md"
 
 out_of_scope:
-  - "lib/dashboard-arr-forecast.js"
-  - "lib/igf-diario-grafica.js"
-  - "lib/igf-diario-venta-kg.js"
-  - "frontend-dashboard/"
-  - "server.js"
-  - "Excel, Compras, Pronóstico y DatosPlanta"
+  - "Cálculos financieros"
+  - "lib/igf-diario-weekly-plant.js"
+  - "Pronóstico"
+  - "Excel financiero salvo selección de la semana"
   - "DB, migrations e importadores"
-  - "Contratos, AGENTS, LOOP_PROTOCOL y TASK_TEMPLATE"
-  - "PR, merge, push a main y deploy"
-
-contracts_in_force:
-  - "AGENTS.md"
-  - "docs/dev-loop/LOOP_PROTOCOL.md"
-  - "docs/dev-loop/TASK_TEMPLATE.md"
-  - "049: precedencia general captura/forecast"
-  - "074: suma y ausencia de canales"
-  - "067/069/077: IGF Diario semanal y cobertura"
-  - "085: PDF consume el snapshot semanal sin recalcular"
+  - "APIs nuevas"
+  - "PDF"
+  - "PR, merge y deploy"
 
 allowed_actions:
-  - "Editar únicamente las rutas autorizadas"
-  - "Crear helper semanal puro para sustituir Venta Total en fechas proyectadas"
-  - "Usar projection.byPlant[].promVentaTotal ya cargado"
-  - "Crear y ejecutar fixtures sintéticos y regresiones"
-  - "Commit de producto/tests"
-  - "Commit de documentación"
-  - "Push únicamente de la rama fix/igf-diario-weekly-venta-prom-parity-086"
+  - "Agregar selector local de semana en IgfDiarioGraficaModal"
+  - "Reutilizar week_anchor existente"
+  - "Crear helpers puros domingo-sábado si son necesarios"
+  - "Validar por lectura que el backend existente consume week_anchor"
+  - "Crear pruebas y build"
+  - "Commit producto/tests y documentación"
+  - "Push únicamente de la rama implementation/igf-grafica-excel-week-selector-087"
 
 forbidden_actions:
-  - "Cambiar resolveCanalTon o materializePlantMonth global"
-  - "Cambiar el cálculo PROM del módulo Pronóstico"
-  - "Usar captura parcial del corte como fallback"
-  - "Usar Casa+Comisionista como fallback del total"
-  - "Inventar ceros"
-  - "Reescalar canales para cuadrar el total"
-  - "Escribir en DB productiva"
-  - "PR, merge, auto-merge o deploy"
-  - "npm audit fix"
+  - "Cambiar cifras del Excel"
+  - "Cambiar fórmulas financieras"
+  - "Cambiar la gráfica al seleccionar semana para Excel"
+  - "Crear una segunda definición de semana incompatible"
+  - "Escribir DB productiva"
+  - "PR, merge o deploy"
 
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-WEEKLY-VENTA-PROM-PARITY-086.md"
-
-accepted_decisions:
-  D1: true
-  D2: true
-  D3: true
-  D4: true
-  D5: true
-  D6: true
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-GRAFICA-EXCEL-WEEK-SELECTOR-087.md"

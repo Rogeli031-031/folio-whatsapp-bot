@@ -25,3 +25,6 @@ Desde la fecha de corte inclusive, la Venta en Kilos del IGF Diario semanal toma
 ## Límites
 
 No hay query nueva, hardcode de planta ni de fecha. No hay PR, merge, deploy ni escrituras a la base.
+
+## Cierre humano para apertura de 087
+CLOSED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-19

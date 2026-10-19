@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { fetchIgfDiarioGrafica, fetchIgfDiarioSemanal, type ArrVentaSerieRange, type IgfDiarioGraficaResponse } from "@/lib/api";
+import { defaultExcelWeekAnchor, excelWeekChoices } from "@/lib/igf-diario-weekly-rows";
 import ArrVentaCanalPanel from "@/components/ArrVentaCanalPanel";
 import ArrVentaGraficaModal from "@/components/ArrVentaGraficaModal";
 
@@ -263,7 +264,16 @@ export default function IgfDiarioGraficaModal({
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [arrCliente, setArrCliente] = useState<string | null>(null);
+  const excelWeeks = useMemo(
+    () => excelWeekChoices(year, month, uploadDay || ""),
+    [year, month, uploadDay],
+  );
+  const [excelWeekAnchor, setExcelWeekAnchor] = useState("");
   const arrEmpresa = todas ? "Provincia" : scopeLabel;
+
+  useEffect(() => {
+    setExcelWeekAnchor(defaultExcelWeekAnchor(excelWeeks, weekAnchor, uploadDay));
+  }, [excelWeeks, weekAnchor, uploadDay, year, month, plantCode, todas]);
 
   useEffect(() => {
     let cancel = false;
@@ -368,10 +378,25 @@ export default function IgfDiarioGraficaModal({
               {scopeLabel}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <label className="flex flex-wrap items-center gap-2 text-xs text-slate-200">
+              <span id="excel-week-label">Semana a descargar:</span>
+              <select
+                aria-labelledby="excel-week-label"
+                value={excelWeekAnchor}
+                onChange={(event) => setExcelWeekAnchor(event.target.value)}
+                className="max-w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-white"
+              >
+                {excelWeeks.map((week) => (
+                  <option key={week.fecha_desde} value={week.fecha_desde}>
+                    {week.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               type="button"
-              onClick={() => window.open(excelDownloadHref(excelUrl, weekAnchor, seriesMetric), "_blank", "noopener,noreferrer")}
+              onClick={() => window.open(excelDownloadHref(excelUrl, excelWeekAnchor || weekAnchor, seriesMetric), "_blank", "noopener,noreferrer")}
               className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
             >
               Descargar Excel

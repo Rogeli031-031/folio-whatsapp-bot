@@ -1,0 +1,19 @@
+{
+  "task_id": "IMPL-IGF-GRAFICA-EXCEL-WEEK-SELECTOR-087",
+  "authorized_by": "HUMAN_APPROVER",
+  "approver_name": "Luis rogelio Zaragoza alvarez",
+  "authorized_at": "2026-10-19T14:34:49.3852055-06:00",
+  "human_authorization": "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-19",
+  "predecessor_task": "FIX-IGF-DIARIO-WEEKLY-VENTA-PROM-PARITY-086",
+  "predecessor_resolution": "CLOSED_BY_HUMAN",
+  "base_sha": "bc06a7cc2f2753f329ec6aba0ca2773cb92ae0b9",
+  "branch": "implementation/igf-grafica-excel-week-selector-087",
+  "decisions": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true,
+    "D6": true
+  }
+}
