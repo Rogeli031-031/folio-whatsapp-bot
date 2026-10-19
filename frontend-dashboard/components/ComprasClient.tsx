@@ -27,6 +27,7 @@ import {
 } from "@/lib/api";
 import {
   COMPRAS_EXCEL_HG_NOTICE,
+  COMPRAS_IMPORT_PENDING_LABEL,
   comprasImportConfirmPhrase,
   newComprasImportRequestId,
   type ComprasExcelPreview,
@@ -427,12 +428,19 @@ export function ComprasClient() {
           </button>
           <button
             type="button"
-            disabled={!token || !plantaId}
-            onClick={() => document.getElementById("compras-excel-import-file")?.click()}
+            disabled={!token || !plantaId || data?.import_ready !== true}
+            title={data?.import_ready === true ? "Importar compras Excel" : COMPRAS_IMPORT_PENDING_LABEL}
+            onClick={() => {
+              if (data?.import_ready !== true) return;
+              document.getElementById("compras-excel-import-file")?.click();
+            }}
             className="rounded bg-amber-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
           >
             Importar compras Excel
           </button>
+          {data?.import_ready !== true && (
+            <span className="text-xs text-amber-200">{COMPRAS_IMPORT_PENDING_LABEL}</span>
+          )}
           <input
             id="compras-excel-import-file"
             type="file"

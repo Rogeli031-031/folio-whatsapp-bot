@@ -1,4 +1,5 @@
 export const COMPRAS_EXCEL_HG_NOTICE = "HG EN KILOS NO SE MODIFICARÁ";
+export const COMPRAS_IMPORT_PENDING_LABEL = "Importación pendiente de habilitar";
 
 export type ComprasExcelPreview = {
   ok: boolean;

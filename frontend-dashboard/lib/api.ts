@@ -3862,6 +3862,7 @@ export type ComprasCell = {
 };
 
 export type ComprasMonthResponse = {
+  import_ready?: boolean;
   plant: { id: number };
   year: number;
   month: number;
