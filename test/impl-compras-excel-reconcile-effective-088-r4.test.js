@@ -64,6 +64,7 @@ class Mem {
         source_company: meta ? meta.source_company : (p.source_company || null),
         excel_kg: eff ? eff.excel_kg : null,
         excel_importe: eff ? eff.excel_importe : null,
+        provenance: eff ? eff.provenance : null,
       };
     });
   }
@@ -150,7 +151,25 @@ function routeClient(mode) {
       }
       if (q.includes("compras_import_lineas")) {
         if (mode === "reconcile") {
-          return { rows: [{ lineas: "arr.compras_import_lineas", effective: "arr.compras_effective", importe_type: "numeric(18,6)" }] };
+          return { rows: [{
+            lineas: "arr.compras_import_lineas",
+            effective: "arr.compras_effective",
+            importe_type: "numeric(18,6)",
+            line_importacion_id: "integer",
+            line_compra_id: "integer",
+            line_excel_kg: "numeric(18,6)",
+            line_excel_importe: "numeric(18,6)",
+            line_captured_kg: "numeric(18,6)",
+            line_captured_importe: "numeric(18,6)",
+            line_action: "text",
+            line_discrepant: "boolean",
+            line_provenance: "text",
+            eff_compra_id: "integer",
+            eff_import_linea_id: "bigint",
+            eff_excel_kg: "numeric(18,6)",
+            eff_excel_importe: "numeric(18,6)",
+            eff_provenance: "text",
+          }] };
         }
         return { rows: [{ lineas: null, effective: null, importe_type: "numeric(14,2)" }] };
       }

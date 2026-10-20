@@ -850,7 +850,7 @@ export function ComprasClient() {
                   <p key={name}>{name}: {cell.rows} filas · {cell.kg} kg · {cell.importe}</p>
                 ))}
                 {(importPreview.legacy_unclassified_count || 0) > 0 && <p className="text-amber-300">LEGACY_ACAPULCO_UNCLASSIFIED</p>}
-                {(importPreview.document_blockers || 0) > 0 && <p className="text-red-300">Hay facturas en el rango. No se sustituye.</p>}
+                {(importPreview.document_blockers || 0) > 0 && <p className="text-red-300">Hay compras con factura sin contraparte en el Excel. No se aplicará la conciliación.</p>}
                 {!importPreview.ok && <p className="text-red-300">{importPreview.error || importPreview.message || "Importación bloqueada"}</p>}
               </div>
             )}
@@ -1438,6 +1438,10 @@ function ComprasDetailModal({
                       Cancelar
                     </button>
                   </div>
+                ) : p.excel_only ? (
+                  <p className="text-sm text-slate-200">
+                    EXCEL — USADO PARA CALCULO: KG {formatKg(p.effective_kg ?? p.kg)} · Importe ${formatExactAmount(p.effective_importe ?? p.importe)}
+                  </p>
                 ) : p.reconciled ? (
                   <div className="space-y-1 text-sm text-slate-200">
                     <p>CAPTURADO / FACTURA: KG {formatKg(p.captured_kg ?? p.kg)} · Importe ${formatExactAmount(p.captured_importe ?? p.importe)}</p>
