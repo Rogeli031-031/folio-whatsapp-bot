@@ -7,7 +7,7 @@ const test = require("node:test");
 const ExcelJS = require("exceljs");
 
 const compras = require("../lib/compras-dashboard");
-const { appendComprasWorksheet, blockStarts } = require("../lib/compras-excel");
+const { appendComprasWorksheet, controlComprasLayout } = require("../lib/compras-excel");
 
 const YELLOW = "FFFFFF00";
 const PROVIDERS = [
@@ -30,14 +30,12 @@ function colLetter(n) {
 }
 
 function sheetCols() {
-  const starts = blockStarts(PROVIDERS.length);
-  const consStart = starts[starts.length - 1];
-  const hgCostoCol = consStart + 4;
+  const layout = controlComprasLayout(PROVIDERS.length);
   return {
-    consKg: consStart,
-    consCosto: consStart + 1,
-    consImp: consStart + 2,
-    hgCosto: hgCostoCol,
+    consKg: layout.consStart,
+    consCosto: layout.consCostoCol,
+    consImp: layout.consImpCol,
+    hgCosto: layout.hgCostoCol,
   };
 }
 
@@ -129,10 +127,10 @@ async function reopen(ws) {
   return wb.getWorksheet("CONTROL DE COMPRAS");
 }
 
-test("layout actual: O es COSTO KG consolidado y R es COSTO HG", () => {
+test("layout actual: P es COSTO KG consolidado y S es COSTO HG", () => {
   const cols = sheetCols();
-  assert.equal(colLetter(cols.consCosto), "O");
-  assert.equal(colLetter(cols.hgCosto), "R");
+  assert.equal(colLetter(cols.consCosto), "P");
+  assert.equal(colLetter(cols.hgCosto), "S");
   assert.match(EXCEL, /consCostoCol/);
   assert.match(EXCEL, /hgCostoCol/);
   assert.doesNotMatch(EXCEL, /ISNUMBER\(O7\)/);

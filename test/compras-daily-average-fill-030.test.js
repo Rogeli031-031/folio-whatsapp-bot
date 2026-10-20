@@ -117,10 +117,10 @@ test("G–J) solo las celdas base estimadas van en azul", async () => {
   assert.notEqual(fillOf(ws.getCell(6, 2)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(8, 2).value, null);
   assert.notEqual(fillOf(ws.getCell(8, 2)), ESTIMATED_BLUE);
-  assert.equal(fillOf(ws.getCell(8, 19)), ESTIMATED_BLUE);
   assert.equal(fillOf(ws.getCell(8, 20)), ESTIMATED_BLUE);
-  assert.equal(ws.getCell(9, 19).value, 0);
-  assert.notEqual(fillOf(ws.getCell(9, 19)), ESTIMATED_BLUE);
+  assert.equal(fillOf(ws.getCell(8, 21)), ESTIMATED_BLUE);
+  assert.equal(ws.getCell(9, 20).value, 0);
+  assert.notEqual(fillOf(ws.getCell(9, 20)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(11, 1).value, "Semana 1");
   assert.notEqual(fillOf(ws.getCell(11, 2)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(13, 1).value, "TOTAL MES");
@@ -137,11 +137,12 @@ test("K–U) las derivadas diarias conservan las relaciones vigentes", async () 
   assert.equal(ws.getCell(row, 3).value, 15);
   assert.equal(ws.getCell(row, 7).value, 4);
   assert.equal(ws.getCell(row, 11).value, 4);
-  assert.match(formulaOf(ws.getCell(row, 14)), /SUM\(B8,F8,J8\)/);
-  assert.match(formulaOf(ws.getCell(row, 16)), /SUM\(D8,H8,L8\)/);
-  assert.doesNotMatch(formulaOf(ws.getCell(row, 14)), /B8\+F8\+J8/);
-  assert.match(formulaOf(ws.getCell(row, 15)), /P8\/N8/);
-  assert.match(formulaOf(ws.getCell(6, 18)), /\+/);
+  assert.match(formulaOf(ws.getCell(row, 15)), /SUM\(B8,F8,J8\)/);
+  assert.doesNotMatch(formulaOf(ws.getCell(row, 15)), /N8/);
+  assert.match(formulaOf(ws.getCell(row, 17)), /SUM\(D8,H8,L8,N8\)/);
+  assert.doesNotMatch(formulaOf(ws.getCell(row, 15)), /B8\+F8\+J8/);
+  assert.match(formulaOf(ws.getCell(row, 16)), /Q8\/O8/);
+  assert.match(formulaOf(ws.getCell(6, 19)), /\+/);
   const starts = blockStarts(3);
   const hgImp = starts[starts.length - 1] + 6;
   const flete = starts.map((col) => col + hgImp + 1);
@@ -160,22 +161,22 @@ test("R diario estimado es O+AJ de la misma fila", async () => {
   const wb = new ExcelJS.Workbook();
   await appendComprasWorksheet(wb, payloadFrom(sampleDays()), { plantName: "Puebla", corteYmd: "2026-09-03" });
   const ws = wb.getWorksheet("CONTROL DE COMPRAS");
-  const estimated = ws.getCell(10, 18).value;
-  const real = ws.getCell(6, 18).value;
+  const estimated = ws.getCell(10, 19).value;
+  const real = ws.getCell(6, 19).value;
   assert.equal(typeof estimated, "object");
-  assert.match(estimated.formula, /ISNUMBER\(O10\),ISNUMBER\(AJ10\)/);
-  assert.match(estimated.formula, /O10\+AJ10/);
+  assert.match(estimated.formula, /ISNUMBER\(P10\),ISNUMBER\(AJ10\)/);
+  assert.match(estimated.formula, /P10\+AJ10/);
   assert.doesNotMatch(estimated.formula, /\d+\.\d+/);
-  assert.notEqual(fillOf(ws.getCell(10, 18)), ESTIMATED_BLUE);
-  assert.match(real.formula, /O6\+AJ6/);
-  assert.equal(typeof ws.getCell(11, 18).value, "number");
-  assert.equal(typeof ws.getCell(13, 18).value, "number");
+  assert.notEqual(fillOf(ws.getCell(10, 19)), ESTIMATED_BLUE);
+  assert.match(real.formula, /P6\+AJ6/);
+  assert.equal(typeof ws.getCell(11, 19).value, "number");
+  assert.equal(typeof ws.getCell(13, 19).value, "number");
 
   const lone = day("2026-09-01", { hg: 5 });
   lone.hg_costo_efectivo = 13.195;
   const carryWb = new ExcelJS.Workbook();
   await appendComprasWorksheet(carryWb, payloadFrom([lone]), { plantName: "Puebla", corteYmd: "2026-08-31" });
-  assert.equal(carryWb.getWorksheet("CONTROL DE COMPRAS").getCell(6, 18).value, 13.195);
+  assert.equal(carryWb.getWorksheet("CONTROL DE COMPRAS").getCell(6, 19).value, 13.195);
 });
 
 test("V–AA) semana y mes suman reales y estimados", async () => {
@@ -192,7 +193,7 @@ test("V–AA) semana y mes suman reales y estimados", async () => {
     .reduce((sum, ymd) => sum + ctx.byYmd.get(ymd).hg.importe, 0);
   assert.equal(ws.getCell(11, 2).value, kg);
   assert.equal(ws.getCell(11, 4).value, importe);
-  assert.equal(ws.getCell(11, 20).value, Math.round(hgImporte * 100) / 100);
+  assert.equal(ws.getCell(11, 21).value, Math.round(hgImporte * 100) / 100);
   assert.equal(ws.getCell(11, 3).value, importe / kg);
   const dailyCosts = [1000 / 100, 3000 / 200, 2000 / 150, 8000 / 400, 4000 / ((100 + 200 + 400) / 3)];
   const simple = dailyCosts.reduce((s, n) => s + n, 0) / dailyCosts.length;
@@ -228,7 +229,7 @@ test("AB) Compras e IGFDiario escriben el mismo CONTROL DE COMPRAS", async () =>
   assert.equal(b.getCell(10, 2).value, 150);
   assert.equal(b.getCell(8, 2).value, a.getCell(8, 2).value);
   assert.equal(formulaOf(b.getCell(8, 3)), formulaOf(a.getCell(8, 3)));
-  assert.equal(b.getCell(11, 20).value, a.getCell(11, 20).value);
+  assert.equal(b.getCell(11, 21).value, a.getCell(11, 21).value);
 });
 
 test("corte México: 19/09 vacío, 24/09 y 25/09 estimados, SUM no usa +", async () => {
@@ -251,25 +252,25 @@ test("corte México: 19/09 vacío, 24/09 y 25/09 estimados, SUM no usa +", async
   assert.equal(ws.getCell(row19, 10).value, null);
   assert.equal(ws.getCell(row19, 6).value, 80);
   assert.notEqual(fillOf(ws.getCell(row19, 6)), ESTIMATED_BLUE);
-  assert.equal(ws.getCell(row19, 19).value, null);
+  assert.equal(ws.getCell(row19, 20).value, null);
   assert.equal(ws.getCell(row24, 2).value, 100 / 23);
   assert.equal(fillOf(ws.getCell(row24, 2)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(row24, 10).value, 40 / 23);
   assert.equal(fillOf(ws.getCell(row24, 10)), ESTIMATED_BLUE);
-  assert.equal(ws.getCell(row24, 19).value, 10);
-  assert.equal(fillOf(ws.getCell(row24, 19)), ESTIMATED_BLUE);
+  assert.equal(ws.getCell(row24, 20).value, 10);
+  assert.equal(fillOf(ws.getCell(row24, 20)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(row25, 2).value, 100 / 23);
   assert.equal(fillOf(ws.getCell(row25, 2)), ESTIMATED_BLUE);
   assert.equal(ws.getCell(row25, 10).value, 40 / 23);
   assert.equal(fillOf(ws.getCell(row25, 10)), ESTIMATED_BLUE);
-  assert.equal(ws.getCell(row25, 19).value, 10);
-  assert.equal(fillOf(ws.getCell(row25, 19)), ESTIMATED_BLUE);
-  assert.match(formulaOf(ws.getCell(row19, 14)), /SUM\(B7,F7,J7\)/);
-  assert.doesNotMatch(formulaOf(ws.getCell(row19, 14)), /#VALUE|B7\+F7\+J7/);
-  assert.match(formulaOf(ws.getCell(row19, 18)), /ISNUMBER\(O7\),ISNUMBER\(AJ7\)/);
-  assert.match(formulaOf(ws.getCell(row25, 18)), /ISNUMBER\(O9\),ISNUMBER\(AJ9\)/);
-  assert.match(formulaOf(ws.getCell(row24, 18)), /ISNUMBER\(O8\),ISNUMBER\(AJ8\)/);
-  assert.match(formulaOf(ws.getCell(row24, 14)), /SUM\(B8,F8,J8\)/);
+  assert.equal(ws.getCell(row25, 20).value, 10);
+  assert.equal(fillOf(ws.getCell(row25, 20)), ESTIMATED_BLUE);
+  assert.match(formulaOf(ws.getCell(row19, 15)), /SUM\(B7,F7,J7\)/);
+  assert.doesNotMatch(formulaOf(ws.getCell(row19, 15)), /#VALUE|B7\+F7\+J7|N7/);
+  assert.match(formulaOf(ws.getCell(row19, 19)), /ISNUMBER\(P7\),ISNUMBER\(AJ7\)/);
+  assert.match(formulaOf(ws.getCell(row25, 19)), /ISNUMBER\(P9\),ISNUMBER\(AJ9\)/);
+  assert.match(formulaOf(ws.getCell(row24, 19)), /ISNUMBER\(P8\),ISNUMBER\(AJ8\)/);
+  assert.match(formulaOf(ws.getCell(row24, 15)), /SUM\(B8,F8,J8\)/);
 });
 
 test("divisor 23 con grid incompleto y corte 2026-09-24", () => {

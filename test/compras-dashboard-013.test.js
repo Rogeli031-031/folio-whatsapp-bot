@@ -827,7 +827,9 @@ describe("013 compras — rutas HTTP", () => {
     assert.equal(ws.getCell(4, 2).value, "PEMEX TUXPAN");
     assert.equal(ws.getCell(4, 6).value, "TOMZA TUXPAN");
     assert.equal(ws.getCell(4, 10).value, "TOMZA TEPEJI");
-    assert.equal(ws.getCell(4, 14).value, "CONSOLIDADO");
+    assert.equal(ws.getCell(4, 14).value, "NOTA DE CARGO");
+    assert.equal(ws.getCell(5, 14).value, "IMPORTE");
+    assert.equal(ws.getCell(4, 15).value, "CONSOLIDADO");
     assert.equal(ws.getCell(5, 2).value, "COMPRA KG");
     assert.equal(ws.getColumn(5).width, 2.2);
     assert.notEqual(String(ws.getCell(4, 2).fill && ws.getCell(4, 2).fill.fgColor && ws.getCell(4, 2).fill.fgColor.argb), "FF2F2F2F");
