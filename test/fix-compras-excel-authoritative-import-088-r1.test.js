@@ -274,7 +274,7 @@ describe("088-R1 mes vacío y rollout", () => {
       const parsed = await compras.parseComprasExcelBuffer(fs.readFileSync(path.join(dir, name)));
       const october = compras.planComprasExcelImport(parsed, { desde: "2026-10-01", hasta: "2026-10-31", plantName: parsed.a1 === "HIDROGAS" || parsed.a1 === "URIBE" ? "Acapulco" : parsed.a1 === "TEHUACAN" ? "Tehuacán" : parsed.a1 === "MORELOS" ? "Morelos" : "Puebla", existing: [], documents: [], hg: [] });
       assert.deepEqual(october.workbook_years, [2026]);
-      if (parsed.a1 === "TEHUACAN") assert.ok(october.errors.some((e) => e.code === "UNKNOWN_ORIGIN"));
+      if (parsed.a1 === "TEHUACAN") assert.equal(october.errors.some((e) => e.code === "UNKNOWN_ORIGIN"), false);
       if (parsed.a1 === "HIDROGAS") {
         assert.ok(october.errors.some((e) => e.code === "DATE_SHEET_MISMATCH"));
         const september = compras.planComprasExcelImport(parsed, { desde: "2026-09-01", hasta: "2026-09-30", plantName: "Acapulco", existing: [], documents: [], hg: [] });

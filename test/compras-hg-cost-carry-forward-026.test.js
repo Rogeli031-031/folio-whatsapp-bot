@@ -91,8 +91,9 @@ test("I–L) el mes sin compra usa el último costo anterior y no inventa cero",
   };
   const seed = await compras.loadLatestHgCostBeforeDate(client, 4, "2026-09-01");
   assert.equal(seed, 13.195);
-  assert.match(calls[0].sql, /fecha < \$2::date/);
-  assert.deepEqual(calls[0].params, [4, "2026-09-01"]);
+  const history = calls.find((call) => /FROM arr\.compras\b/.test(call.sql) && !/to_regclass/.test(call.sql));
+  assert.match(history.sql, /fecha < \$2::date/);
+  assert.deepEqual(history.params, [4, "2026-09-01"]);
 
   const leading = [day("2026-09-01", { hg: 5 }), day("2026-09-02", { hg: 5 }), day("2026-09-03", { hg: 5 })];
   compras.applyHgCostCarryForward(gridOf(leading), seed);
