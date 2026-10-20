@@ -7,7 +7,7 @@ const test = require("node:test");
 const ExcelJS = require("exceljs");
 
 const compras = require("../lib/compras-dashboard");
-const { appendComprasWorksheet, blockStarts, buildComprasWorkbook } = require("../lib/compras-excel");
+const { appendComprasWorksheet, blockStarts, buildComprasWorkbook, controlComprasLayout } = require("../lib/compras-excel");
 
 const ROOT = path.join(__dirname, "..");
 const CLIENT = fs.readFileSync(path.join(ROOT, "frontend-dashboard", "components", "ComprasClient.tsx"), "utf8");
@@ -184,9 +184,13 @@ function acceptancePayload() {
 }
 
 function hgCols() {
-  const starts = blockStarts(1);
-  const consStart = starts[starts.length - 1];
-  return { costo: consStart + 4, hg: consStart + 5, importe: consStart + 6, providerCosto: starts[0] + 1 };
+  const layout = controlComprasLayout(1);
+  return {
+    costo: layout.hgCostoCol,
+    hg: layout.hgCol,
+    importe: layout.hgImpCol,
+    providerCosto: layout.providerStarts[0] + 1,
+  };
 }
 
 test("Y–AA) Excel y CONTROL DE COMPRAS comparten el costo efectivo", async () => {

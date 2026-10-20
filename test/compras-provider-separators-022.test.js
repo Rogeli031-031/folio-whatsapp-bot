@@ -38,7 +38,7 @@ describe("IMPL-COMPRAS-PROVIDER-SEPARATORS-022 gaps de compras", () => {
   it("C) existe gap antes de CONSOLIDADO", () => {
     assert.match(
       CLIENT,
-      /<th rowSpan=\{3\} className=\{COMPRAS_PROVIDER_GAP_CLS\} \/>\s*<\/Fragment>\s*\)\)\}\s*<th colSpan=\{3\}[^>]*>\s*CONSOLIDADO/
+      /<th rowSpan=\{3\} className=\{COMPRAS_PROVIDER_GAP_CLS\} \/>\s*<\/Fragment>\s*\)\)\}\s*<th[^>]*>\s*NOTA DE CARGO\s*<\/th>\s*<th colSpan=\{3\}[^>]*>\s*CONSOLIDADO/
     );
   });
 

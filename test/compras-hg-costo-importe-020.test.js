@@ -252,14 +252,14 @@ describe("IMPL-COMPRAS-HG-COSTO-IMPORTE-020 Excel y no persistencia", () => {
     const payload = await compras.loadMonth(db, 1, 2026, 9);
     const wb = await buildComprasWorkbook(payload, { plantName: "Puebla" });
     const ws = wb.getWorksheet("CONTROL DE COMPRAS");
-    assert.equal(ws.getCell(4, 18).value, "HG EN KILOS");
-    assert.equal(ws.getCell(5, 18).value, "COSTO");
-    assert.equal(ws.getCell(5, 19).value, "HG EN KILOS");
-    assert.equal(ws.getCell(5, 20).value, "IMPORTE");
-    assert.equal(ws.getCell(6, 19).value, -100);
-    const costoF = ws.getCell(6, 18).value;
+    assert.equal(ws.getCell(4, 19).value, "HG EN KILOS");
+    assert.equal(ws.getCell(5, 19).value, "COSTO");
+    assert.equal(ws.getCell(5, 20).value, "HG EN KILOS");
+    assert.equal(ws.getCell(5, 21).value, "IMPORTE");
+    assert.equal(ws.getCell(6, 20).value, -100);
+    const costoF = ws.getCell(6, 19).value;
     assert.ok(costoF && String(costoF.formula || "").includes("+"));
-    const impF = ws.getCell(6, 20).value;
+    const impF = ws.getCell(6, 21).value;
     assert.match(String(impF.formula || ""), /\*-1/);
     let fleteCons = null;
     for (let c = 19; c <= 80; c += 1) {

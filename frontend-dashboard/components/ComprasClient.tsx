@@ -99,12 +99,36 @@ export function comprasGridColSpan(providerCount: number, fleteExpanded: boolean
   const n = Number.isFinite(providerCount) && providerCount > 0 ? Math.floor(providerCount) : 0;
   const fecha = 1;
   const compras = n * 3 + n;
+  const notaCargo = 1;
   const consolidado = 3;
   const sepHg = 1;
   const hg = 3;
   const sepFlete = 1;
   const flete = fleteExpanded ? n * 3 + n + 3 : 0;
-  return fecha + compras + consolidado + sepHg + hg + sepFlete + flete;
+  return fecha + compras + notaCargo + consolidado + sepHg + hg + sepFlete + flete;
+}
+
+function normalizeComprasProviderName(name: string): string {
+  return String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function isNotaCargoProviderName(name: string | null | undefined): boolean {
+  return normalizeComprasProviderName(String(name || "")) === "nota de cargo";
+}
+
+function notaImporteFrom(
+  provider: { id: number } | null,
+  bag: Record<string, { importe?: number | null } | undefined> | undefined
+): number {
+  if (!provider || !bag) return 0;
+  const cell = bag[String(provider.id)];
+  const n = Number(cell?.importe);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function readSavedSheet(): { plantaId: number | null; year: number | null; month: number | null } {
@@ -238,8 +262,11 @@ export function ComprasClient() {
     return Array.from(set).sort((a, b) => a - b);
   }, [now, year]);
 
-  const providers = data?.providers || [];
+  const sheetProviders = data?.providers || [];
+  const notaCargoProvider = sheetProviders.find((p) => isNotaCargoProviderName(p.nombre)) ?? null;
+  const providers = sheetProviders.filter((p) => !isNotaCargoProviderName(p.nombre));
   const allProviders = data?.all_providers || [];
+  const manageableProviders = allProviders.filter((p) => !isNotaCargoProviderName(p.nombre));
   const dayByYmd = useMemo(() => {
     const m = new Map<string, ComprasMonthResponse["grid"]["days"][number]>();
     for (const d of data?.grid.days || []) m.set(d.ymd, d);
@@ -308,6 +335,10 @@ export function ComprasClient() {
 
   async function handleCreateProvider() {
     if (!token || !plantaId || !newProviderName.trim() || providerSaving) return;
+    if (isNotaCargoProviderName(newProviderName)) {
+      setError("NOTA DE CARGO es un origen reservado del sistema.");
+      return;
+    }
     setProviderSaving(true);
     try {
       await createComprasProveedor(token, plantaId, {
@@ -500,7 +531,7 @@ export function ComprasClient() {
               </button>
             </div>
             <ul className="space-y-1 text-sm">
-              {allProviders.map((p) => (
+              {manageableProviders.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center gap-2 text-slate-200">
                   <span className={p.activo ? "" : "line-through text-slate-500"}>{p.nombre}</span>
                   <button type="button" className="text-xs text-cyan-300" onClick={() => void handleMoveProvider(p, -1)}>
@@ -514,7 +545,7 @@ export function ComprasClient() {
                   </button>
                 </li>
               ))}
-              {!allProviders.length && <li className="text-slate-400">Sin proveedores. Agrega al menos uno para capturar.</li>}
+              {!manageableProviders.length && <li className="text-slate-400">Sin proveedores. Agrega al menos uno para capturar.</li>}
             </ul>
           </section>
         )}
@@ -566,6 +597,9 @@ export function ComprasClient() {
                     <th rowSpan={3} className={COMPRAS_PROVIDER_GAP_CLS} />
                   </Fragment>
                 ))}
+                <th className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
+                  NOTA DE CARGO
+                </th>
                 <th colSpan={3} className="compras-provider-title border-b border-black bg-white px-2 py-2 text-center text-[13px] font-bold uppercase tracking-wide text-black">
                   CONSOLIDADO
                 </th>
@@ -587,6 +621,9 @@ export function ComprasClient() {
                 {providers.map((p) => (
                   <MetricHeads key={`m-${p.id}`} rowSpan={2} />
                 ))}
+                <th rowSpan={2} className="min-w-[88px] border border-black bg-black px-1 py-1 text-center font-normal text-white">
+                  IMPORTE
+                </th>
                 <MetricHeads rowSpan={2} />
                 <HgMetricHeads rowSpan={2} />
                 {fleteExpanded &&
@@ -651,6 +688,7 @@ export function ComprasClient() {
                           </Fragment>
                         );
                       })}
+                      <NotaCargoCell importe={notaImporteFrom(notaCargoProvider, day?.cells)} />
                       <ReadOnlyTriple kg={day?.consolidado.kg || 0} importe={day?.consolidado.importe || 0} costo={day?.consolidado.costo_kg ?? null} consolidado />
                       <td className={`compras-hg-gap ${COMPRAS_SEP_CLS}`} />
                       <HgDerivedCells
@@ -696,6 +734,7 @@ export function ComprasClient() {
                           </Fragment>
                         );
                       })}
+                      <NotaCargoCell importe={notaImporteFrom(notaCargoProvider, week?.providers)} showZero />
                       <ReadOnlyTriple
                         kg={week?.consolidado.kg || 0}
                         importe={week?.consolidado.importe || 0}
@@ -740,6 +779,7 @@ export function ComprasClient() {
                       </Fragment>
                     );
                   })}
+                  <NotaCargoCell importe={notaImporteFrom(notaCargoProvider, data.grid.month.providers)} showZero />
                   <ReadOnlyTriple
                     kg={data.grid.month.consolidado.kg || 0}
                     importe={data.grid.month.consolidado.importe || 0}
@@ -1151,6 +1191,14 @@ function ProviderCells({
         {formatImporte(importe)}
       </td>
     </>
+  );
+}
+
+function NotaCargoCell({ importe, showZero }: { importe: number; showZero?: boolean }) {
+  return (
+    <td className={`border border-black bg-[#d9d9d9] px-1 py-1 text-right tabular-nums ${showZero ? "font-bold" : ""}`}>
+      {formatImporte(importe, Boolean(showZero))}
+    </td>
   );
 }
 

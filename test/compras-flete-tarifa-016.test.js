@@ -527,8 +527,9 @@ describe("016 compras TARIFA flete", () => {
     const payload = await compras.loadMonth(db, 1, 2026, 9);
     const wb = await buildComprasWorkbook(payload, { plantName: "Puebla" });
     const ws = wb.getWorksheet("CONTROL DE COMPRAS");
-    assert.equal(ws.getCell(4, 14).value, "CONSOLIDADO");
-    assert.equal(ws.getCell(4, 18).value, "HG EN KILOS");
+    assert.equal(ws.getCell(4, 14).value, "NOTA DE CARGO");
+    assert.equal(ws.getCell(4, 15).value, "CONSOLIDADO");
+    assert.equal(ws.getCell(4, 19).value, "HG EN KILOS");
     let banner = null;
     ws.eachRow((row) => {
       row.eachCell((cell) => {
