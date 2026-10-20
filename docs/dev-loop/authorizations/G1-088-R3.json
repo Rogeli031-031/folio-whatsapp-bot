@@ -1,0 +1,18 @@
+{
+  "task_id": "FIX-COMPRAS-NOTA-CARGO-VISIBLE-088-R3",
+  "authorized_by": "HUMAN_APPROVER",
+  "approver_name": "Luis Rogelio Zaragoza Alvarez",
+  "authorized_at": "2026-10-19T18:16:10.4813798-06:00",
+  "human_authorization": "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-10-19",
+  "base_sha": "7779d1304624c6977999e1b024e795d1e885e565",
+  "branch": "fix/compras-nota-cargo-visible-088-r3",
+  "parent_task": "IMPL-COMPRAS-EXCEL-AUTHORITATIVE-IMPORT-088",
+  "decisions": {
+    "D1": true,
+    "D2": true,
+    "D3": true,
+    "D4": true,
+    "D5": true,
+    "D6": true
+  }
+}
