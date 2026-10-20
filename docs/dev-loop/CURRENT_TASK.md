@@ -1,53 +1,34 @@
-task_id: "FIX-COMPRAS-NOTA-CARGO-VISIBLE-088-R3"
+task_id: "IMPL-COMPRAS-EXCEL-RECONCILE-EFFECTIVE-088-R4"
 status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-10-19T18:16:10.4813798-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-10-19"
+approver_name: "Luis rogelio Zaragoza alvarez"
+authorized_at: "2026-10-20T11:54:34.2458496-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Zaragoza 2026-10-20"
 
-base_sha: "7779d1304624c6977999e1b024e795d1e885e565"
-branch: "fix/compras-nota-cargo-visible-088-r3"
-parent_task: "IMPL-COMPRAS-EXCEL-AUTHORITATIVE-IMPORT-088"
+base_sha: "07aca321a24b354e249fed28437fd8a77e994496"
+branch: "implementation/compras-excel-reconcile-effective-088-r4"
 
-objective: "Mostrar NOTA DE CARGO como columna financiera fija de solo importe en Control de Compras y en su Excel, sin tratarla como proveedor físico."
+objective: "Conservar captura/factura y aplicar el valor exacto del Excel como valor efectivo de calculo, con reconciliacion uno-a-uno y fecha amarilla ante discrepancia."
 
 decisions:
-  D1_fixed_column: true
-  D2_only_importe: true
-  D3_consolidated_importe_not_kg: true
-  D4_no_flete_no_projection: true
-  D5_always_visible: true
-  D6_excel_parity: true
+  preserve_matching_purchase_and_documents: true
+  excel_is_effective_value: true
+  exact_match_key_date_provider_kg: true
+  yellow_date_on_discrepancy: true
+  preserve_excel_precision: true
+  unmatched_purchase_with_document_blocks: true
+  unmatched_purchase_without_document_may_delete: true
+  exact_origin_aliases_only: true
+  hg_kilos_immutable: true
 
-in_scope:
-  - "frontend-dashboard/components/ComprasClient.tsx"
-  - "lib/compras-excel.js"
-  - "lib/compras-dashboard.js solo si un helper puro es necesario"
-  - "test/fix-compras-nota-cargo-visible-088-r3.test.js"
-  - "tests de regresión directamente afectados"
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/authorizations/G1-088-R3.json"
-  - "docs/dev-loop/reports/FIX-COMPRAS-NOTA-CARGO-VISIBLE-088-R3.md"
-
-out_of_scope:
-  - "Modificar el importador 088 salvo adaptación estrictamente necesaria de presentación"
-  - "Captura manual de NOTA DE CARGO"
-  - "Nueva migración SQL"
-  - "Modificar datos productivos"
-  - "Modificar HG"
-  - "Modificar fletes"
+forbidden:
+  - "DB writes productivos"
   - "PR"
   - "merge"
   - "deploy"
+  - "borrar factura de compra reconciliada"
+  - "sumar captura + Excel"
+  - "fuzzy matching"
+  - "modificar HG kilos"
 
-forbidden_actions:
-  - "Tratar NOTA DE CARGO como compra física"
-  - "Asignarle kilos"
-  - "Asignarle costo/kg"
-  - "Asignarle tarifa o flete"
-  - "Proyectar NOTA DE CARGO"
-  - "Duplicar NOTA DE CARGO como triple y columna fija"
-  - "DB writes productivos"
-  - "PR, merge o deploy"
-
-max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-NOTA-CARGO-VISIBLE-088-R3.md"
+result_report_path: "docs/dev-loop/reports/IMPL-COMPRAS-EXCEL-RECONCILE-EFFECTIVE-088-R4.md"
