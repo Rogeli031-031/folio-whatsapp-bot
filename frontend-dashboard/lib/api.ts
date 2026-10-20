@@ -3844,6 +3844,7 @@ export type ComprasPurchase = {
   effective_importe?: number;
   reconciled?: boolean;
   discrepant?: boolean;
+  historical_discrepant?: boolean;
   excel_only?: boolean;
   provenance?: "CAPTURED" | "EXCEL_ONLY" | null;
   created_by_usuario_id: number | null;

@@ -1268,8 +1268,9 @@ function ComprasDetailModal({
     }
     return m;
   }, [data.documents]);
-  const totalKg = purchases.reduce((a, p) => a + (Number(p.kg) || 0), 0);
-  const totalImp = purchases.reduce((a, p) => a + (Number(p.importe) || 0), 0);
+  const usesEffective = purchases.some((p) => p.effective_kg != null || p.effective_importe != null);
+  const totalKg = purchases.reduce((a, p) => a + (Number(p.effective_kg ?? p.kg) || 0), 0);
+  const totalImp = purchases.reduce((a, p) => a + (Number(p.effective_importe ?? p.importe) || 0), 0);
   const totalCosto = totalKg > 0 ? totalImp / totalKg : null;
 
   const [kg, setKg] = useState("");
@@ -1538,9 +1539,9 @@ function ComprasDetailModal({
           <p className="mt-4 text-sm text-amber-200">Proveedor inactivo: se conserva el histórico y no admite compras nuevas.</p>
         )}
         <div className="mt-4 border-t border-slate-700 pt-3 text-sm">
-          <strong>TOTAL DEL DÍA</strong>
+          <strong>{usesEffective ? "TOTAL DEL DIA — USADO PARA CALCULO" : "TOTAL DEL DÍA"}</strong>
           <p>
-            {formatKg(totalKg) || "0"} kg · ${formatImporte(totalImp) || "0.00"} · {formatCosto(totalCosto) || "—"}/kg
+            {formatKg(totalKg) || "0"} kg · ${usesEffective ? formatExactAmount(totalImp) : (formatImporte(totalImp) || "0.00")} · {formatCosto(totalCosto) || "—"}/kg
           </p>
         </div>
       </div>
