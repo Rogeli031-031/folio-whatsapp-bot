@@ -181,7 +181,7 @@ describe("088 importación autoritativa", () => {
     const missing = compras.planComprasExcelImport(parsed, { desde: "2026-10-01", hasta: "2026-11-02", plantName: "Puebla", existing: [], documents: [], hg: [] });
     assert.equal(missing.ok, false);
     assert.ok(missing.errors.some((e) => e.code === "MISSING_MONTH"));
-    const bad = await workbook([{ name: "OCTUBRE", a1: "PUEBLA", rows: [{ origin: "TEPEJI IMPOTADORA", kg: 1, fecha: "2026-10-02", importe: 10 }] }]);
+    const bad = await workbook([{ name: "OCTUBRE", a1: "PUEBLA", rows: [{ origin: "TEPEJI DESCONOCIDA", kg: 1, fecha: "2026-10-02", importe: 10 }] }]);
     const badParsed = await compras.parseComprasExcelBuffer(bad);
     const unknown = compras.planComprasExcelImport(badParsed, { desde: "2026-10-01", hasta: "2026-10-31", plantName: "Puebla", existing: [], documents: [], hg: [] });
     assert.equal(unknown.ok, false);

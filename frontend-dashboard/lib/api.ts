@@ -3838,6 +3838,12 @@ export type ComprasPurchase = {
   fecha: string;
   kg: number;
   importe: number;
+  captured_kg?: number;
+  captured_importe?: number;
+  effective_kg?: number;
+  effective_importe?: number;
+  reconciled?: boolean;
+  discrepant?: boolean;
   created_by_usuario_id: number | null;
   updated_by_usuario_id: number | null;
   created_at?: string;
@@ -3863,6 +3869,7 @@ export type ComprasCell = {
 
 export type ComprasMonthResponse = {
   import_ready?: boolean;
+  reconcile_ready?: boolean;
   plant: { id: number };
   year: number;
   month: number;
@@ -3878,6 +3885,7 @@ export type ComprasMonthResponse = {
     days: Array<{
       ymd: string;
       captured: boolean;
+      fecha_discrepante?: boolean;
       cells: Record<string, ComprasCell>;
       consolidado: { kg: number; importe: number; costo_kg: number | null };
       hg_kilos: number | null;

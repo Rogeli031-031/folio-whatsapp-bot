@@ -91,6 +91,12 @@ function downloadBlob(blob: Blob, name: string) {
   URL.revokeObjectURL(href);
 }
 
+function formatExactAmount(value: number | null | undefined): string {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 6 });
+}
+
 const COMPRAS_SHEET_KEY = "compras-dashboard-sheet";
 const COMPRAS_SEP_CLS = "min-w-[70px] w-[70px] border-0 bg-white p-0";
 const COMPRAS_PROVIDER_GAP_CLS = "compras-provider-gap w-3 min-w-[12px] border-0 bg-white p-0";
@@ -459,17 +465,17 @@ export function ComprasClient() {
           </button>
           <button
             type="button"
-            disabled={!token || !plantaId || data?.import_ready !== true}
-            title={data?.import_ready === true ? "Importar compras Excel" : COMPRAS_IMPORT_PENDING_LABEL}
+            disabled={!token || !plantaId || data?.reconcile_ready !== true}
+            title={data?.reconcile_ready === true ? "Revisar conciliación" : COMPRAS_IMPORT_PENDING_LABEL}
             onClick={() => {
-              if (data?.import_ready !== true) return;
+              if (data?.reconcile_ready !== true) return;
               document.getElementById("compras-excel-import-file")?.click();
             }}
             className="rounded bg-amber-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 disabled:opacity-50"
           >
-            Importar compras Excel
+            Revisar conciliación
           </button>
-          {data?.import_ready !== true && (
+          {data?.reconcile_ready !== true && (
             <span className="text-xs text-amber-200">{COMPRAS_IMPORT_PENDING_LABEL}</span>
           )}
           <input
@@ -669,7 +675,11 @@ export function ComprasClient() {
                       <td
                         data-captured={captured ? "1" : "0"}
                         className={`sticky left-0 z-[1] border border-black px-2 py-1 font-medium ${
-                          captured ? "bg-[#b8cce4] text-slate-900 compras-fecha-capturada" : "bg-white text-slate-800"
+                          day?.fecha_discrepante
+                            ? "bg-[#fff2cc] text-slate-900 compras-fecha-capturada"
+                            : captured
+                              ? "bg-[#b8cce4] text-slate-900 compras-fecha-capturada"
+                              : "bg-white text-slate-800"
                         }`}
                       >
                         {formatFechaGrid(row.ymd)}
@@ -808,7 +818,7 @@ export function ComprasClient() {
       {importFile && (
         <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/60 p-3 sm:items-center">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-amber-700 bg-slate-950 p-4 text-sm text-slate-100">
-            <h2 className="text-base font-semibold">Importar compras Excel</h2>
+            <h2 className="text-base font-semibold">Revisar conciliación</h2>
             <p className="mt-2 text-amber-200">{COMPRAS_EXCEL_HG_NOTICE}</p>
             <p className="mt-2">Archivo: {importFile.name}</p>
             <p>Planta destino: {plantaNombre || "—"}</p>
@@ -823,16 +833,19 @@ export function ComprasClient() {
               </label>
             </div>
             <button type="button" disabled={importBusy || !importDesde || !importHasta} onClick={() => void reviewImport()} className="mt-3 rounded bg-slate-700 px-3 py-1.5 text-xs disabled:opacity-50">
-              {importBusy ? "Revisando…" : "Revisar sustitución"}
+              {importBusy ? "Revisando…" : "Revisar conciliación"}
             </button>
             {importPreview && (
               <div className="mt-3 space-y-1 text-xs">
                 <p>A1: {importPreview.a1 || "—"} · planta {importPreview.plant || "—"}{importPreview.source_company ? ` · ${importPreview.source_company}` : ""}</p>
                 <p>Hojas: {(importPreview.sheets || []).join(", ") || "—"}</p>
-                <p>Filas Excel: {importPreview.inserts ?? 0} · se eliminan: {importPreview.deletes ?? 0} · permanecen: {importPreview.remaining ?? 0}</p>
-                <p>Kg antes {importPreview.kg_before ?? 0} · kg Excel {importPreview.kg_excel ?? 0}</p>
-                <p>Importe antes {importPreview.importe_before ?? 0} · importe Excel {importPreview.importe_excel ?? 0}</p>
+                <p>Filas Excel: {importPreview.excel_rows ?? importPreview.inserts ?? 0} · Reconciliadas: {importPreview.reconciled ?? 0} · Con factura: {importPreview.reconciled_with_invoice ?? 0}</p>
+                <p>Discrepancias: {importPreview.discrepancies ?? 0} · Nuevas: {importPreview.nuevas ?? 0} · Se eliminan sin factura: {importPreview.deletes ?? 0} · Bloqueos: {importPreview.document_blockers ?? 0}</p>
                 <p>Notas de cargo: {importPreview.notas ?? 0}</p>
+                <p>Kg efectivo actual {importPreview.kg_effective_before ?? importPreview.kg_before ?? 0} · kg Excel {importPreview.kg_excel ?? 0}</p>
+                <p>Importe efectivo actual {importPreview.importe_effective_before ?? importPreview.importe_before ?? 0} · importe Excel {importPreview.importe_excel ?? 0}</p>
+                <p>MAX_FECHA_EXCEL_EN_RANGO: {importPreview.max_fecha_excel_en_rango || "—"}</p>
+                {importPreview.excel_range_warning ? <p className="text-amber-300">{importPreview.excel_range_warning}</p> : null}
                 {Object.entries(importPreview.by_provider || {}).map(([name, cell]) => (
                   <p key={name}>{name}: {cell.rows} filas · {cell.kg} kg · {cell.importe}</p>
                 ))}
@@ -851,7 +864,7 @@ export function ComprasClient() {
                   onClick={() => void commitImport()}
                   className="mt-2 rounded bg-red-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
                 >
-                  {importBusy ? "Sustituyendo…" : "Sustituir compras"}
+                  {importBusy ? "Aplicando…" : "Aplicar Excel"}
                 </button>
               </div>
             )}
@@ -1424,6 +1437,12 @@ function ComprasDetailModal({
                     <button type="button" onClick={() => setEditingId(null)} className="rounded bg-slate-700 px-2 py-1 text-sm">
                       Cancelar
                     </button>
+                  </div>
+                ) : p.reconciled ? (
+                  <div className="space-y-1 text-sm text-slate-200">
+                    <p>CAPTURADO / FACTURA: KG {formatKg(p.captured_kg ?? p.kg)} · Importe ${formatExactAmount(p.captured_importe ?? p.importe)}</p>
+                    <p>EXCEL — USADO PARA CALCULO: KG {formatKg(p.effective_kg ?? p.kg)} · Importe ${formatExactAmount(p.effective_importe ?? p.importe)}</p>
+                    {!p.discrepant && <p className="text-xs text-emerald-300">COINCIDE</p>}
                   </div>
                 ) : (
                   <p className="text-sm text-slate-200">

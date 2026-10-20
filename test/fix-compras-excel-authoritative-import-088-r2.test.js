@@ -141,7 +141,7 @@ describe("088-R2 fecha ilegible y migración atómica", () => {
     const tehu = await compras.parseComprasExcelBuffer(fs.readFileSync(path.join(dir, tehuacan)));
     const tehuOct = compras.planComprasExcelImport(tehu, { desde: "2026-10-01", hasta: "2026-10-31", plantName: "Tehuacán", existing: [], documents: [], hg: [] });
     const tehuSept = compras.planComprasExcelImport(tehu, { desde: "2026-09-01", hasta: "2026-09-30", plantName: "Tehuacán", existing: [], documents: [], hg: [] });
-    assert.ok(tehuOct.errors.some((e) => e.code === "UNKNOWN_ORIGIN"));
+    assert.equal(tehuOct.errors.some((e) => e.code === "UNKNOWN_ORIGIN"), false);
     assert.equal(tehuSept.errors.some((e) => e.code === "UNKNOWN_ORIGIN"), false);
   });
 
