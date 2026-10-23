@@ -304,20 +304,20 @@ describe("088 importación autoritativa", () => {
     assert.equal(left.purchases.some((p) => p.kg === 4), false);
   });
 
-  it("R legado de Acapulco bloquea sin modificar", async () => {
+  it("R legado de Acapulco sin contraparte se conserva", async () => {
     const buf = await workbook([{ name: "OCTUBRE", a1: "URIBE", rows: [{ origin: "PEMEX TUXPAN", kg: 2, fecha: "2026-10-12", importe: 20 }] }]);
     const parsed = await compras.parseComprasExcelBuffer(buf);
     const mem = new Mem();
     mem.purchases.push({ id: 4, fecha: "2026-10-12", kg: 3, importe: 30, proveedor_id: 1 });
     const preview = await compras.runComprasExcelImport(mem, spec(parsed, { mode: "preview", plantName: "Acapulco" }));
-    assert.equal(preview.body.legacy_unclassified_count > 0, true);
-    assert.equal(preview.body.ok, false);
+    assert.equal(preview.body.legacy_remaining_unclassified, 1);
+    assert.equal(preview.body.legacy_matched_to_source, 0);
+    assert.equal(preview.body.ok, true);
     assert.equal(mem.began, 0);
     const commit = await compras.runComprasExcelImport(mem, spec(parsed, { plantName: "Acapulco", request_id: "legacy" }));
-    assert.equal(commit.status, 409);
-    assert.equal(commit.body.message, compras.EXCEL_BLOCK_LEGACY);
-    assert.equal(mem.purchases.length, 1);
-    assert.equal(mem.purchases[0].kg, 3);
+    assert.equal(commit.status, 200);
+    assert.equal(mem.purchases.some((p) => p.id === 4 && p.kg === 3), true);
+    assert.equal(mem.purchases.some((p) => Number(p.kg) === 2), true);
   });
 
   it("S–T dos filas idénticas y trazabilidad de archivo, hoja y renglón", async () => {

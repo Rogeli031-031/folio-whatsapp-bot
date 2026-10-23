@@ -374,9 +374,10 @@ describe("088-R4 conciliación efectiva", () => {
     assert.equal(aca.purchases.filter((p) => p.kg === 6).length, 1);
     aca.purchases.push({ id: 99, fecha: "2026-10-09", kg: 1, importe: 1, proveedor_nombre: "PEMEX TUXPAN", source_company: null });
     const legacy = await compras.runComprasExcelImport(aca, spec(hidro, { plantName: "Acapulco", request_id: "legacy" }));
-    assert.equal(legacy.status, 409);
-    assert.ok(legacy.body.errors.some((e) => e.code === "LEGACY_ACAPULCO_UNCLASSIFIED"));
-    assert.equal(aca.purchases.some((p) => p.id === 99), true);
+    assert.equal(legacy.status, 200);
+    assert.equal(legacy.body.ok, true);
+    assert.equal(aca.purchases.some((p) => p.id === 99 && p.kg === 1), true);
+    assert.equal(aca.purchases.filter((p) => p.kg === 6).length, 1);
   });
 
   it("R–S solo los alias exactos IMPOTADORA", async () => {

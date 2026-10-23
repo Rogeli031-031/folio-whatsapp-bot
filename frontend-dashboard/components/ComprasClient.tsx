@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getTokenFromStorage, parseTokenFromQuery, setTokenInStorage, tokenCanAccessCompras } from "@/lib/auth";
@@ -97,6 +97,7 @@ function formatExactAmount(value: number | null | undefined): string {
   return n.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 6 });
 }
 
+const COMPRAS_DOC_BLOCK = "Hay compras con factura sin contraparte en el Excel. No se aplicará la conciliación.";
 const COMPRAS_SHEET_KEY = "compras-dashboard-sheet";
 const COMPRAS_SEP_CLS = "min-w-[70px] w-[70px] border-0 bg-white p-0";
 const COMPRAS_PROVIDER_GAP_CLS = "compras-provider-gap w-3 min-w-[12px] border-0 bg-white p-0";
@@ -183,6 +184,7 @@ export function ComprasClient() {
   const [importBusy, setImportBusy] = useState(false);
   const [importRequestId, setImportRequestId] = useState("");
   const [importConfirm, setImportConfirm] = useState("");
+  const loadSeq = useRef(0);
 
   useEffect(() => {
     const t = parseTokenFromQuery(searchParams) || getTokenFromStorage();
@@ -246,15 +248,19 @@ export function ComprasClient() {
 
   const loadMonth = useCallback(async () => {
     if (!token || !plantaId || !sheetReady) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError(null);
     try {
       const payload = await fetchComprasMonth(token, plantaId, year, month);
+      if (seq !== loadSeq.current) return;
       setData(payload);
+      setError(null);
     } catch (e: unknown) {
+      if (seq !== loadSeq.current) return;
       setError(friendlyError(e));
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   }, [token, plantaId, year, month, sheetReady]);
 
@@ -346,6 +352,7 @@ export function ComprasClient() {
       return;
     }
     setProviderSaving(true);
+    setError(null);
     try {
       await createComprasProveedor(token, plantaId, {
         nombre: newProviderName.trim(),
@@ -516,7 +523,12 @@ export function ComprasClient() {
       </header>
 
       <main className="p-4">
-        {error && <p className="mb-3 rounded border border-red-700/50 bg-red-950/40 px-3 py-2 text-sm text-red-200">{error}</p>}
+        {error && (
+          <p className="mb-3 flex items-start justify-between gap-3 rounded border border-red-700/50 bg-red-950/40 px-3 py-2 text-sm text-red-200">
+            <span>{error}</span>
+            <button type="button" aria-label="Cerrar aviso" className="shrink-0 text-xs text-red-100" onClick={() => setError(null)}>Cerrar</button>
+          </p>
+        )}
         {providersOpen && (
           <section className="mb-4 rounded-lg border border-slate-700 bg-slate-900/70 p-3">
             <h2 className="mb-2 text-sm font-medium text-slate-200">Proveedores de {plantaNombre || "la planta"}</h2>
@@ -849,9 +861,21 @@ export function ComprasClient() {
                 {Object.entries(importPreview.by_provider || {}).map(([name, cell]) => (
                   <p key={name}>{name}: {cell.rows} filas · {cell.kg} kg · {cell.importe}</p>
                 ))}
-                {(importPreview.legacy_unclassified_count || 0) > 0 && <p className="text-amber-300">LEGACY_ACAPULCO_UNCLASSIFIED</p>}
-                {(importPreview.document_blockers || 0) > 0 && <p className="text-red-300">Hay compras con factura sin contraparte en el Excel. No se aplicará la conciliación.</p>}
-                {!importPreview.ok && <p className="text-red-300">{importPreview.error || importPreview.message || "Importación bloqueada"}</p>}
+                {(importPreview.provider_repairs || 0) > 0 && <p>provider_repairs: {importPreview.provider_repairs}</p>}
+                {(importPreview.provider_repair_rows || []).map((row) => (
+                  <p key={`repair-${row.compra_id}`}>compra {row.compra_id} · {row.fecha} · {row.kg} kg · {row.from_provider} → {row.to_provider}{row.has_document ? " · con factura" : ""}</p>
+                ))}
+                <p>legacy_matched_to_source: {importPreview.legacy_matched_to_source || 0}</p>
+                <p>legacy_remaining_unclassified: {importPreview.legacy_remaining_unclassified || 0}</p>
+                {(importPreview.document_blockers || 0) > 0 && <p className="text-red-300">{COMPRAS_DOC_BLOCK}</p>}
+                {(importPreview.errors || []).filter((err) => err.code !== "UNMATCHED_DOCUMENT_PURCHASE").map((err) => (
+                  <p key={`${err.code}-${err.sheet || ""}-${err.row || ""}-${err.fecha || ""}`} className="text-red-300">
+                    {err.code}{err.sheet ? ` · ${err.sheet}` : ""}{err.row != null ? ` · fila ${err.row}` : ""}{err.fecha ? ` · ${err.fecha}` : ""}
+                  </p>
+                ))}
+                {!importPreview.ok && (importPreview.error || importPreview.message) !== COMPRAS_DOC_BLOCK && !(importPreview.errors || []).some((err) => err.code === (importPreview.message || "")) && (
+                  <p className="text-red-300">{importPreview.error || importPreview.message || "Importación bloqueada"}</p>
+                )}
               </div>
             )}
             {importPreview?.ok && (
