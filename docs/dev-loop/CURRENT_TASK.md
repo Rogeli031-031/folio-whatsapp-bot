@@ -1,45 +1,42 @@
-task_id: "FIX-COMPRAS-EXCEL-RECONCILE-EFFECTIVE-088-R4-R2"
+task_id: "FIX-COMPRAS-CROSSPLANT-RECONCILE-NORMALIZATION-088-R5"
 status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
-approver_name: "Luis rogelio Zaragoza alvarez"
-authorized_at: "2026-10-20T13:53:53.6627200-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-20"
+approver_name: "Luir Rogelio Zaragoza alvarez"
+authorized_at: "2026-10-23T09:11:35.8318363-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luir Rogelio Zaragoza alvarez 2026-10-23"
 
-parent_task: "IMPL-COMPRAS-EXCEL-RECONCILE-EFFECTIVE-088-R4"
+base_sha: "f6d08998d1b1d0689d92b9bf8e62faee38849eb4"
+branch: "fix/compras-crossplant-reconcile-normalization-088-r5"
 
-main_base_sha: "07aca321a24b354e249fed28437fd8a77e994496"
-base_sha: "b8428d72a0e27bd28a4bca51501d1de7e7b75194"
-branch: "implementation/compras-excel-reconcile-effective-088-r4"
+objective: "Corregir conciliacion Excel de Morelos, Queretaro, San Luis y bootstrap seguro de Acapulco, preservando Puebla y Tehuacan."
 
-objective: "Usar valor efectivo en TOTAL DEL DIA del detalle y calcular discrepancia visual actual contra captura vigente, sin modificar la historia de importacion."
+authorized_scope:
+  morelos_exact_provider_repair: true
+  queretaro_tepeji_tomza_alias: true
+  san_luis_potosi_a1_alias: true
+  san_luis_tepeji_tomza_alias: true
+  nota_cargo_missing_date_previous_physical_row: true
+  acapulco_legacy_source_bootstrap: true
+  acapulco_date_sheet_mismatch_block: true
+  duplicate_block_message_ui_fix: true
+  stale_error_banner_ui_fix: true
 
-authorized_findings:
-  modal_total_uses_effective: true
-  modal_cost_uses_effective: true
-  live_discrepancy_from_current_capture: true
-  excel_only_never_false_yellow: true
-  import_history_immutable: true
-
-out_of_scope:
-  - "Cambiar matching"
-  - "Cambiar pairing 1:1"
-  - "Cambiar provenance"
-  - "Cambiar aliases"
-  - "Cambiar migracion 025"
-  - "Ejecutar migracion 025"
-  - "Modificar HG kilos"
-  - "DB writes productivos"
-  - "PR"
-  - "merge"
-  - "deploy"
+protected:
+  - "Puebla"
+  - "Tehuacan"
+  - "HG kilos"
+  - "R4 effective-value semantics"
+  - "facturas y IDs existentes"
 
 forbidden:
-  - "Reescribir lineas historicas de importacion al editar una compra"
-  - "Usar captura para calculos si existe effective"
-  - "Pintar EXCEL_ONLY amarillo por redondeo compatibility"
   - "DB writes productivos"
+  - "migraciones productivas"
   - "PR"
   - "merge"
   - "deploy"
+  - "deduplicar silenciosamente Excel"
+  - "fuzzy matching"
+  - "borrar facturas"
+  - "cambiar Puebla o Tehuacan"
 
-result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-EXCEL-RECONCILE-EFFECTIVE-088-R4-R2.md"
+result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-CROSSPLANT-RECONCILE-NORMALIZATION-088-R5.md"

@@ -30,9 +30,13 @@ export type ComprasExcelPreview = {
   by_provider?: Record<string, { kg: number; importe: number; rows: number }>;
   notas?: number;
   legacy_unclassified_count?: number;
+  legacy_matched_to_source?: number;
+  legacy_remaining_unclassified?: number;
+  provider_repairs?: number;
+  provider_repair_rows?: Array<{ compra_id: number; fecha: string; kg: number; from_provider: string; to_provider: string; has_document: boolean }>;
   document_blockers?: number;
   hg_notice?: string;
-  errors?: Array<{ code: string }>;
+  errors?: Array<{ code: string; sheet?: string; row?: number; fecha?: string }>;
 };
 
 export function newComprasImportRequestId(): string {
