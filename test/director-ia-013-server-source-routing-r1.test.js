@@ -211,7 +211,7 @@ describe("DIRECTOR-IA-013-R1 server routing", () => {
   });
 
   it("X-Z no escribe, respeta planta y no usa un día posterior al corte", async () => {
-    const files = ["lib/director-ia-013-semantic.js", "lib/director-ia-013-snapshot.js", "lib/director-ia-013-corpus.js"];
+    const files = ["lib/director-ia-013-semantic.js", "lib/director-ia-013-snapshot.js", "lib/director-ia-013-corpus.js", "lib/director-ia-013-acumulado.js"];
     for (const file of files) {
       const source = fs.readFileSync(path.join(ROOT, file), "utf8");
       assert.doesNotMatch(source, /\b(INSERT|UPDATE|DELETE)\s+/);
