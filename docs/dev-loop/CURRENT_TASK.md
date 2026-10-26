@@ -1,40 +1,44 @@
-task_id: "DIRECTOR-IA-013-R2"
+task_id: "DIRECTOR-IA-013-R3"
 status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
 approver_name: "Luis Rogelio Zaragoza alvarez"
-authorized_at: "2026-10-26T11:50:52.9905812-06:00"
+authorized_at: "2026-10-26T12:14:38.1287071-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza alvarez 2026-10-26"
 
-base_sha: "e79f29b0364a3a75995e516f821a598284b1e60a"
+base_sha: "fe20da86a1717ae15c4659e084bf94d95361a8ec"
 main_guard_sha: "677c201806bedc2dd08b1dcf85ce4e6b95e82474"
 branch: "feature/director-ia-igf-diario-compras-hg-013"
 
-objective: "Cerrar paridad real de DIRECTOR-IA-013 con IGF Diario Acumulado productivo, conectar Forecast vivo y reutilizar la discrepancia efectiva R4 para Compras."
+objective: "Hacer DIRECTOR-IA-013 estrictamente read-only y recuperar paridad productiva del margen para día, semana y rango sin romper la paridad mensual de R2."
 
 authorized_scope:
-  igf_acumulado_live_parity: true
-  forecast_live_loader: true
-  actual_vs_forecast_live: true
-  r4_current_discrepant_parity: true
-  source_audit_truth: true
-  endpoint_parity_tests: true
+  strict_read_only: true
+  desglose_read_only_loader: true
+  margin_detail_live_loader: true
+  day_margin_parity: true
+  weekly_margin_parity: true
+  range_margin_parity: true
+  manual_margin_override_parity: true
 
 protected:
+  - "R2 acumulado mensual"
+  - "R2 Forecast vivo"
+  - "R2 Actual vs Forecast"
+  - "R2 discrepancia R4"
   - "Compras R4/R5"
   - "migracion 025"
-  - "IGF Diario productivo"
-  - "Forecast productivo"
-  - "client purchase semantics"
   - "DB productiva"
 
 forbidden:
-  - "DB writes productivos"
+  - "CREATE desde Chat Director IA"
+  - "INSERT"
+  - "UPDATE"
+  - "DELETE"
   - "schema migration"
   - "PR"
   - "merge"
   - "deploy"
-  - "segunda formula paralela de IGF Diario"
-  - "forecast de prueba en produccion"
-  - "hardcodes por planta"
+  - "prorrateo inventado"
+  - "formula paralela de margen"
 
-result_report_path: "docs/dev-loop/reports/DIRECTOR-IA-013-R2.md"
+result_report_path: "docs/dev-loop/reports/DIRECTOR-IA-013-R3.md"
