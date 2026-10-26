@@ -5,6 +5,23 @@ import { fetchDirectorIaChat } from "@/modules/director-ia/lib/api";
 import { resolveDirectorIaUploadDayFromSearch } from "@/modules/director-ia/lib/chat-request";
 import { buildOpenPronosticoHref } from "@/lib/igf-open-pronostico";
 
+const INTERNAL_ANSWER_CODES = [
+  "RESULT_WITH_EVIDENCE",
+  "INSUFFICIENT_EVIDENCE",
+  "DATA_NOT_FOUND",
+  "SOURCE_RESTRICTED",
+  "CLARIFICATION_REQUIRED",
+];
+
+export function hideDirectorIaInternalCodes(text: string): string {
+  let out = String(text || "");
+  for (const code of INTERNAL_ANSWER_CODES) {
+    out = out.replace(new RegExp(`^${code}\\s*:\\s*`, "i"), "");
+    out = out.replace(new RegExp(`\\b${code}\\b`, "g"), "");
+  }
+  return out.replace(/[ ]{2,}/g, " ").trim();
+}
+
 export type DirectorIaChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -122,7 +139,7 @@ export function DirectorIaChatPanel({
       }
       setMessages((prev) => [
         ...prev,
-        { id: newMessageId(), role: "assistant", content: res.answer },
+        { id: newMessageId(), role: "assistant", content: hideDirectorIaInternalCodes(res.answer) },
       ]);
       setLastSources(res.sources || []);
       const nextState =

@@ -1,42 +1,44 @@
-task_id: "FIX-COMPRAS-CROSSPLANT-RECONCILE-NORMALIZATION-088-R5"
+task_id: "DIRECTOR-IA-013-R3"
 status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
-approver_name: "Luir Rogelio Zaragoza alvarez"
-authorized_at: "2026-10-23T09:11:35.8318363-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luir Rogelio Zaragoza alvarez 2026-10-23"
+approver_name: "Luis Rogelio Zaragoza alvarez"
+authorized_at: "2026-10-26T12:14:38.1287071-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza alvarez 2026-10-26"
 
-base_sha: "f6d08998d1b1d0689d92b9bf8e62faee38849eb4"
-branch: "fix/compras-crossplant-reconcile-normalization-088-r5"
+base_sha: "fe20da86a1717ae15c4659e084bf94d95361a8ec"
+main_guard_sha: "677c201806bedc2dd08b1dcf85ce4e6b95e82474"
+branch: "feature/director-ia-igf-diario-compras-hg-013"
 
-objective: "Corregir conciliacion Excel de Morelos, Queretaro, San Luis y bootstrap seguro de Acapulco, preservando Puebla y Tehuacan."
+objective: "Hacer DIRECTOR-IA-013 estrictamente read-only y recuperar paridad productiva del margen para día, semana y rango sin romper la paridad mensual de R2."
 
 authorized_scope:
-  morelos_exact_provider_repair: true
-  queretaro_tepeji_tomza_alias: true
-  san_luis_potosi_a1_alias: true
-  san_luis_tepeji_tomza_alias: true
-  nota_cargo_missing_date_previous_physical_row: true
-  acapulco_legacy_source_bootstrap: true
-  acapulco_date_sheet_mismatch_block: true
-  duplicate_block_message_ui_fix: true
-  stale_error_banner_ui_fix: true
+  strict_read_only: true
+  desglose_read_only_loader: true
+  margin_detail_live_loader: true
+  day_margin_parity: true
+  weekly_margin_parity: true
+  range_margin_parity: true
+  manual_margin_override_parity: true
 
 protected:
-  - "Puebla"
-  - "Tehuacan"
-  - "HG kilos"
-  - "R4 effective-value semantics"
-  - "facturas y IDs existentes"
+  - "R2 acumulado mensual"
+  - "R2 Forecast vivo"
+  - "R2 Actual vs Forecast"
+  - "R2 discrepancia R4"
+  - "Compras R4/R5"
+  - "migracion 025"
+  - "DB productiva"
 
 forbidden:
-  - "DB writes productivos"
-  - "migraciones productivas"
+  - "CREATE desde Chat Director IA"
+  - "INSERT"
+  - "UPDATE"
+  - "DELETE"
+  - "schema migration"
   - "PR"
   - "merge"
   - "deploy"
-  - "deduplicar silenciosamente Excel"
-  - "fuzzy matching"
-  - "borrar facturas"
-  - "cambiar Puebla o Tehuacan"
+  - "prorrateo inventado"
+  - "formula paralela de margen"
 
-result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-CROSSPLANT-RECONCILE-NORMALIZATION-088-R5.md"
+result_report_path: "docs/dev-loop/reports/DIRECTOR-IA-013-R3.md"

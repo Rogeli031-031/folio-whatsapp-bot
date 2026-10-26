@@ -1,0 +1,10 @@
+{
+  "task_id": "DIRECTOR-IA-013-R1",
+  "authorized_by": "HUMAN_APPROVER",
+  "approver_name": "Luis rogelio Zaragoza alvarez",
+  "authorized_at": "2026-10-26T10:10:44.7583613-06:00",
+  "human_authorization": "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-26",
+  "base_sha": "9a6c9d36eff8ca3bb2a2ca12b6a0b7ad81564de2",
+  "main_guard_sha": "677c201806bedc2dd08b1dcf85ce4e6b95e82474",
+  "branch": "feature/director-ia-igf-diario-compras-hg-013"
+}
