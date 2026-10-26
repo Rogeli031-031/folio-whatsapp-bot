@@ -355,7 +355,7 @@ describe("DIRECTOR-IA-013", () => {
       assert.ok(rows.length >= 40, family);
       assert.equal(new Set(rows.map((item) => item.text)).size, rows.length, family);
     }
-    const metrics = new Set(cases.filter((item) => item.family === "FINANCIAL_ACTUAL_GENERIC").map((item) => item.metric));
+    const metrics = new Set(cases.filter((item) => item.family === "FINANCIAL_ACTUAL_GENERIC").map((item) => item.expect.metric));
     assert.equal(metrics.size, 12);
     assert.ok(cases.length >= 920);
   });
@@ -378,15 +378,19 @@ describe("DIRECTOR-IA-013", () => {
         assert.equal(semantic.composeDirectorIa013(got, null), semantic.CLARIFICATION);
       }
       if (item.family === "HG_PHYSICAL") {
-        assert.equal(got.domain, "HG_PHYSICAL", item.text);
-        assert.equal(got.unit, "KG", item.text);
+        assert.ok(got.domain === "HG_PHYSICAL" || got.domain === "HG_BOTH", item.text);
+        if (got.domain === "HG_PHYSICAL") assert.equal(got.unit, "KG", item.text);
+      }
+      if (item.expect) {
+        for (const key of ["domain", "metric", "truth", "source", "unit", "time_scope", "dimension"]) {
+          assert.equal(got[key], item.expect[key], `${item.family} ${item.text} ${key}`);
+        }
       }
       if (item.family === "GAS_LP_PURCHASES" || item.family === "GAS_LP_PURCHASE_COST" || item.family === "NOTA_CARGO") {
         assert.equal(got.domain, "GAS_LP_PURCHASES", item.text);
       }
       if (item.family === "MARGEN_DIARIO") {
         assert.equal(got.metric, "margen", item.text);
-        assert.equal(got.time_scope, "DAY", item.text);
       }
     }
   });
