@@ -1,42 +1,38 @@
-task_id: "FIX-COMPRAS-CROSSPLANT-RECONCILE-NORMALIZATION-088-R5"
+task_id: "DIRECTOR-IA-013"
 status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
-approver_name: "Luir Rogelio Zaragoza alvarez"
-authorized_at: "2026-10-23T09:11:35.8318363-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luir Rogelio Zaragoza alvarez 2026-10-23"
+approver_name: "Luis rogelio Zaragoza alvarez"
+authorized_at: "2026-10-26T08:37:14.2141374-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-26"
 
-base_sha: "f6d08998d1b1d0689d92b9bf8e62faee38849eb4"
-branch: "fix/compras-crossplant-reconcile-normalization-088-r5"
+base_sha: "677c201806bedc2dd08b1dcf85ce4e6b95e82474"
+branch: "feature/director-ia-igf-diario-compras-hg-013"
 
-objective: "Corregir conciliacion Excel de Morelos, Queretaro, San Luis y bootstrap seguro de Acapulco, preservando Puebla y Tehuacan."
+objective: "Convertir Chat Director IA en interfaz conversacional paritaria de IGF Diario Acumulado y CONTROL DE COMPRAS, con routing actual/forecast, Compras Gas LP, HG fisico, gastos y margen diarios, comparaciones y lenguaje natural robusto."
 
-authorized_scope:
-  morelos_exact_provider_repair: true
-  queretaro_tepeji_tomza_alias: true
-  san_luis_potosi_a1_alias: true
-  san_luis_tepeji_tomza_alias: true
-  nota_cargo_missing_date_previous_physical_row: true
-  acapulco_legacy_source_bootstrap: true
-  acapulco_date_sheet_mismatch_block: true
-  duplicate_block_message_ui_fix: true
-  stale_error_banner_ui_fix: true
+truth_precedence:
+  financial_actual_from: "2026-10"
+  financial_actual_source: "IGF_DIARIO_ACUMULADO"
+  pre_contract_source: "FORECAST_HISTORICAL_EXISTING"
+  explicit_forecast_source: "IGF_FORECAST"
+  gas_purchases_source: "CONTROL_DE_COMPRAS"
+  hg_physical_source: "arr.compras_hg"
 
 protected:
-  - "Puebla"
-  - "Tehuacan"
-  - "HG kilos"
-  - "R4 effective-value semantics"
-  - "facturas y IDs existentes"
+  - "Compras R4/R5"
+  - "migracion 025"
+  - "HG kilos productivo"
+  - "IGF Diario calculations"
+  - "Forecast existing semantics"
+  - "client-purchase Director IA semantics"
 
 forbidden:
   - "DB writes productivos"
-  - "migraciones productivas"
+  - "schema migration"
   - "PR"
   - "merge"
   - "deploy"
-  - "deduplicar silenciosamente Excel"
-  - "fuzzy matching"
-  - "borrar facturas"
-  - "cambiar Puebla o Tehuacan"
+  - "duplicar formulas del dashboard con formulas aproximadas"
+  - "mostrar codigos internos al usuario"
 
-result_report_path: "docs/dev-loop/reports/FIX-COMPRAS-CROSSPLANT-RECONCILE-NORMALIZATION-088-R5.md"
+result_report_path: "docs/dev-loop/reports/DIRECTOR-IA-013.md"
