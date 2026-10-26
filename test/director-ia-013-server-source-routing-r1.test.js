@@ -124,6 +124,26 @@ describe("DIRECTOR-IA-013-R1 server routing", () => {
     assert.notEqual(route("semana pasada").period.from, route("ultimos 7 dias").period.from);
   });
 
+  it("el endpoint compara Tuxpan y Tepeji con porcentajes y solo lecturas", async () => {
+    const client = fakeClient([
+      { id: 1, fecha: CUTOFF, kg: 200, importe: 2000, proveedor: "TOMZA TUXPAN" },
+      { id: 2, fecha: CUTOFF, kg: 300, importe: 3000, proveedor: "TOMZA TEPEJI" },
+      { id: 3, fecha: CUTOFF, kg: 500, importe: 5000, proveedor: "PEMEX TUXPAN" },
+    ]);
+    configureDirectorIaChat({ pool: { totalCount: 1, connect: async () => client } });
+    const question = "cuanto compramos de tuxpan y cuanto de tepeji y que porcentaje de cada uno?";
+    const got = await askDirectorIa({
+      body: { question, upload_day: CUTOFF }, dashboardAuth: { role: "AD" },
+    }, 7, question, { id: 1 });
+    assert.equal(got.ok, true);
+    assert.match(got.answer, /Tuxpan \(TOMZA\): 200 kg \(20\.00%/);
+    assert.match(got.answer, /Tepeji \(TOMZA\): 300 kg \(30\.00%/);
+    assert.match(got.answer, /todos los proveedores: 1,000 kg/);
+    assert.equal(got.conversation_state.purchase_domain, "GAS_LP");
+    assert.ok(client.calls.every(({ sql }) => /^SELECT\b/i.test(sql.trim())));
+    assert.ok(client.calls.every(({ sql }) => !/igf_diario/.test(sql)));
+  });
+
   it("I-K el proveedor filtra y el ranking usa sus filas", () => {
     const rows = [
       { fecha: "2026-10-26", kg: 100, importe: 1000, proveedor: "PEMEX", excel_kg: null, excel_importe: null },
