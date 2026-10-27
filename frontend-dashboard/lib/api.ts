@@ -3967,7 +3967,7 @@ export function upsertComprasFleteDiario(token: string, plantaId: number, body: 
 
 export type ComprasFleteExcelPreview = {
   ok: boolean; preview_token?: string; updated?: number;
-  rows: { fecha: string; actual?: number | null; nuevo?: number; origen?: string; tarifa?: number }[];
+  rows: { proveedor_id: number; proveedor?: string; fecha: string; actual?: number | null; nuevo?: number; origen?: string; tarifa?: number }[];
 };
 export function importComprasFleteExcel(token: string, plantaId: number, body: {
   proveedor_id: number; desde: string; hasta: string; file_base64: string; action: "preview" | "save"; preview_token?: string;

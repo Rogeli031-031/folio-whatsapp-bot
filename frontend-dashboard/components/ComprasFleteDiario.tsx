@@ -50,8 +50,8 @@ export default function ComprasFleteDiario({ token, plantaId, proveedorId, nombr
             if(!alive.current)return;
             await onSaved();
             if(!alive.current)return;
-            setDrafts(prev=>({...prev,...Object.fromEntries(rows.map(row=>[row.fecha,String(row.tarifa)]))}));
-            setMessage(`Se importaron ${rows.length} fechas de flete para ${nombre}.`);
+            setDrafts(prev=>({...prev,...Object.fromEntries(rows.filter(row=>row.proveedor_id===proveedorId).map(row=>[row.fecha,String(row.tarifa)]))}));
+            setMessage(`Se importaron los fletes de ${new Set(rows.map(row=>row.proveedor_id)).size} proveedores para ${new Set(rows.map(row=>row.fecha)).size} fechas.`);
           }}/>
         {error&&<p role="alert" className="mb-2 text-sm text-red-300">{error}</p>}
         {message&&<p role="status" className="mb-2 text-sm text-emerald-300">{message}</p>}

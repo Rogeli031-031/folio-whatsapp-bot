@@ -4,7 +4,7 @@ import {importComprasFleteExcel,type ComprasFleteExcelPreview} from "@/lib/api";
 
 export default function ComprasFleteExcelUpload({token,plantaId,proveedorId,nombre,year,month,disabled,onBusy,onOpen,onImported}:{
  token:string;plantaId:number;proveedorId:number;nombre:string;year:number;month:number;disabled:boolean;
- onBusy:(busy:boolean)=>void;onOpen:(open:boolean)=>void;onImported:(rows:{fecha:string;tarifa:number}[])=>Promise<void>;
+ onBusy:(busy:boolean)=>void;onOpen:(open:boolean)=>void;onImported:(rows:{proveedor_id:number;fecha:string;tarifa:number}[])=>Promise<void>;
 }){
  const first=`${year}-${String(month).padStart(2,"0")}-01`,last=`${year}-${String(month).padStart(2,"0")}-${new Date(year,month,0).getDate()}`;
  const [open,setOpen]=useState(false),[from,setFrom]=useState(first),[to,setTo]=useState(last),[file,setFile]=useState<File|null>(null);
@@ -22,7 +22,7 @@ export default function ComprasFleteExcelUpload({token,plantaId,proveedorId,nomb
    if(!alive.current)return;
    if(action==="preview")setPreview(result);
    else{
-    await onImported(result.rows.map(row=>({fecha:row.fecha,tarifa:row.tarifa!})));
+    await onImported(result.rows.map(row=>({proveedor_id:row.proveedor_id,fecha:row.fecha,tarifa:row.tarifa!})));
     if(!alive.current)return;
     setPreview(null);setFile(null);setOpen(false);onOpen(false);
    }
@@ -34,11 +34,11 @@ export default function ComprasFleteExcelUpload({token,plantaId,proveedorId,nomb
  return <div className="mb-3 min-h-0 overflow-y-auto text-sm">
   <button type="button" disabled={busy||disabled} className="rounded bg-sky-700 px-3 py-2 disabled:opacity-50" onClick={()=>{const next=!open;setOpen(next);onOpen(next);invalidate();}}>Subir Excel de fletes</button>
   {open&&<div className="mt-3 rounded border border-slate-600 p-3">
-   <p className="mb-2 text-slate-300">Hoja DatosPlanta · {nombre}. Solo se reemplazarán las fechas elegidas. Los ceros explícitos también se importan. Se guardan seis decimales. Comprueba que el Excel corresponde a esta planta y está recalculado y guardado.</p>
+   <p className="mb-2 text-slate-300">Hoja DatosPlanta · todos los proveedores: PEMEX TUXPAN, TOMZA TUXPAN y TOMZA TEPEJI. Se reemplazarán juntos sus fletes en las fechas elegidas para esta planta. Los ceros explícitos también se importan. Se guardan seis decimales. Comprueba que el Excel corresponde a esta planta y está recalculado y guardado.</p>
    <label>Archivo Excel<input type="file" accept=".xlsx" disabled={busy} className={input} onChange={e=>{setFile(e.target.files?.[0]||null);invalidate();}}/></label>
    <div className="my-2 grid grid-cols-2 gap-2"><label>Desde<input type="date" min={first} max={last} value={from} disabled={busy} className={input} onChange={e=>{setFrom(e.target.value);invalidate();}}/></label><label>Hasta<input type="date" min={from||first} max={last} value={to} disabled={busy} className={input} onChange={e=>{setTo(e.target.value);invalidate();}}/></label></div>
    {error&&<p role="alert" className="my-2 text-red-300">{error}</p>}
-   {preview&&<div className="my-2"><p className="mb-1 font-semibold">Vista previa · {preview.rows.length} fechas · $/kg</p><div className="max-h-48 overflow-auto"><table className="w-full"><thead className="sticky top-0 bg-slate-800"><tr><th className="p-2 text-left">Fecha</th><th className="p-2 text-right">Actual</th><th className="p-2 text-right">Excel</th></tr></thead><tbody>{preview.rows.map(row=><tr key={row.fecha} className="border-t border-slate-700"><td className="p-2">{row.fecha}</td><td className="p-2 text-right">{rate(row.actual)}</td><td className="p-2 text-right font-semibold">{rate(row.nuevo)}</td></tr>)}</tbody></table></div></div>}
+   {preview&&<div className="my-2"><p className="mb-1 font-semibold">Vista previa · {new Set(preview.rows.map(row=>row.fecha)).size} fechas · {new Set(preview.rows.map(row=>row.proveedor_id)).size} proveedores · $/kg</p><div className="max-h-48 overflow-auto"><table className="w-full"><thead className="sticky top-0 bg-slate-800"><tr><th className="p-2 text-left">Proveedor</th><th className="p-2 text-left">Fecha</th><th className="p-2 text-right">Actual</th><th className="p-2 text-right">Excel</th></tr></thead><tbody>{preview.rows.map(row=><tr key={`${row.proveedor_id}:${row.fecha}`} className="border-t border-slate-700"><td className="p-2">{row.proveedor}</td><td className="p-2">{row.fecha}</td><td className="p-2 text-right">{rate(row.actual)}</td><td className="p-2 text-right font-semibold">{rate(row.nuevo)}</td></tr>)}</tbody></table></div></div>}
    <div className="mt-2 flex flex-wrap gap-2"><button type="button" disabled={busy||!file||!from||!to||from>to||from<first||to>last} className="rounded bg-sky-700 px-3 py-2 disabled:opacity-50" onClick={()=>void run("preview")}>{busy?"Procesando…":"Revisar Excel"}</button>{preview&&<button type="button" disabled={busy} className="rounded bg-emerald-700 px-3 py-2 disabled:opacity-50" onClick={()=>void run("save")}>Guardar fletes del Excel</button>}<button type="button" disabled={busy} className="rounded bg-slate-700 px-3 py-2 disabled:opacity-50" onClick={()=>{setOpen(false);onOpen(false);invalidate();}}>Cancelar carga</button></div>
   </div>}
  </div>;
