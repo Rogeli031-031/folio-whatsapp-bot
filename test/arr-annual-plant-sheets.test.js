@@ -70,7 +70,7 @@ function findRow(ws, text) {
 }
 
 function headerValues(ws, row) {
-  return [1, 2, 3, 4, 5, 6, 7, 8, 9].map((c) => ws.getCell(row, c).value);
+  return Array.from({ length: 13 }, (_, i) => ws.getCell(row, i + 1).value);
 }
 
 function clientsUnder(ws, title) {
