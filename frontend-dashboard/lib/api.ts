@@ -3958,7 +3958,12 @@ export type ComprasMonthResponse = {
     month: number;
     tarifa: number;
   }>;
+  fletes_diarios?: Array<{ proveedor_id: number; fecha: string; tarifa: number }>;
 };
+
+export function upsertComprasFleteDiario(token: string, plantaId: number, body: { proveedor_id: number; fecha: string; tarifa: number | null }): Promise<{ ok: boolean }> {
+  return apiFetch("/api/compras/flete-diario", { token, method: "POST", body: JSON.stringify({ planta_id: plantaId, ...body }) });
+}
 
 export function upsertComprasFleteTarifa(
   token: string,

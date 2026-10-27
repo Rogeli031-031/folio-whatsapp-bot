@@ -31,6 +31,7 @@ class MemClient {
   }
   async query(sql, params = []) {
     const q = String(sql).replace(/\s+/g, " ").trim().toLowerCase();
+    if (q.includes("to_regclass('arr.compras_flete_diario')")) return { rows: [{ flete_diario: null }] };
     if (q.startsWith("create ") || q.startsWith("create schema")) return { rows: [] };
     if (q.includes("from public.plantas")) return { rows: [{ nombre: "Morelos" }] };
 

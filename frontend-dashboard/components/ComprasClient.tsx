@@ -53,6 +53,7 @@ import {
 } from "@/lib/compras-format";
 import { commitHgWrite } from "@/lib/compras-hg-write";
 import { commitFleteTarifaWrite } from "@/lib/compras-flete-write";
+import ComprasFleteDiario from "@/components/ComprasFleteDiario";
 
 type DetailState = {
   proveedor: ComprasProvider;
@@ -595,6 +596,7 @@ export function ComprasClient() {
                     >
                       {token && plantaId ? (
                         <TarifaCell
+                          key={`${plantaId}:${p.id}:${year}:${month}`}
                           token={token}
                           plantaId={plantaId}
                           proveedorId={p.id}
@@ -602,6 +604,7 @@ export function ComprasClient() {
                           year={year}
                           month={month}
                           value={tarifaOf(data, p.id)}
+                          overrides={data?.fletes_diarios || []}
                           onSaved={loadMonth}
                           onError={setError}
                         />
@@ -1135,6 +1138,7 @@ function TarifaCell({
   year,
   month,
   value,
+  overrides,
   onSaved,
   onError,
 }: {
@@ -1145,6 +1149,7 @@ function TarifaCell({
   year: number;
   month: number;
   value: number | null;
+  overrides: { proveedor_id: number; fecha: string; tarifa: number }[];
   onSaved: () => Promise<void>;
   onError: (message: string | null) => void;
 }) {
@@ -1188,8 +1193,9 @@ function TarifaCell({
   }
 
   return (
-    <label className="mb-1 flex items-center justify-center gap-1 text-[9px] font-semibold normal-case tracking-normal text-slate-700">
-      <span>TARIFA</span>
+    <div className="mb-1 flex items-center justify-center gap-1 text-[9px] font-semibold normal-case tracking-normal text-slate-700">
+      <ComprasFleteDiario token={token} plantaId={plantaId} proveedorId={proveedorId} nombre={proveedorNombre} year={year} month={month} defaultValue={value} overrides={overrides} onSaved={onSaved} />
+      <span>Base</span>
       <input
         aria-label={`TARIFA ${proveedorNombre}`}
         value={text}
@@ -1201,7 +1207,7 @@ function TarifaCell({
         }}
         className="w-16 border border-slate-400 bg-white px-1 py-0.5 text-right text-[11px] tabular-nums text-black outline-none"
       />
-    </label>
+    </div>
   );
 }
 
