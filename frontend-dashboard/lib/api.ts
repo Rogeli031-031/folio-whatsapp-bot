@@ -2288,6 +2288,12 @@ export interface ArrClientesMesResponse {
 }
 
 export type ArrAnnualCategoryClientRow = {
+  last_purchase?: string | null;
+  frequency_days?: number | null;
+  client_state?: string | null;
+  month_discount_kg?: number | null;
+  last_purchase_discount_kg?: number | null;
+  cutoff?: string;
   planta: string;
   subcategoria: string;
   cliente: string;
