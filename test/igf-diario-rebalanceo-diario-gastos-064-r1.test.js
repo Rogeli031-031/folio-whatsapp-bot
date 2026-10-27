@@ -139,6 +139,7 @@ function memoryClient(seed) {
         state.manual.push({ plant_code: params[0], corporativos: params[4], operativos: params[3] });
         return { rows: [{ plant_code: params[0] }] };
       }
+      if (text.includes("pg_advisory_xact_lock")) return { rows: [] };
       throw new Error(`SQL no simulada: ${text.slice(0, 120)}`);
     },
   };

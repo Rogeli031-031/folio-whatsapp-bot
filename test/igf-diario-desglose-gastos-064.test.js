@@ -156,6 +156,7 @@ function txClient(options) {
         else state.manual.push(next);
         return { rows: [{ ...next }] };
       }
+      if (text.includes("pg_advisory_xact_lock")) return { rows: [] };
       throw new Error(`SQL no simulada: ${text}`);
     },
   };

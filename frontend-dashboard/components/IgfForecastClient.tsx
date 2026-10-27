@@ -32,6 +32,7 @@ import {
   zonaFromPlantRows,
 } from "@/lib/igf-october-mini";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
+import IgfPresupuestoUpload from "@/components/IgfPresupuestoUpload";
 import IgfDiarioWeeklyPlantPanel from "@/components/IgfDiarioWeeklyPlantPanel";
 import IgfDiarioWeeklyAllPlantsPanel from "@/components/IgfDiarioWeeklyAllPlantsPanel";
 import IgfDiarioFoliosDepositoMatrix from "@/components/IgfDiarioFoliosDepositoMatrix";
@@ -466,6 +467,7 @@ export function IgfForecastContent() {
   const [acumuladoError, setAcumuladoError] = useState<string | null>(null);
   const [gastosManuales, setGastosManuales] = useState<IgfDiarioGastoManual[]>([]);
   const [gastosDesglose, setGastosDesglose] = useState<IgfDiarioGastoDesglose[]>([]);
+  const [presupuestoNonce, setPresupuestoNonce] = useState(0);
   const [desgloseModal, setDesgloseModal] = useState<{
     plant: string;
     plantLabel: string;
@@ -697,7 +699,7 @@ export function IgfForecastContent() {
     return () => {
       cancel = true;
     };
-  }, [igfTableMode, token, igfForecast?.year, igfForecast?.month]);
+  }, [igfTableMode, token, igfForecast?.year, igfForecast?.month, presupuestoNonce]);
 
   useEffect(() => {
     if (igfTableMode !== "igf_diario" || !token || !igfForecast) return;
@@ -723,7 +725,7 @@ export function IgfForecastContent() {
     return () => {
       cancel = true;
     };
-  }, [igfTableMode, token, igfForecast?.year, igfForecast?.month]);
+  }, [igfTableMode, token, igfForecast?.year, igfForecast?.month, presupuestoNonce]);
 
   const saveGastoManual = async (
     plantCode: string,
@@ -1423,7 +1425,7 @@ export function IgfForecastContent() {
       clearInterval(id);
     };
     // No incluir igfForecast: cada setState del forecast re-disparaba el efecto y una segunda petición (parpadeo entre dos tablas).
-  }, [token, isGAPageBlocked, isGVPageBlocked, uploadDay, versionAsOfCorte]);
+  }, [token, isGAPageBlocked, isGVPageBlocked, uploadDay, versionAsOfCorte, presupuestoNonce]);
 
   useEffect(() => {
     if (!token || isGAPageBlocked || isGVPageBlocked || !igfForecast) return;
@@ -2019,6 +2021,17 @@ export function IgfForecastContent() {
                       ))}
                     </select>
                   </label>
+                  {token && usesDetailedExpenseLayout(igfForecast.year, igfForecast.month) && (
+                    <IgfPresupuestoUpload token={token}
+                      plants={Array.from(new Set(forecastRows.map(r => r.empresa?.trim()).filter(Boolean)))}
+                      initialPlant={plantaFilter} year={igfForecast.year} month={igfForecast.month}
+                      onSaved={() => {
+                        lastIgfFetchKeyRef.current = "";
+                        acumuladoCacheRef.current = null;
+                        setPresupuestoNonce(value => value + 1);
+                        setAcumuladoNonce(value => value + 1);
+                      }} />
+                  )}
                   {token && (
                     <button
                       type="button"
