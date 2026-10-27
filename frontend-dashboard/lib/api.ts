@@ -452,6 +452,23 @@ export type IgfDiarioGastoDesgloseComponentes = {
   provisiones_planta: number | null;
 };
 
+export type PresupuestoImportPreview = {
+  ok: boolean; plant_code: string; desde: string; hasta: string; dias: number; preview_token: string;
+  months: { year: number; month: number; concepts: { key: string; label: string; anterior_ventana: number | null; nuevo_ventana: number; mensual_anterior: number | null; mensual_nuevo: number }[] }[];
+  days: { fecha: string; values: Record<string, number> }[];
+};
+
+export async function importIgfPresupuesto(token: string, body: {
+  action: "preview" | "save"; plant_code: string; desde: string; hasta: string; file_base64: string; preview_token?: string;
+}): Promise<PresupuestoImportPreview> {
+  const response = await fetch(getApiUrl("/api/dashboard/igf-presupuesto-import"), {
+    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const parsed = await response.json().catch(() => ({ error: response.statusText }));
+  if (!response.ok) throw new Error(parsed.error || "No se pudo importar el presupuesto");
+  return parsed;
+}
+
 export type IgfDiarioGastoDesglose = {
   plant_code: string;
   year: number;

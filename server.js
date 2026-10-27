@@ -50,6 +50,7 @@ const igfDiarioGastosManuales = require("./lib/igf-diario-gastos-manuales");
 const igfDashboardScope = require("./lib/igf-dashboard-scope");
 const igfDiarioGastosDesglose = require("./lib/igf-diario-gastos-desglose");
 const igfDiarioGastosDistribucion = require("./lib/igf-diario-gastos-distribucion");
+const igfPresupuestoImport = require("./lib/igf-presupuesto-import");
 const igfDiarioMargenManual = require("./lib/igf-diario-margen-manual");
 const igfDiarioDailyInsights = require("./lib/igf-diario-daily-insights");
 const igfDiarioComprasComment = require("./lib/igf-diario-compras-comment");
@@ -12420,6 +12421,36 @@ app.patch("/api/dashboard/igf-diario-gastos-manuales", dashboardAuthMiddleware, 
 async function filterIgfDiarioGastosDesglose(client, auth, rows) {
   return igfDashboardScope.filterRows(client, auth, rows, dashboardArrForecast.resolveForecastExportPlant);
 }
+
+app.post("/api/dashboard/igf-presupuesto-import", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  if (dashboardBlockGVForbidden(req, res)) return;
+  let client;
+  try {
+    const body = req.body || {};
+    if (!["preview", "save"].includes(body.action)) return res.status(400).json({ error: "Acción inválida" });
+    const spec = igfPresupuestoImport.parseRequest(body);
+    client = await pool.connect();
+    const resolved = await dashboardArrForecast.resolveForecastExportPlant(client, spec.plantCode);
+    if (!resolved) return res.status(400).json({ error: "Planta no reconocida" });
+    if (!igfDashboardScope.canAccessPlant(req.dashboardAuth, resolved.plantaId)) return res.status(403).json({ error: "Sin permiso para esta planta" });
+    spec.plantCode = resolved.canon;
+    const codes = await client.query(`SELECT DISTINCT plant_code FROM arr.igf_diario_gastos_desglose
+      WHERE (year * 100 + month) BETWEEN $1 AND $2`, [Number(spec.from.slice(0, 7).replace("-", "")), Number(spec.to.slice(0, 7).replace("-", ""))]);
+    const existingCodes = codes.rows.map(row => row.plant_code).filter(code => dashboardArrForecast.plantsEquivalent(code, resolved.canon));
+    if (existingCodes.length > 1) return res.status(409).json({ error: "Hay más de un código de presupuesto para esta planta. Revisa el desglose antes de importar." });
+    if (existingCodes.length === 1) spec.plantCode = existingCodes[0];
+    spec.rows = igfPresupuestoImport.parseWorkbook(spec.buffer, spec.from, spec.to);
+    const actor = req.dashboardAuth?.actor_id != null ? `Dashboard:${req.dashboardAuth.actor_id}` : "Dashboard";
+    const result = body.action === "save"
+      ? await igfPresupuestoImport.savePlan(client, spec, body.preview_token, actor)
+      : igfPresupuestoImport.publicPreview(await igfPresupuestoImport.buildPlan(client, spec), spec);
+    res.json(result);
+  } catch (error) {
+    console.error("[igf-presupuesto-import]", error.message);
+    res.status(error.status || 500).json({ error: error.code === "42P01" ? "Primero abre el desglose y la distribución de gastos para inicializar sus tablas." : error.message || "No se pudo importar el presupuesto" });
+  } finally { if (client) client.release(); }
+});
 
 app.get("/api/dashboard/igf-diario-gastos-desglose", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
