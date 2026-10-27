@@ -15902,6 +15902,13 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
   const uploadDay = ((req.query.upload_day || "").toString().trim().slice(0, 10)) || null;
   const versionAsOfCorte = /^(1|true|yes)$/i.test(String(req.query.version_as_of_corte || "").trim());
   const view = String(req.query.view || "week");
+  if (!["week", "series", "periods"].includes(view)) return res.status(400).json({ error: "Vista no reconocida." });
+  const periodMode = String(req.query.period_mode || "weeks");
+  const firstMonth = req.query.first_month == null ? undefined : Number(req.query.first_month);
+  if (view === "periods") {
+    try { require("./lib/igf-diario-weekly-plant").periodWindows(year, month, periodMode, firstMonth); }
+    catch (error) { return res.status(400).json({ error: error.message }); }
+  }
   if (todas && view === "series") return res.status(400).json({ error: "La serie semanal requiere una planta." });
   const weekAnchor = String(req.query.week_anchor || uploadDay || "").slice(0, 10);
   const metric = String(req.query.metric || "resultado_mxn");
@@ -15923,8 +15930,10 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
       }
       const weekly = require("./lib/igf-diario-weekly-plant");
       const comprasCache = new Map();
-      const payload = await weekly.loadWeeklyAll(client, {
+      const payload = await (view === "periods" ? weekly.loadPeriodColumns : weekly.loadWeeklyAll)(client, {
         plants,
+        periodMode,
+        firstMonth,
         year,
         month,
         weekAnchor,
@@ -15964,8 +15973,10 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
         comprasCache: new Map(),
         loadPrecio: (plantName, y, m) => dashboardArrForecast.loadPrecioDiario(client, plantName, y, m),
       })
-      : await weekly.loadWeeklyPlant(client, {
+      : await (view === "periods" ? weekly.loadPeriodColumns : weekly.loadWeeklyPlant)(client, {
         plant: resolvedPlant,
+        periodMode,
+        firstMonth,
         year,
         month,
         weekAnchor,

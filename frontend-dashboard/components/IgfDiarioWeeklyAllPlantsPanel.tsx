@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import IgfDiarioPeriodPanel, { IgfTimeframeControl, type Timeframe } from "@/components/IgfDiarioPeriodPanel";
 import { fetchIgfDiarioSemanal, type IgfDiarioSemanalAllResponse } from "@/lib/api";
 import IgfDiarioWeeklyExecutiveModal from "@/components/IgfDiarioWeeklyExecutiveModal";
 import { WEEKLY_ROWS, coverageLines, fmtValue, tone, weekLabel } from "@/lib/igf-diario-weekly-rows";
@@ -20,6 +21,7 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
   versionAsOfCorte?: boolean;
   refreshKey?: number;
 }) {
+  const [timeframe, setTimeframe] = useState<Timeframe>("days");
   const [anchor, setAnchor] = useState((uploadDay || "").trim());
   const [data, setData] = useState<IgfDiarioSemanalAllResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +33,7 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
   }, [year, month, uploadDay]);
 
   useEffect(() => {
+    if (timeframe !== "days") return;
     let cancel = false;
     setLoading(true);
     setError(null);
@@ -55,10 +58,15 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
     return () => {
       cancel = true;
     };
-  }, [token, year, month, anchor, uploadDay, versionAsOfCorte, refreshKey]);
+  }, [token, year, month, anchor, uploadDay, versionAsOfCorte, refreshKey, timeframe]);
 
   const estado = data?.week.estado === "proyectada" ? "PROYECTADA" : data?.week.estado === "parcial" ? "PARCIAL" : "REAL";
   const plants = data?.plants || [];
+
+  if (timeframe !== "days") return <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4">
+    <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-base font-medium text-slate-100">IGF Diario · Todas</h3><IgfTimeframeControl value={timeframe} onChange={setTimeframe}/></div>
+    <IgfDiarioPeriodPanel token={token} year={year} month={month} uploadDay={uploadDay} versionAsOfCorte={versionAsOfCorte} mode={timeframe} refreshKey={refreshKey}/>
+  </section>;
 
   return (
     <section className="mt-6 rounded-lg border border-slate-700 bg-slate-800/60 p-4">
@@ -67,6 +75,7 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
         {data && <span className="rounded bg-slate-700 px-2 py-1 text-xs font-semibold text-slate-100">{estado}</span>}
       </div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        <IgfTimeframeControl value={timeframe} onChange={setTimeframe}/>
         <button
           type="button"
           disabled={!data?.nav.prev_enabled}
