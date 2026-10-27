@@ -10,7 +10,7 @@ export function IgfTimeframeControl({value,onChange}:{value:Timeframe;onChange:(
    <option value="days">Días de la semana</option><option value="weeks">Por semanas</option><option value="months">Por mes</option>
   </select></label>;
 }
-type Column={key:string;label:string;fecha_desde:string;fecha_hasta:string;estado:string;complete:boolean;metrics:IgfDiarioSemanalMetrics;coverage:IgfDiarioSemanalCoverageMap};
+type Column={key:string;label:string;fecha_desde:string;fecha_hasta:string;estado:string;complete:boolean;metrics:IgfDiarioSemanalMetrics & Record<string,number|null>;coverage:IgfDiarioSemanalCoverageMap;forecast_sources?:{empresa:string;version_id:number;version_number:number;fields:string[]}[]};
 const MONTHS=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 export default function IgfDiarioPeriodPanel({token,year,month,plantCode,uploadDay,versionAsOfCorte,mode,refreshKey=0}:{
  token:string;year:number;month:number;plantCode?:string;uploadDay?:string|null;versionAsOfCorte?:boolean;mode:"weeks"|"months";refreshKey?:number;
@@ -30,6 +30,12 @@ export default function IgfDiarioPeriodPanel({token,year,month,plantCode,uploadD
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return()=>controller.abort();
  },[token,year,month,plantCode,uploadDay,versionAsOfCorte,mode,first,refreshKey]);
+ const forecastRows = columns.some(c=>c.forecast_sources?.length) ? [
+  {key:"gasto_operativo_forecast_kg",label:"Gasto operativo · IGF Forecast",unit:"per_kg" as const,separatorBefore:true},
+  {key:"bancos_planta_forecast_kg",label:"Bancos Planta · IGF Forecast",unit:"per_kg" as const},
+  {key:"util_oper_forecast_kg",label:"Utilidad de Operación · IGF Forecast",unit:"per_kg" as const},
+ ] : [];
+ const rows: {key:string;label:string;unit:"kg"|"mxn"|"per_kg";highlight?:boolean;strongest?:boolean;separatorBefore?:boolean}[]=[...WEEKLY_ROWS,...forecastRows];
  return <div className="mt-3">
   <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-slate-300">
    {mode==="months"?<label>Mes inicial <select aria-label="Mes inicial" value={Math.min(first,month)} onChange={e=>setFirst(Number(e.target.value))} className="ml-2 rounded bg-slate-700 px-3 py-2 text-white">{MONTHS.slice(0,month).map((name,i)=><option key={name} value={i+1}>{name} {year}</option>)}</select> · Hasta {MONTHS[month-1]} {year}</label>:<span>Semanas completas de domingo a sábado · {MONTHS[month-1]} {year}</span>}
@@ -37,9 +43,10 @@ export default function IgfDiarioPeriodPanel({token,year,month,plantCode,uploadD
   </div>
   {loading&&<p role="status" className="text-slate-400">Cargando periodos…</p>}
   {error&&<p role="alert" className="text-red-300">{error}</p>}
+  {forecastRows.length>0&&<p className="mb-3 text-xs text-sky-200">* Valores recuperados de la última versión histórica de IGF Forecast. Se conservan las cifras existentes. Esta fuente no separa precio, costo, flete ni nómina/IMSS; esos conceptos quedan sin cifra. Gasto operativo se muestra como total, sin repartirlo entre conceptos.</p>}
   {columns.length>0&&<div className="overflow-x-auto rounded border border-slate-700"><table className="w-full min-w-[800px] border-separate border-spacing-0 text-sm">
-   <thead><tr className="bg-slate-900 text-slate-200"><th className="sticky left-0 z-10 min-w-[220px] bg-slate-900 p-3 text-left">Concepto</th>{columns.map(c=><th key={c.key} className="min-w-[150px] p-3 text-right"><div>{c.label}</div><div className="text-xs font-normal text-slate-400">{fmtFecha(c.fecha_desde)}–{fmtFecha(c.fecha_hasta)}</div><div className="text-xs uppercase">{c.estado}{!c.complete?" · Incompleta":""}</div></th>)}</tr></thead>
-   <tbody>{WEEKLY_ROWS.map(row=><tr key={row.key} className={row.highlight?"bg-amber-950/25":""}><th className={`sticky left-0 bg-slate-800 p-3 text-left font-medium text-slate-100 ${row.separatorBefore?"border-t-4 border-slate-400":"border-t border-slate-700"}`}>{row.label}</th>{columns.map(c=><td key={c.key} className={`p-3 text-right tabular-nums ${tone(row.key,c.metrics[row.key])} ${row.separatorBefore?"border-t-4 border-slate-400":"border-t border-slate-700"} ${row.strongest?"font-semibold":""}`}>{fmtValue(c.metrics[row.key],row.unit)}</td>)}</tr>)}</tbody>
+   <thead><tr className="bg-slate-900 text-slate-200"><th className="sticky left-0 z-10 min-w-[220px] bg-slate-900 p-3 text-left">Concepto</th>{columns.map(c=><th key={c.key} className="min-w-[150px] p-3 text-right"><div>{c.label}</div><div className="text-xs font-normal text-slate-400">{fmtFecha(c.fecha_desde)}–{fmtFecha(c.fecha_hasta)}</div><div className="text-xs uppercase">{c.estado}{!c.complete?" · Incompleta":""}</div>{!!c.forecast_sources?.length&&<div className="text-xs text-sky-300">IGF Forecast · v{c.forecast_sources[0].version_number}</div>}</th>)}</tr></thead>
+   <tbody>{rows.map(row=><tr key={row.key} className={row.highlight?"bg-amber-950/25":""}><th className={`sticky left-0 bg-slate-800 p-3 text-left font-medium text-slate-100 ${row.separatorBefore?"border-t-4 border-slate-400":"border-t border-slate-700"}`}>{row.label}</th>{columns.map(c=><td key={c.key} className={`p-3 text-right tabular-nums ${tone(row.key,c.metrics[row.key])} ${row.separatorBefore?"border-t-4 border-slate-400":"border-t border-slate-700"} ${row.strongest?"font-semibold":""}`}>{fmtValue(c.metrics[row.key],row.unit)}{c.forecast_sources?.some(source=>source.fields.includes(row.key))&&<span title="Fuente: IGF Forecast histórico" className="ml-1 text-sky-300">*</span>}</td>)}</tr>)}</tbody>
   </table></div>}
   {columns.map(c=>coverageLines(c.coverage).map(line=><p key={`${c.key}:${line}`} className="mt-2 text-xs text-amber-200">{c.label}: {line}</p>))}
  </div>;
