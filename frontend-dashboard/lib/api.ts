@@ -3965,6 +3965,16 @@ export function upsertComprasFleteDiario(token: string, plantaId: number, body: 
   return apiFetch("/api/compras/flete-diario", { token, method: "POST", body: JSON.stringify({ planta_id: plantaId, ...body }) });
 }
 
+export type ComprasFleteExcelPreview = {
+  ok: boolean; preview_token?: string; updated?: number;
+  rows: { fecha: string; actual?: number | null; nuevo?: number; origen?: string; tarifa?: number }[];
+};
+export function importComprasFleteExcel(token: string, plantaId: number, body: {
+  proveedor_id: number; desde: string; hasta: string; file_base64: string; action: "preview" | "save"; preview_token?: string;
+}): Promise<ComprasFleteExcelPreview> {
+  return apiFetch("/api/compras/flete-excel-import", { token, method: "POST", body: JSON.stringify({ planta_id: plantaId, ...body }) });
+}
+
 export function upsertComprasFleteTarifa(
   token: string,
   plantaId: number,
