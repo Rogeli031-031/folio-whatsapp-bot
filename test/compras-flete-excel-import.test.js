@@ -61,6 +61,33 @@ test("cambio posterior al preview y error de guardado revierten toda la carga",a
  await assert.rejects(()=>importer.save(client,request,fresh.preview_token,42),/write failed/);
  assert.deepEqual(client.state,previous);assert.equal(client.calls.at(-1).sql,"ROLLBACK");
 });
+const providers=[{id:1,nombre:"PEMEX TUXPAN"},{id:2,nombre:"TOMZA TUXPAN"},{id:3,nombre:"TOMZA TEPEJI"}];
+function batch(){return{planta_id:7,from:"2026-10-01",to:"2026-10-02",providers:importer.allProviders(file(),providers,"2026-10-01","2026-10-02")};}
+test("carga todos los proveedores juntos y conserva fechas externas y predeterminados",async()=>{
+ const client=db(),request=batch(),p=await importer.previewAll(client,request);
+ assert.equal(p.rows.length,6);assert.deepEqual([...new Set(p.rows.map(r=>r.proveedor_id))],[1,2,3]);
+ assert.ok(client.calls.every(c=>c.sql.startsWith("SELECT")));
+ const result=await importer.saveAll(client,request,p.preview_token,42);
+ assert.equal(result.updated,6);assert.equal(client.state.rows.length,7);assert.equal(client.state.base,1.23);
+ for(const provider of request.providers)for(const row of provider.rows)
+  assert.equal(client.state.rows.find(r=>r.proveedor_id===provider.proveedor_id&&r.fecha===row.fecha).tarifa,row.tarifa);
+ assert.equal(client.state.rows.find(r=>r.fecha==="2026-10-03").tarifa,8);
+ assert.deepEqual(client.calls.filter(c=>c.sql.includes("pg_advisory_xact_lock")).map(c=>c.params[0]),["compras-flete:7:1","compras-flete:7:2","compras-flete:7:3"]);
+});
+test("si cambia cualquier proveedor o falla la última escritura no cambia ninguno",async()=>{
+ const client=db(),request=batch(),p=await importer.previewAll(client,request);
+ client.state.rows[1].tarifa=10;
+ await assert.rejects(()=>importer.saveAll(client,request,p.preview_token,42),e=>e.status===409);
+ const fresh=await importer.previewAll(client,request),before=structuredClone(client.state),query=client.query.bind(client);
+ client.query=async(sql,params)=>{if(sql.startsWith("INSERT INTO")&&params[1]===3&&params[2]==="2026-10-02")throw new Error("last provider failed");return query(sql,params);};
+ await assert.rejects(()=>importer.saveAll(client,request,fresh.preview_token,42),/last provider failed/);
+ assert.deepEqual(client.state,before);assert.equal(client.calls.at(-1).sql,"ROLLBACK");
+});
+test("rechaza proveedores ausentes o duplicados y columna inválida antes de guardar",()=>{
+ assert.throws(()=>importer.allProviders(file(),providers.slice(0,2),"2026-10-01","2026-10-02"),/TOMZA TEPEJI/);
+ assert.throws(()=>importer.allProviders(file(),[...providers,providers[0]],"2026-10-01","2026-10-02"),/PEMEX TUXPAN/);
+ assert.throws(()=>importer.allProviders(buffer([["2026-10-01",1,2,null]]),providers,"2026-10-01","2026-10-01"),/inválido/);
+});
 test("API aplica sesión, permiso y planta antes de leer archivo; rechaza proveedor ajeno",async()=>{
  const routes=new Map(),calls=[];
  const app=Object.fromEntries(["get","post","patch","delete"].map(method=>[method,(path,...handlers)=>routes.set(`${method}:${path}`,handlers)]));
@@ -75,4 +102,25 @@ test("API aplica sesión, permiso y planta antes de leer archivo; rechaza provee
  assert.equal((await invoke({permisos:{acceso_compras:true},plantas_permitidas:[1]},2)).code,403);assert.equal(calls.length,0);
  assert.equal((await invoke({permisos:{acceso_compras:true},plantas_permitidas:[1,2]},2)).code,403);
  assert.ok(calls.every(c=>c.sql.startsWith("SELECT")));
+});
+test("API importa los tres proveedores de la planta aunque se abra desde uno solo",async()=>{
+ const routes=new Map(),client=db(),query=client.query.bind(client);
+ client.release=()=>{};
+ client.query=async(sql,params)=>{
+  if(sql.includes("SELECT id, planta_id, nombre")){
+   if(sql.includes("WHERE planta_id")){assert.deepEqual(params,[7]);return{rows:providers.map(p=>({...p,planta_id:7}))};}
+   return{rows:[{...providers[1],planta_id:7}]};
+  }
+  return query(sql,params);
+ };
+ const app=Object.fromEntries(["get","post","patch","delete"].map(method=>[method,(path,...handlers)=>routes.set(`${method}:${path}`,handlers)]));
+ compras.registerComprasRoutes(app,{pool:{connect:async()=>client},dashboardAuthMiddleware:(req,res,next)=>next(),assertPlantaAccess:()=>true,s3Enabled:()=>false});
+ async function invoke(action,token){
+  const req={query:{},body:{action,preview_token:token,planta_id:7,proveedor_id:2,desde:"2026-10-01",hasta:"2026-10-02",file_base64:file().toString("base64")},dashboardAuth:{permisos:{acceso_compras:true},plantas_permitidas:[7]}};
+  const res={code:200,status(n){this.code=n;return this;},json(data){this.data=data;return this;}};
+  for(const h of routes.get("post:/api/compras/flete-excel-import")){let next=false;await h(req,res,()=>next=true);if(!next)break;}return res;
+ }
+ const p=await invoke("preview");assert.equal(p.code,200);assert.equal(p.data.rows.length,6);
+ const saved=await invoke("save",p.data.preview_token);assert.equal(saved.code,200);assert.equal(saved.data.updated,6);
+ assert.deepEqual([...new Set(saved.data.rows.map(r=>r.proveedor_id))],[1,2,3]);
 });
