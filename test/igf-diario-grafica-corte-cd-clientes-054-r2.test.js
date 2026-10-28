@@ -509,7 +509,7 @@ test("7. agosto en fallback no queda bloqueado por el primary de septiembre", as
   assert.equal(august.mode, "fallback");
   assert.equal(september.mode, "primary");
   assert.equal(august.queryCount, 2);
-  assert.equal(september.queryCount, 1);
+  assert.equal(september.queryCount, 2);
   const augSeries = grafica.materializePlantMonth({
     year: 2026, month: 8, plant: "Puebla", corteYmd: "2026-09-20", project: false,
     cdByFecha: plantMap(august, "Puebla"),
@@ -543,8 +543,9 @@ test("8. septiembre sin primary usa fallback real y el post-corte sigue en promD
   const september = await grafica.loadCdMonthIndex(client, 2026, 9);
   assert.equal(august.mode, "primary");
   assert.equal(september.mode, "fallback");
-  assert.equal(cdCalls(client.calls, "fallback").length, 1);
-  assert.equal(cdCalls(client.calls, "fallback")[0].params[0], "2026-09-01");
+  const evidenceCalls = cdCalls(client.calls, "fallback");
+  assert.equal(evidenceCalls.length, 2);
+  assert.ok(evidenceCalls.some((call) => call.params[0] === "2026-09-01"));
   const sepSeries = grafica.materializePlantMonth({
     year: 2026,
     month: 9,
@@ -602,8 +603,8 @@ test("9. la consulta C&D se resuelve una vez por mes y se comparte entre plantas
   const fallback = cdCalls(client.calls, "fallback");
   assert.deepEqual(primary.map((call) => call.params[0]).sort(), ["2026-06-01", "2026-07-01", "2026-08-01", "2026-09-01"]);
   assert.equal(primary.length, 4);
-  assert.equal(fallback.length, 2);
-  assert.deepEqual(fallback.map((call) => call.params[0]).sort(), ["2026-06-01", "2026-08-01"]);
+  assert.equal(fallback.length, 4);
+  assert.deepEqual(fallback.map((call) => call.params[0]).sort(), ["2026-06-01", "2026-07-01", "2026-08-01", "2026-09-01"]);
   const augustFallback = fallback.find((call) => call.params[0] === "2026-08-01");
   assert.equal(augustFallback.params[1], "2026-08-31");
   assert.ok(live.points.some((point) => point.fecha === "2026-08-15" && point.estado === "real"));
@@ -783,5 +784,6 @@ test("20. el gate Todas queda antes de la lectura y la UI 054 sigue intacta", ()
   assert.doesNotMatch(GRAFICA_SRC, /require\("exceljs"\)/);
   assert.doesNotMatch(GRAFICA_SRC, /require\(["']openai|api\.openai|OPENAI_API/);
   assert.doesNotMatch(GRAFICA_SRC, /\bINSERT\b|\bUPDATE\b|\bDELETE\b|CREATE TABLE|ALTER TABLE/);
-  assert.match(GRAFICA_SRC, /if \(primary\.length\) return pack\(primary, "primary", 1\)/);
+  assert.match(GRAFICA_SRC, /mergeDiscountRates\(primary, evidence\)/);
+  assert.match(GRAFICA_SRC, /mode: primary\.length \? "primary" : "fallback"/);
 });

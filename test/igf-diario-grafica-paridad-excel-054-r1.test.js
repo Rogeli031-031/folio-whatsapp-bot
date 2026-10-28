@@ -584,7 +584,8 @@ test("el loader no reconstruye inputs ni genera Excel en runtime", () => {
   assert.match(GRAFICA_SRC, /resolveCanalTon/);
   assert.match(GRAFICA_SRC, /resolveComisionCd/);
   assert.match(GRAFICA_SRC, /descuento_por_kilo_diario_provincia/);
-  assert.match(GRAFICA_SRC, /if \(primary\.length\) return pack\(primary, "primary", 1\)/);
+  assert.match(GRAFICA_SRC, /mergeDiscountRates\(primary, evidence\)/);
+  assert.match(GRAFICA_SRC, /mode: primary\.length \? "primary" : "fallback"/);
   assert.doesNotMatch(GRAFICA_SRC, /require\("exceljs"\)/);
   assert.doesNotMatch(GRAFICA_SRC, /require\(["']openai|api\.openai|OPENAI_API/);
   assert.doesNotMatch(GRAFICA_SRC, /\bINSERT\b|\bUPDATE\b|\bDELETE\b|CREATE TABLE|ALTER TABLE/);
