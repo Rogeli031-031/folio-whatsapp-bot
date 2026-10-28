@@ -159,7 +159,7 @@ test("el fallback no reutiliza una tasa ya rellenada ni un forecast", () => {
   }
 });
 
-test("San Luis 04/10 usa la tasa real del 03/10 y el día proyectado conserva el forecast", () => {
+test("la regla del 2026-10-28 sustituye la herencia de San Luis 04/10 cuando el cero está evidenciado", () => {
   const series = monthOf({
     year: 2026,
     month: 10,
@@ -168,15 +168,17 @@ test("San Luis 04/10 usa la tasa real del 03/10 y el día proyectado conserva el
     casa: new Map([["2026-10-04", 1.701], ["2026-10-09", 2], ["2026-10-10", 3]]),
     rates: new Map([
       ["2026-10-03", -4.33],
+      ["2026-10-04", 0],
       ["2026-10-10", 0],
     ]),
     promDesc: ["-4", "-4.19", "-4.12", "-3.87", "-3.85", "-4.3", ""],
   });
   const sunday = dayOf(series, "2026-10-04");
   assert.equal(sunday.ventaKg, 1701);
-  assert.equal(sunday.cdKg, -4.33);
-  assert.equal(sunday.cdSource, "LAST_REAL_FALLBACK");
-  assert.equal(sunday.cdSourceDate, "2026-10-03");
+  assert.equal(sunday.cdKg, 0);
+  assert.equal(sunday.cdSource, "REAL");
+  assert.equal(sunday.cdSourceDate, null);
+  assert.notEqual(sunday.cdKg, -4.33);
 
   const projected = dayOf(series, "2026-10-09");
   assert.equal(projected.cdKg, -3.85);
