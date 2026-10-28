@@ -1,44 +1,35 @@
-task_id: "DIRECTOR-IA-013-R3"
+task_id: "FIX-IGF-DIARIO-COMDESC-NO-DISCOUNTS-ZERO-078-R3"
 status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
-approver_name: "Luis Rogelio Zaragoza alvarez"
-authorized_at: "2026-10-26T12:14:38.1287071-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza alvarez 2026-10-26"
+approver_name: "Luis rogelio Zaragoza alvarez"
+authorized_at: "2026-10-28T13:26:18.9896096-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-28"
 
-base_sha: "fe20da86a1717ae15c4659e084bf94d95361a8ec"
-main_guard_sha: "677c201806bedc2dd08b1dcf85ce4e6b95e82474"
-branch: "feature/director-ia-igf-diario-compras-hg-013"
+base_sha: "2a6c4a20044f3d0b0158a00600dbabe73645ff2a"
+branch: "fix/igf-diario-comdesc-no-discounts-zero-078-r3"
 
-objective: "Hacer DIRECTOR-IA-013 estrictamente read-only y recuperar paridad productiva del margen para día, semana y rango sin romper la paridad mensual de R2."
+objective: "Cuando exista venta positiva y no haya ningún descuento registrado para la planta/fecha, Comisiones y Descuentos debe ser cero real y no LAST_REAL_FALLBACK. Verificar todas las fórmulas y reportes dependientes."
 
-authorized_scope:
-  strict_read_only: true
-  desglose_read_only_loader: true
-  margin_detail_live_loader: true
-  day_margin_parity: true
-  weekly_margin_parity: true
-  range_margin_parity: true
-  manual_margin_override_parity: true
+business_rule: "venta > 0 AND zero discount rows => com_desc = 0"
 
 protected:
-  - "R2 acumulado mensual"
-  - "R2 Forecast vivo"
-  - "R2 Actual vs Forecast"
-  - "R2 discrepancia R4"
-  - "Compras R4/R5"
-  - "migracion 025"
-  - "DB productiva"
+  - "LAST_REAL_FALLBACK para casos realmente desconocidos"
+  - "Forecast"
+  - "IGF Diario semanal"
+  - "IGF Diario acumulado"
+  - "Provincia Comisiones"
+  - "Compras"
+  - "HG"
+  - "gastos"
+  - "margen bruto"
 
 forbidden:
-  - "CREATE desde Chat Director IA"
-  - "INSERT"
-  - "UPDATE"
-  - "DELETE"
-  - "schema migration"
+  - "hardcode San Luis"
+  - "hardcode fechas"
+  - "DB writes"
+  - "migration"
   - "PR"
   - "merge"
   - "deploy"
-  - "prorrateo inventado"
-  - "formula paralela de margen"
 
-result_report_path: "docs/dev-loop/reports/DIRECTOR-IA-013-R3.md"
+result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-COMDESC-NO-DISCOUNTS-ZERO-078-R3.md"
