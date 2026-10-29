@@ -66,9 +66,10 @@ function colspan(providerCount, fleteExpanded) {
   const consolidado = 3;
   const sepHg = 1;
   const hg = 3;
+  const participacion = 2;
   const sepFlete = 1;
   const flete = fleteExpanded ? n * 3 + n + 3 : 0;
-  return fecha + comprasCols + notaCargo + consolidado + sepHg + hg + sepFlete + flete;
+  return fecha + comprasCols + notaCargo + consolidado + sepHg + hg + participacion + sepFlete + flete;
 }
 
 describe("FIX-COMPRAS-NOTA-CARGO-VISIBLE-088-R3", () => {
@@ -198,11 +199,12 @@ describe("FIX-COMPRAS-NOTA-CARGO-VISIBLE-088-R3", () => {
   it("N) colspan cuenta la nota con flete cerrado y abierto", () => {
     assert.match(CLIENT, /const notaCargo = 1;/);
     assert.match(CLIENT, /const flete = fleteExpanded \? n \* 3 \+ n \+ 3 : 0;/);
-    assert.equal(colspan(0, false), 10);
-    assert.equal(colspan(3, false), 22);
-    assert.equal(colspan(0, true), 13);
-    assert.equal(colspan(3, true), 37);
-    assert.match(CLIENT, /return fecha \+ compras \+ notaCargo \+ consolidado \+ sepHg \+ hg \+ sepFlete \+ flete;/);
+    assert.equal(colspan(0, false), 12);
+    assert.equal(colspan(3, false), 24);
+    assert.equal(colspan(0, true), 15);
+    assert.equal(colspan(3, true), 39);
+    assert.match(CLIENT, /const participacion = 2;/);
+    assert.match(CLIENT, /return fecha \+ compras \+ notaCargo \+ consolidado \+ sepHg \+ hg \+ participacion \+ sepFlete \+ flete;/);
   });
 
   it("P) el importador 088 conserva la nota con kg 0", async () => {

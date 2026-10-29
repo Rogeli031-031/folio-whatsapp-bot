@@ -54,6 +54,12 @@ import {
 import { commitHgWrite } from "@/lib/compras-hg-write";
 import { commitFleteTarifaWrite } from "@/lib/compras-flete-write";
 import ComprasFleteDiario from "@/components/ComprasFleteDiario";
+import {
+  comprasParticipation,
+  formatParticipationPct,
+  type ParticipationBag,
+  type ParticipationProvider,
+} from "@/lib/compras-participation";
 
 type DetailState = {
   proveedor: ComprasProvider;
@@ -111,9 +117,10 @@ export function comprasGridColSpan(providerCount: number, fleteExpanded: boolean
   const consolidado = 3;
   const sepHg = 1;
   const hg = 3;
+  const participacion = 2;
   const sepFlete = 1;
   const flete = fleteExpanded ? n * 3 + n + 3 : 0;
-  return fecha + compras + notaCargo + consolidado + sepHg + hg + sepFlete + flete;
+  return fecha + compras + notaCargo + consolidado + sepHg + hg + participacion + sepFlete + flete;
 }
 
 function normalizeComprasProviderName(name: string): string {
@@ -628,6 +635,12 @@ export function ComprasClient() {
                 <th colSpan={3} className="compras-hg-title border-b border-black bg-white px-2 py-2 text-center text-[12px] font-bold uppercase tracking-wide text-black">
                   HG
                 </th>
+                <th rowSpan={3} className="compras-participation-title min-w-[96px] border border-black bg-black px-2 py-2 text-center text-[12px] font-bold uppercase tracking-wide text-white">
+                  TUXPAN
+                </th>
+                <th rowSpan={3} className="compras-participation-title min-w-[96px] border border-black bg-black px-2 py-2 text-center text-[12px] font-bold uppercase tracking-wide text-white">
+                  TEPEJI
+                </th>
                 <th rowSpan={3} className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
                 {fleteExpanded && (
                   <th
@@ -734,6 +747,8 @@ export function ComprasClient() {
                         onSaved={loadMonth}
                         onError={setError}
                       />
+                      <PurchaseParticipationBlank />
+                      <PurchaseParticipationBlank />
                       <td className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
                       {fleteExpanded && <FleteRowCells providers={providers} flete={day?.flete} />}
                     </tr>
@@ -777,6 +792,11 @@ export function ComprasClient() {
                         )}
                         bold
                       />
+                      <PurchaseParticipationCells
+                        providers={sheetProviders}
+                        bag={week?.providers}
+                        consolidatedKg={week?.consolidado?.kg}
+                      />
                       <td className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
                       {fleteExpanded && <FleteRowCells providers={providers} flete={week?.flete} showZero />}
                     </tr>
@@ -819,6 +839,11 @@ export function ComprasClient() {
                     hg={data.grid.month.hg_kilos ?? null}
                     importe={hgImporteSum(data.grid.days || [])}
                     bold
+                  />
+                  <PurchaseParticipationCells
+                    providers={sheetProviders}
+                    bag={data.grid.month.providers}
+                    consolidatedKg={data.grid.month.consolidado?.kg}
                   />
                   <td className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
                   {fleteExpanded && <FleteRowCells providers={providers} flete={data.grid.month.flete} showZero />}
@@ -985,6 +1010,37 @@ function HgDayCell({
         className="w-full bg-transparent px-1 py-1 text-right tabular-nums outline-none"
       />
     </td>
+  );
+}
+
+function PurchaseParticipationBlank() {
+  return <td data-participation="blank" className="border border-black bg-white" />;
+}
+
+function PurchaseParticipationCell({ label, kg, pct }: { label: string; kg: number; pct: number | null }) {
+  return (
+    <td data-participation={label} className="min-w-[96px] border border-black bg-white px-1 py-1 text-center align-middle">
+      <div className="text-[16px] font-bold leading-tight tabular-nums text-black">{formatParticipationPct(pct)}</div>
+      <div className="text-[11px] font-medium leading-tight tabular-nums text-slate-700">{`${formatKg(kg, true)} kg`}</div>
+    </td>
+  );
+}
+
+function PurchaseParticipationCells({
+  providers,
+  bag,
+  consolidatedKg,
+}: {
+  providers: ParticipationProvider[];
+  bag: ParticipationBag;
+  consolidatedKg: number | null | undefined;
+}) {
+  const participation = comprasParticipation(providers, bag, consolidatedKg);
+  return (
+    <>
+      <PurchaseParticipationCell label="TUXPAN" kg={participation.tuxpan.kg} pct={participation.tuxpan.pct} />
+      <PurchaseParticipationCell label="TEPEJI" kg={participation.tepeji.kg} pct={participation.tepeji.pct} />
+    </>
   );
 }
 
