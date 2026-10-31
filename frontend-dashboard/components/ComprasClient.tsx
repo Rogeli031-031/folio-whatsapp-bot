@@ -54,6 +54,7 @@ import {
 import { commitHgWrite } from "@/lib/compras-hg-write";
 import { commitFleteTarifaWrite } from "@/lib/compras-flete-write";
 import ComprasFleteDiario from "@/components/ComprasFleteDiario";
+import { comprasOriginShare } from "@/lib/compras-origin-share";
 
 type DetailState = {
   proveedor: ComprasProvider;
@@ -112,8 +113,27 @@ export function comprasGridColSpan(providerCount: number, fleteExpanded: boolean
   const sepHg = 1;
   const hg = 3;
   const sepFlete = 1;
+  const originShare = 2;
   const flete = fleteExpanded ? n * 3 + n + 3 : 0;
-  return fecha + compras + notaCargo + consolidado + sepHg + hg + sepFlete + flete;
+  return fecha + compras + notaCargo + consolidado + sepHg + hg + sepFlete + originShare + (fleteExpanded ? 1 : 0) + flete;
+}
+
+function OriginShareCells({ providers, totals, rowSpan = 1, monthly = false }: {
+  providers: ComprasProvider[];
+  totals?: ComprasMonthResponse["grid"]["month"];
+  rowSpan?: number;
+  monthly?: boolean;
+}) {
+  const shares = comprasOriginShare(providers, totals);
+  return <>{(["tuxpan", "tepeji"] as const).map((origin) => (
+    <td key={origin} rowSpan={rowSpan} data-origin={origin}
+      className={`min-w-[140px] border-b border-slate-300 px-5 py-3 text-center align-middle tabular-nums ${monthly ? "bg-slate-100" : "bg-white"}`}>
+      <span className="block whitespace-nowrap text-[22px] font-bold leading-tight text-slate-900">
+        {shares[origin].percent == null ? "—" : `${shares[origin].percent.toLocaleString("es-MX", { maximumFractionDigits: 2 })}%`}
+      </span>
+      <span className="mt-1 block whitespace-nowrap text-[12px] text-slate-600">{formatKg(shares[origin].kg, true)} kg</span>
+    </td>
+  ))}</>;
 }
 
 function normalizeComprasProviderName(name: string): string {
@@ -290,6 +310,9 @@ export function ComprasClient() {
     for (const w of data?.grid.weeks || []) m.set(w.week, w);
     return m;
   }, [data]);
+  const weekByFirstDay = useMemo(() => new Map(
+    (data?.grid.weeks || []).map((week) => [week.ymds[0], week])
+  ), [data]);
 
   const igfHref = token ? `/igf-forecast?t=${encodeURIComponent(token)}` : "/igf-forecast";
   const plantaNombre = plantas.find((p) => p.id === plantaId)?.nombre || "";
@@ -629,6 +652,9 @@ export function ComprasClient() {
                   HG
                 </th>
                 <th rowSpan={3} className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
+                <th rowSpan={3} scope="col" className="min-w-[140px] px-5 py-3 text-center text-[14px] font-bold text-black" title="PEMEX TUXPAN + TOMZA TUXPAN / kilos totales comprados">TUXPAN</th>
+                <th rowSpan={3} scope="col" className="min-w-[140px] px-5 py-3 text-center text-[14px] font-bold text-black" title="TOMZA TEPEJI / kilos totales comprados">TEPEJI</th>
+                {fleteExpanded && <th rowSpan={3} className={COMPRAS_SEP_CLS} />}
                 {fleteExpanded && (
                   <th
                     colSpan={Math.max(3, providers.length * 4 + 3)}
@@ -735,6 +761,10 @@ export function ComprasClient() {
                         onError={setError}
                       />
                       <td className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
+                      {weekByFirstDay.has(row.ymd) && (
+                        <OriginShareCells providers={providers} totals={weekByFirstDay.get(row.ymd)} rowSpan={weekByFirstDay.get(row.ymd)!.ymds.length + 1} />
+                      )}
+                      {fleteExpanded && <td className={COMPRAS_SEP_CLS} />}
                       {fleteExpanded && <FleteRowCells providers={providers} flete={day?.flete} />}
                     </tr>
                   );
@@ -778,6 +808,7 @@ export function ComprasClient() {
                         bold
                       />
                       <td className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
+                      {fleteExpanded && <td className={COMPRAS_SEP_CLS} />}
                       {fleteExpanded && <FleteRowCells providers={providers} flete={week?.flete} showZero />}
                     </tr>
                     <tr className="compras-week-gap h-3">
@@ -821,6 +852,8 @@ export function ComprasClient() {
                     bold
                   />
                   <td className={`compras-flete-gap ${COMPRAS_SEP_CLS}`} />
+                  <OriginShareCells providers={providers} totals={data.grid.month} monthly />
+                  {fleteExpanded && <td className={COMPRAS_SEP_CLS} />}
                   {fleteExpanded && <FleteRowCells providers={providers} flete={data.grid.month.flete} showZero />}
                 </tr>
               )}
