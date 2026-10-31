@@ -592,7 +592,8 @@ export function ComprasClient() {
           </section>
         )}
 
-        <div className="overflow-x-auto bg-white text-slate-900 shadow">
+        <div role="region" aria-label="Tabla de compras, desplazamiento vertical y horizontal" tabIndex={0}
+          className="max-h-[calc(100dvh-12rem)] min-h-[240px] overflow-auto overscroll-contain bg-white text-slate-900 shadow focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-500">
           <div className="flex min-w-max items-start justify-between gap-8 px-6 pb-2 pt-5">
             <div>
               <h2 className="text-[28px] font-bold leading-none tracking-tight text-black">CONTROL DE COMPRAS</h2>
