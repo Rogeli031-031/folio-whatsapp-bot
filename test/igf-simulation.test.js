@@ -3,6 +3,16 @@ const test=require("node:test"),assert=require("node:assert/strict");
 const {modelFromRow,profit,weeklyPoints,closestEquilibrium}=require("../frontend-dashboard/lib/igf-simulation");
 const proposals=require("../lib/igf-simulation-proposals"),register=require("../lib/igf-simulation-routes");
 const {historyPeriods,mergeWeekColumns,visibleWeekPoints}=require("../frontend-dashboard/lib/igf-simulation");
+const {axisTicks}=require("../frontend-dashboard/lib/igf-simulation");
+
+test("axis ticks label intermediate values, negative results and zero without leaving the interval",()=>{
+ for(const [min,max] of [[0,1594],[0,6.49],[-5200000,4400000],[-.0004,.0009]]){
+  const ticks=axisTicks(min,max);assert.ok(ticks.length>=3&&ticks.length<=7);assert.ok(ticks.every(Number.isFinite));
+  assert.ok(ticks.every(v=>v>=min&&v<=max));assert.ok(ticks.includes(0));
+  assert.equal(new Set(ticks).size,ticks.length);assert.deepEqual([...ticks].sort((a,b)=>a-b),ticks);
+ }
+ assert.deepEqual(axisTicks(NaN,10),[]);assert.deepEqual(axisTicks(1,1),[]);
+});
 
 test("history includes October weeks in November, crosses year boundaries and deduplicates shared weeks",()=>{
  assert.deepEqual(historyPeriods(2026,11),[{year:2026,month:10},{year:2026,month:11}]);

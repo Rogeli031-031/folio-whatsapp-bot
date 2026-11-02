@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getApiUrl, type IgfForecastMiniRow } from "@/lib/api";
-import { closestEquilibrium, historyPeriods, mergeWeekColumns, modelFromRow, profit, visibleWeekPoints, weeklyPoints } from "@/lib/igf-simulation";
+import { axisTicks, closestEquilibrium, historyPeriods, mergeWeekColumns, modelFromRow, profit, visibleWeekPoints, weeklyPoints } from "@/lib/igf-simulation";
 
 type Model={q:number;d:number;a:number;fixed:number};
 type Point={key:string;label:string;q:number;d:number;z:number;color:string;state?:string};
@@ -28,13 +28,18 @@ function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[
   const y0=Math.min(0,d-1,...all.map(p=>p.d-.3)),y1=Math.max(5.5,d+1,...all.map(p=>p.d+.5));
   const zValues=[...all.map(p=>p.z),profit(model,x0,y0),profit(model,x0,y1),profit(model,x1,y0),profit(model,x1,y1),0];
   const z0=Math.min(...zValues),z1=Math.max(z0+1,...zValues);
+  const axes=[
+   {key:"venta",label:"Venta (t/mes)",color:"#93c5fd",min:0,max:x1+(x1-x0)*.18,at:(v:number)=>[v,0,0],format:(v:number)=>`${num(v,0)} t`},
+   {key:"descuento",label:"Descuento ($/kg)",color:"#c4b5fd",min:Math.min(0,y0),max:y1+(y1-y0)*.18,at:(v:number)=>[0,v,0],format:(v:number)=>`$${num(v)}/kg`},
+   {key:"resultado",label:"Resultado (MXN/mes)",color:"#e2e8f0",min:z0-(z1-z0)*.12,max:z1+(z1-z0)*.12,at:(v:number)=>[0,0,v],format:money},
+  ];
   function raw(x:number,y:number,z:number){const u=2*(x-x0)/(x1-x0)-1,v=2*(y-y0)/(y1-y0)-1,w=2*(z-z0)/(z1-z0)-1;
    const rx=u*Math.cos(camera.az)-v*Math.sin(camera.az),ry=u*Math.sin(camera.az)+v*Math.cos(camera.az);
    return [rx,ry*Math.sin(camera.el)-w*Math.cos(camera.el),ry*Math.cos(camera.el)+w*Math.sin(camera.el)];}
   // Fit the actual surface/markers instead of an imaginary full bounding cube.
   const corners=all.map(p=>raw(p.q,p.d,p.z));
   for(const x of [x0,x1])for(const y of [y0,y1]){corners.push(raw(x,y,profit(model,x,y)),raw(x,y,0));}
-  corners.push(raw(x0,y0,z0),raw(x0,y0,z1));
+  for(const axis of axes)for(const value of [axis.min,axis.max]){const at=axis.at(value);corners.push(raw(at[0],at[1],at[2]));}
   const minX=Math.min(...corners.map(c=>c[0])),maxX=Math.max(...corners.map(c=>c[0])),minY=Math.min(...corners.map(c=>c[1])),maxY=Math.max(...corners.map(c=>c[1]));
   const scale=Math.min(Math.max(100,viewport.width-150)/(maxX-minX),Math.max(100,viewport.height-130)/(maxY-minY))*zoom;
   const project=(x:number,y:number,z:number)=>{const r=raw(x,y,z);return [viewport.width/2+(r[0]-(minX+maxX)/2)*scale,viewport.height/2+(r[1]-(minY+maxY)/2)*scale,r[2]];};
@@ -46,7 +51,7 @@ function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[
   }
   cells.sort((a,b)=>a.depth-b.depth);
   const zero=[];for(let i=0;i<=240;i++){const x=x0+(x1-x0)*i/240;if(x<=0)continue;const y=model.a-model.fixed/(x*1000);if(y>=y0&&y<=y1)zero.push(project(x,y,0));}
-  return {project,path,cells,zero,x0,x1,y0,y1,z0,z1};
+  return {project,path,cells,zero,x0,x1,y0,y1,z0,z1,axes};
  },[model,q,d,points,camera,nearest?.q,nearest?.d,zoom,viewport]);
  const p=scene.project(q,d,profit(model,q,d));
  const eq=nearest?scene.project(nearest.q,nearest.d,0):null;
@@ -61,17 +66,27 @@ function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[
    <text x={viewport.width/2} y="25" textAnchor="middle" fill="#cbd5e1" fontSize="15">Altura: resultado mensual equivalente (MXN)</text>
    <polygon points={scene.path([[scene.x0,scene.y0],[scene.x1,scene.y0],[scene.x1,scene.y1],[scene.x0,scene.y1]].map(([x,y])=>scene.project(x,y,0)))} fill="#334155" fillOpacity=".3" stroke="#64748b"/>
    {scene.cells.map((c,i)=><polygon key={i} points={c.path} fill={c.positive?"#168ca0":"#64748b"} fillOpacity=".7" stroke="#cbd5e1" strokeOpacity=".22" strokeWidth=".6"/>)}
+   <defs>{scene.axes.map(axis=><marker key={axis.key} id={`igf-axis-${axis.key}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill={axis.color}/></marker>)}</defs>
+   {scene.axes.map(axis=>{
+    const project=(value:number)=>{const at=axis.at(value);return scene.project(at[0],at[1],at[2]);};
+    const start=project(axis.min),end=project(axis.max),length=Math.hypot(end[0]-start[0],end[1]-start[1])||1;
+    const dx=(end[0]-start[0])/length,dy=(end[1]-start[1])/length,px=-dy,py=dx;
+    const anchor=px>.25?"start":px<-.25?"end":"middle";
+    return <g key={axis.key} data-sim-axis={axis.key} aria-label={`Eje ${axis.label}`}>
+     <line x1={start[0]} y1={start[1]} x2={end[0]} y2={end[1]} stroke={axis.color} strokeWidth="1.5" markerEnd={`url(#igf-axis-${axis.key})`}/>
+     {axisTicks(axis.min,axis.max).map(value=>{const at=project(value);return <g key={value} data-axis-tick={value}><line x1={at[0]-px*4} y1={at[1]-py*4} x2={at[0]+px*5} y2={at[1]+py*5} stroke={axis.color}/><text x={at[0]+px*11} y={at[1]+py*11+4} textAnchor={anchor} fill={axis.color} stroke="#020617" strokeWidth="3" paintOrder="stroke" fontSize="12">{axis.format(value)}</text></g>;})}
+     <text x={end[0]+dx*14} y={end[1]+dy*14-8} textAnchor={dx>.3?"start":dx<-.3?"end":"middle"} fill={axis.color} stroke="#020617" strokeWidth="3" paintOrder="stroke" fontSize="14" fontWeight="600">{axis.label}</text>
+    </g>;
+   })}
    <polyline points={scene.path(scene.zero)} fill="none" stroke="#f8fafc" strokeWidth="3"/>
    {trail.length>1&&<polyline points={scene.path(trail)} fill="none" stroke="#c084fc" strokeWidth="3" strokeDasharray="7 5"/>}
    {eq&&nearest&&<><line x1={p[0]} y1={p[1]} x2={eq[0]} y2={eq[1]} stroke="#fb923c" strokeWidth="3"/><circle cx={eq[0]} cy={eq[1]} r="7" fill="#fb923c" stroke="white"><title>{`Equilibrio: ${num(nearest.q)} t · ${num(nearest.d,4)}/kg`}</title></circle></>}
    {points.map(point=>{const at=scene.project(point.q,point.d,point.z);return <g key={point.key}><circle cx={at[0]} cy={at[1]} r="7" fill={point.state==="proyectada"?"#020617":point.color} stroke={point.state==="proyectada"?point.color:"white"} strokeDasharray={point.state==="parcial"?"3 2":undefined} strokeWidth="2"><title>{`${point.label}: ${num(point.q)} t · ${num(point.d,4)}/kg · ${money(point.z)}${point.state?` · ${point.state}`:""}`}</title></circle><text x={at[0]+10} y={at[1]-9} fill={point.color} stroke="#020617" strokeWidth="3" paintOrder="stroke" fontSize="15">{point.label}</text></g>;})}
    <circle cx={p[0]} cy={p[1]} r="9" fill="#38bdf8" stroke="white" strokeWidth="3"><title>{`Escenario: ${num(q)} t · ${num(d,4)}/kg · ${money(profit(model,q,d))}`}</title></circle>
    <text x="16" y={viewport.height-35} fill="#cbd5e1" fontSize="13">Venta: {num(scene.x0,0)}–{num(scene.x1,0)} t/mes</text><text x="16" y={viewport.height-15} fill="#cbd5e1" fontSize="13">Descuento: ${num(scene.y0)}–${num(scene.y1)}/kg</text>
-   {[[scene.x0,scene.y0],[scene.x1,scene.y0],[scene.x0,scene.y1]].map(([x,y],i)=>{const at=scene.project(x,y,0);return <text key={i} x={at[0]} y={at[1]+22} textAnchor="middle" fontSize="14" fill="#e2e8f0">{i===2?`$${num(y)}/kg`:`${num(x,0)} t`}</text>;})}
-   <line x1={scene.project(scene.x0,scene.y0,scene.z0)[0]} y1={scene.project(scene.x0,scene.y0,scene.z0)[1]} x2={scene.project(scene.x0,scene.y0,scene.z1)[0]} y2={scene.project(scene.x0,scene.y0,scene.z1)[1]} stroke="#94a3b8"/>
-   {[scene.z0,0,scene.z1].map((z,i)=>{const at=scene.project(scene.x0,scene.y0,z);return <text key={i} x={at[0]-8} y={at[1]} textAnchor="end" fill="#e2e8f0" fontSize="13">{money(z)}</text>;})}
   </svg>
-  <p className="text-xs text-slate-300">Azul: escenario · Morado: semanas y trayectoria (punto hueco: proyectada; borde discontinuo: parcial) · Amarillo: tendencia actual · Verde: propuestas · Blanco: equilibrio · Naranja: ruta más corta al equilibrio.</p>
+  <p className="text-xs text-slate-300">Superficie gris: pérdida · Superficie azul: utilidad · Línea blanca: equilibrio. Los tamaños de estas áreas no representan porcentajes ni probabilidades; dependen de los rangos de venta y descuento y de la vista.</p>
+  <p className="text-xs text-slate-300">Punto azul: escenario · Morado: semanas y trayectoria (punto hueco: proyectada; borde discontinuo: parcial) · Amarillo: tendencia actual · Verde: propuestas · Naranja: ruta más corta al equilibrio.</p>
   <p className="text-sm text-orange-200">{nearest?`Equilibrio cercano: ${num(nearest.q)} t/mes · $${num(nearest.d,4)}/kg. Cambio: ${num(nearest.q-q)} t y $${num(nearest.d-d,4)}/kg.`:"Sin equilibrio con venta positiva y descuento no negativo."}</p>
   <p className="text-xs text-slate-400">Distancia normalizada: 1,600 t y $4.50/kg por unidad. La línea es geométrica; llegar a cero no mejora un escenario que ya tiene utilidad.</p>
  </>;
