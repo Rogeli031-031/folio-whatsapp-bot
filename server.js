@@ -12368,6 +12368,13 @@ async function filterIgfDiarioGastosManuales(client, auth, rows) {
   return igfDashboardScope.filterRows(client, auth, rows, dashboardArrForecast.resolveForecastExportPlant);
 }
 
+require("./lib/igf-simulation-routes")(app, {
+  pool, auth: dashboardAuthMiddleware,
+  blockGA: dashboardBlockGAFinancialKpis, blockGV: dashboardBlockGVForbidden,
+  resolvePlant: dashboardArrForecast.resolveForecastExportPlant,
+  computeCategories: dashboardArrForecast.computeClientesDescuentoMes,
+});
+
 app.get("/api/dashboard/igf-diario-gastos-manuales", dashboardAuthMiddleware, async (req, res) => {
   if (dashboardBlockGAFinancialKpis(req, res)) return;
   if (dashboardBlockGVForbidden(req, res)) return;

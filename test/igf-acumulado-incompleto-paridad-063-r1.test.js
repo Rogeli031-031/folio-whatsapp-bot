@@ -224,7 +224,7 @@ test("una sola request, sin Forecast, gastos 062 y endpoint de solo lectura", ()
   assert.equal(effect.split("fetchIgfDiarioAcumulado(").length - 1, 1);
   assert.doesNotMatch(effect, /fetchIgfDiarioGrafica/);
   assert.doesNotMatch(effect, /Promise\.all/);
-  assert.match(applyFn, /if \(missingAcumuladoPlants\(mini\.rows \|\| \[\], byPlant\)\.length\) return null/);
+  assert.doesNotMatch(applyFn, /if \(missingAcumuladoPlants\(mini\.rows \|\| \[\], byPlant\)\.length\) return null/);
   assert.doesNotMatch(applyFn, /igfMini/);
   assert.match(route, /dashboardAuthMiddleware/);
   assert.match(route, /dashboardBlockGAFinancialKpis/);
