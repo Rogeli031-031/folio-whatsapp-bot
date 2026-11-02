@@ -9,14 +9,14 @@ function harness(){
  const hooks={...React,useMemo:fn=>fn(),useEffect(){},useState(initial){const i=index++;if(!(i in state))state[i]=initial;return [state[i],v=>{state[i]=typeof v==="function"?v(state[i]):v;}];},useRef(initial){const i=index++;if(!(i in state))state[i]={current:initial};return state[i];}};
  const code=ts.transpileModule(text,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  const module={exports:{}};
- new Function("require","module","exports",code+"\nmodule.exports.Surface=Surface;")((name)=>{
+ new Function("require","module","exports",code+"\nmodule.exports.Surface=Surface;module.exports.WeekControls=WeekControls;")((name)=>{
   if(name==="react")return hooks;
   if(name==="react/jsx-runtime")return require("../frontend-dashboard/node_modules/react/jsx-runtime");
   if(name==="@/lib/api")return {getApiUrl:x=>x};
   if(name==="@/lib/igf-simulation")return require("../frontend-dashboard/lib/igf-simulation");
   throw new Error(name);
  },module,module.exports);
- return {render(props){index=0;return module.exports.Surface(props);},renderModal(props){index=0;return module.exports.default(props);}};
+ return {render(props){index=0;return module.exports.Surface(props);},renderModal(props){index=0;return module.exports.default(props);},renderWeeks(props){return module.exports.WeekControls(props);}};
 }
 function elements(node){if(!node||typeof node!=="object")return [];if(Array.isArray(node))return node.flatMap(elements);return [node,...elements(node.props?.children)];}
 const model={q:1400,d:3.6,a:6.525225303866561,fixed:3850193.5114285713};
@@ -35,4 +35,26 @@ test("3D renders weekly/current/proposal markers, touch rotation and cancel with
 test("partial financial data shows an explicit explanation rather than a fictional 3D scenario",()=>{
  const h=harness();const tree=h.renderModal({row:{empresa:"GT Puebla",plant_code:"Puebla",ventaTon:100,comDesc:-2,resultadoFinalImporte:null},token:"test",year:2026,month:11,cutoff:"2026-11-02",mode:"igf_diario",versionAsOf:true,onClose(){}});
  const html=renderToStaticMarkup(tree);assert.match(html,/Faltan venta/);assert.match(html,/HG faltante/);assert.doesNotMatch(html,/<svg/);assert.match(html,/categoría y subcategoría/);
+});
+
+test("zoom grows the plotted surface, has bounds and resets without changing the scenario",()=>{
+ const h=harness(),props={model,q:1400,d:3.6,points:[]};
+ const width=tree=>{const polys=elements(tree).filter(e=>e.type==="polygon");const xs=polys.flatMap(p=>p.props.points.split(" ").map(pair=>Number(pair.split(",")[0])));return Math.max(...xs)-Math.min(...xs);};
+ let tree=h.render(props),base=width(tree);
+ const find=(tree,label)=>elements(tree).find(e=>e.props?.["aria-label"]===label);
+ find(tree,"Acercar gráfica").props.onClick();tree=h.render(props);assert.ok(width(tree)>base);
+ find(tree,"Zoom de gráfica").props.onChange({target:{value:"4"}});tree=h.render(props);assert.equal(find(tree,"Acercar gráfica").props.disabled,true);
+ find(tree,"Zoom de gráfica").props.onChange({target:{value:".5"}});tree=h.render(props);assert.equal(find(tree,"Alejar gráfica").props.disabled,true);
+ elements(tree).find(e=>e.type==="button"&&e.props.children==="Ajustar gráfica").props.onClick();tree=h.render(props);assert.ok(renderToStaticMarkup(tree).includes("100%"));
+ assert.equal(props.q,1400);assert.equal(props.d,3.6);assert.doesNotMatch(renderToStaticMarkup(tree),/NaN|Infinity/);
+});
+
+test("week checkboxes toggle individual weeks, all/none and disable incomplete points",()=>{
+ const h=harness(),weeks=[{key:"a",label:"Semana 40",from:"2026-09-27",to:"2026-10-03",available:true,state:"real"},{key:"b",label:"Semana 41",from:"2026-10-04",to:"2026-10-10",available:true,state:"real"},{key:"gap",label:"Semana 42",from:"2026-10-11",to:"2026-10-17",available:false,state:"real"}];
+ let hidden=[];const render=()=>h.renderWeeks({weeks,hidden,onChange:v=>{hidden=v;}});
+ let tree=render();const checks=elements(tree).filter(e=>e.type==="input");assert.equal(checks[2].props.disabled,true);
+ checks[0].props.onChange({target:{checked:false}});assert.deepEqual(hidden,["a"]);
+ tree=render();assert.equal(elements(tree).find(e=>e.props?.["aria-label"]==="Mostrar Semana 40 del 2026-09-27").props.checked,false);
+ elements(tree).find(e=>e.type==="button"&&e.props.children==="Ocultar todas").props.onClick();assert.deepEqual(hidden,["a","b"]);
+ tree=render();elements(tree).find(e=>e.type==="button"&&e.props.children==="Mostrar todas").props.onClick();assert.deepEqual(hidden,[]);
 });

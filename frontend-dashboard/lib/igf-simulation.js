@@ -9,6 +9,24 @@ function modelFromRow(row) {
  return { q, d, fixed, a:(row.resultadoFinalImporte+fixed)/(q*1000)+d };
 }
 const profit = (model,q,d) => q*1000*(model.a-d)-model.fixed;
+function historyPeriods(year, month, monthsBack = 1) {
+ const back = Math.max(0, Math.min(5, Math.trunc(monthsBack)));
+ return Array.from({length:back+1},(_,i)=>{
+  const date=new Date(Date.UTC(year,month-1-back+i,1));
+  return {year:date.getUTCFullYear(),month:date.getUTCMonth()+1};
+ });
+}
+function mergeWeekColumns(batches) {
+ // Adjacent monthly responses can contain the same Sunday–Saturday week.
+ // Prefer the later month, whose projection context matches that boundary.
+ const weeks=new Map();
+ for(const columns of batches)for(const column of columns||[])weeks.set(column.key,column);
+ return [...weeks.values()].sort((a,b)=>a.fecha_desde.localeCompare(b.fecha_desde));
+}
+function visibleWeekPoints(weeks, hiddenKeys) {
+ const hidden=new Set(hiddenKeys);
+ return weeks.filter(week=>week.available&&!hidden.has(week.key)).map(week=>({...week,color:"#c084fc"}));
+}
 function weeklyPoints(columns, year, month) {
  const daysInMonth=new Date(Date.UTC(year,month,0)).getUTCDate();
  return (columns||[]).map(c=>{
@@ -45,4 +63,4 @@ function closestEquilibrium(s) {
  const q=candidates.reduce((best,v)=>objective(v)<objective(best)?v:best,trial);
  return {q,d:Math.max(0,eq(q))};
 }
-module.exports={modelFromRow,profit,weeklyPoints,closestEquilibrium};
+module.exports={modelFromRow,profit,weeklyPoints,closestEquilibrium,historyPeriods,mergeWeekColumns,visibleWeekPoints};
