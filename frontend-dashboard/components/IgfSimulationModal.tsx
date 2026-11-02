@@ -100,6 +100,8 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
  const [weekError,setWeekError]=useState("");
  const [monthsBack,setMonthsBack]=useState(1),[hiddenWeeks,setHiddenWeeks]=useState<string[]>([]),[weeksLoading,setWeeksLoading]=useState(true);
  const [categories,setCategories]=useState<CategoryLine[]>([]),[categoryError,setCategoryError]=useState("");
+ const [panel,setPanel]=useState<"weeks"|"categories"|"proposals"|null>(null);
+ const [detail,setDetail]=useState<{week:any;field:string}|null>(null),[detailData,setDetailData]=useState<any>(null),[detailError,setDetailError]=useState("");
  const saveLock=useRef(false);
  const plant=row.plant_code||row.empresa;
  const params=useMemo(()=>new URLSearchParams({year:String(year),month:String(month),plant_code:plant}),[year,month,plant]);
@@ -132,7 +134,16 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
   return()=>controller.abort();
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[params,token,year,month,cutoff,versionAsOf,monthsBack]);
- useEffect(()=>{const listener=(e:KeyboardEvent)=>{if(e.key==="Escape"&&!saving&&!busyId)onClose();};document.addEventListener("keydown",listener);return()=>document.removeEventListener("keydown",listener);},[onClose,saving,busyId]);
+ useEffect(()=>{const listener=(e:KeyboardEvent)=>{if(e.key==="Escape"&&!saving&&!busyId){if(detail)setDetail(null);else if(panel)setPanel(null);else onClose();}};document.addEventListener("keydown",listener);return()=>document.removeEventListener("keydown",listener);},[onClose,saving,busyId,panel,detail]);
+ useEffect(()=>{
+  if(!detail)return;
+  const controller=new AbortController();setDetailData(null);setDetailError("");
+  const search=new URLSearchParams(params);search.set("year",detail.week.from.slice(0,4));search.set("month",String(Number(detail.week.from.slice(5,7))));search.set("week_anchor",detail.week.from);search.set("upload_day",cutoff);
+  if(versionAsOf)search.set("version_as_of_corte","1");
+  void request(`/api/dashboard/igf-diario-semanal?${search}`,{signal:controller.signal}).then(data=>{if(!controller.signal.aborted)setDetailData(data);}).catch(e=>{if(!controller.signal.aborted)setDetailError(e.message);});
+  return()=>controller.abort();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[detail,params,token,cutoff,versionAsOf]);
  const weeks=useMemo(()=>weeklyPoints(columns,year,month),[columns,year,month]);
  const points:Point[]=visibleWeekPoints(weeks,hiddenWeeks);
  if(model)points.push({key:"current",label:"Tendencia actual",q:model.q,d:model.d,z:profit(model,model.q,model.d),color:"#facc15",state:"actual"});
@@ -147,14 +158,13 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
   <div className="mx-auto flex max-h-[96vh] w-full flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 text-slate-100">
    <header className="flex items-center justify-between gap-3 border-b border-slate-700 p-3"><div><h2 id="igf-simulation-title" className="text-lg font-semibold">Simulador de rentabilidad · {row.empresa}</h2><p className="text-xs text-slate-400">{month}/{year} · Corte {cutoff} · {mode==="forecast"?"Forecast":"IGF Diario acumulado"}</p></div><button type="button" disabled={saving||!!busyId} onClick={onClose} className="rounded bg-slate-700 px-3 py-2">Cerrar</button></header>
    <div className="overflow-y-auto p-3 sm:p-4">
-    <div className="mb-3 rounded border border-slate-700 p-2">
-     <label className="flex flex-wrap items-center gap-2 text-xs">Historial de semanas
-      <select aria-label="Historial de semanas" value={monthsBack} onChange={e=>setMonthsBack(Number(e.target.value))} className="rounded border border-slate-600 bg-slate-950 px-2 py-1">
-       <option value={0}>Solo el mes seleccionado</option><option value={1}>Mes anterior y mes seleccionado</option><option value={2}>Últimos 3 meses hasta el seleccionado</option><option value={5}>Últimos 6 meses hasta el seleccionado</option>
-      </select><span className="text-slate-400">El historial usa el mismo corte y la misma planta.</span>
-     </label>
-     {weeksLoading?<p role="status" className="mt-2 text-xs text-slate-400">Cargando semanas…</p>:<WeekControls weeks={weeks} hidden={hiddenWeeks} onChange={setHiddenWeeks}/>}
+    <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+     <button type="button" onClick={()=>setPanel("weeks")} className="rounded bg-purple-800 px-3 py-2">Semanas · {weeks.filter((w:any)=>w.available&&!hiddenWeeks.includes(w.key)).length}/{weeks.filter((w:any)=>w.available).length}</button>
+     <button type="button" onClick={()=>setPanel("categories")} className="rounded bg-slate-700 px-3 py-2">Categorías del mes</button>
+     <button type="button" onClick={()=>setPanel("proposals")} className="rounded bg-emerald-800 px-3 py-2">Agregar punto / propuestas ({saved.length})</button>
+     {weeksLoading&&<span role="status">Cargando semanas…</span>}
     </div>
+    <div className="mb-3 overflow-x-auto rounded border border-slate-700"><table className="w-full text-right text-xs"><caption className="p-2 text-left text-slate-400">Base mensual de la superficie · {month}/{year} · Margen bruto del IGF; contribución efectiva antes del descuento: {num(model?.a,4)} $/kg (incluye HG y ajustes del resultado seleccionado).</caption><thead><tr>{["Venta (t)","Margen ($/kg)","Descuento ($/kg)","Operativos ($)","Corporativos ($)","Gasto ($)","Resultado ($)"].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody><tr className="bg-slate-800"><td className="p-2"><button type="button" className="text-cyan-300 underline" onClick={()=>setPanel("categories")}>{num(row.ventaTon)}</button></td><td>{num(row.margen,4)}</td><td><button type="button" className="text-cyan-300 underline" onClick={()=>setPanel("categories")}>{num(model?.d,4)}</button></td><td>{money(row.operativos)}</td><td>{money(row.corporativos)}</td><td>{money(row.gasto)}</td><td>{money(row.resultadoFinalImporte)}</td></tr></tbody></table></div>
     {model?<>
      <div className="mb-3 flex flex-wrap items-center gap-4 text-xs"><label>Venta (t/mes) <input aria-label="Venta simulada en toneladas" type="number" min="1" max="1000000" step="1" value={q} onChange={e=>setQ(Math.max(1,Math.min(1000000,Number(e.target.value)||1)))} className={field}/></label><label>Comisión / descuento ($/kg) <input aria-label="Descuento simulado por kilo" type="number" min="-100" max="100" step=".01" value={d} onChange={e=>setD(Math.max(-100,Math.min(100,Number(e.target.value)||0)))} className={field}/></label><strong className="text-base text-cyan-200">Resultado: {money(profit(model,q,d))}</strong><button type="button" onClick={()=>{setQ(model.q);setD(model.d);}} className="rounded bg-slate-700 px-2 py-1">Restaurar actual</button></div>
      <Surface model={model} q={q} d={d} points={points}/>
@@ -162,6 +172,17 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
     </>:<p className="mb-4 rounded border border-amber-700 p-3 text-amber-200">Faltan venta, comisión, impuestos, gastos o resultado final para calcular la superficie. Completa los datos de esta planta; no se sustituye HG faltante por cero. Puedes consultar sus semanas y propuestas guardadas.</p>}
     {loading&&<p role="status" className="text-sm text-slate-400">Cargando propuestas y categorías…</p>}
     {weekError&&<p role="alert" className="text-amber-200">Semanas: {weekError}</p>}
+    {panel&&<Popup title={panel==="weeks"?"Semanas · selección y resumen financiero":panel==="categories"?"Venta y descuentos por categoría y subcategoría · mes seleccionado":"Puntos y propuestas"} onClose={()=>setPanel(null)}>
+     {panel==="weeks"&&<>
+     <label className="flex flex-wrap items-center gap-2 text-xs">Historial de semanas
+      <select aria-label="Historial de semanas" value={monthsBack} onChange={e=>setMonthsBack(Number(e.target.value))} className="rounded border border-slate-600 bg-slate-950 px-2 py-1">
+       <option value={0}>Solo el mes seleccionado</option><option value={1}>Mes anterior y mes seleccionado</option><option value={2}>Últimos 3 meses hasta el seleccionado</option><option value={5}>Últimos 6 meses hasta el seleccionado</option>
+      </select><span className="text-slate-400">El historial usa el mismo corte y la misma planta.</span>
+     </label>
+     {weeksLoading?<p role="status">Cargando semanas…</p>:<WeekControls weeks={weeks} hidden={hiddenWeeks} onChange={setHiddenWeeks} onDetail={(week,field)=>setDetail({week,field})}/>}
+     <p className="mt-3 text-xs text-slate-400">Importes del periodo de domingo a sábado; margen y descuento ponderados por kilos. Pulsa una cifra para ver sus días. La gráfica convierte venta y resultado a ritmo mensual. Corporativos incluye gasto corporativo, inversiones e impuestos federales, según el IGF semanal. — indica dato no disponible; no se sustituye por cero.</p>
+     </>}
+     {panel==="categories"&&<>
     <h3 className="mt-4 font-semibold">Venta y descuentos por categoría y subcategoría</h3>
     <p className="text-xs text-slate-400">Fuente ARR: mezcla de clientes con venta anterior al corte, distribuida al volumen mensual seleccionado. Clasificación vigente de clientes. El descuento se muestra como costo positivo y se pondera por kilos. Esta tabla es la base de referencia; los cambios globales del simulador no modifican la mezcla ni los descuentos reales de cada grupo.</p>
     {categoryError&&<p role="alert" className="text-amber-200">Categorías: {categoryError}</p>}
@@ -172,25 +193,57 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
     </tbody></table></div>
     {!loading&&!categoryError&&!categories.length&&<p className="text-sm text-amber-200">Sin ventas de clientes anteriores al corte para distribuir por categoría.</p>}
     {categories.length>0&&model&&(()=>{const kg=categories.reduce((s,c)=>s+c.kg,0),amount=categories.every(c=>c.discount_amount!=null)?categories.reduce((s,c)=>s+c.discount_amount!,0):null;const discount=amount!=null&&kg>0?amount/kg:null;return <p className="mt-2 text-xs text-amber-200">Conciliación con el resultado seleccionado: diferencia de venta {num(kg/1000-model.q)} t; diferencia de descuento {num(discount!=null?discount-model.d:null,4)} $/kg. ARR y el IGF pueden usar fuentes o ponderaciones distintas; no se fuerza la coincidencia del descuento.</p>;})()}
-    <h3 className="mt-4 font-semibold">Resultados por semana</h3><p className="text-xs text-slate-400">La tabla conserva todas las semanas cargadas; las casillas superiores controlan cuáles aparecen en la gráfica. Los equivalentes mensuales usan {new Date(year,month,0).getDate()} días del mes seleccionado, también para las semanas históricas.</p><div className="overflow-x-auto"><table className="w-full text-right text-sm"><thead className="text-xs text-slate-400"><tr>{["Semana / estado","Venta del periodo (t)","Descuento ($/kg)","Resultado del periodo","Ritmo mensual (t)","Resultado mensual equivalente"].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{weeks.map((w:any)=><tr key={w.key} className={`border-t border-slate-700 ${hiddenWeeks.includes(w.key)?"opacity-50":""}`}><td className="p-2 text-left">{w.label} · {w.state}<div className="text-xs text-slate-400">{w.from} – {w.to}{!w.available?" · Cobertura incompleta; sin punto financiero":hiddenWeeks.includes(w.key)?" · Oculta en gráfica":""}</div></td><td>{num(w.actualTon)}</td><td>{num(w.d,4)}</td><td>{money(w.actualResult)}</td><td>{num(w.q)}</td><td>{money(w.z)}</td></tr>)}</tbody></table></div>
+     </>}
+     {panel==="proposals"&&<>
+     {model&&<div className="mb-3 flex flex-wrap items-center gap-3 text-sm"><label>Venta (t/mes) <input aria-label="Venta de propuesta en toneladas" type="number" min="1" max="1000000" value={q} onChange={e=>setQ(Math.max(1,Math.min(1000000,Number(e.target.value)||1)))} className={field}/></label><label>Descuento ($/kg) <input aria-label="Descuento de propuesta por kilo" type="number" min="-100" max="100" step=".01" value={d} onChange={e=>setD(Math.max(-100,Math.min(100,Number(e.target.value)||0)))} className={field}/></label><strong>Resultado: {money(profit(model,q,d))}</strong></div>}
     <h3 className="mt-5 font-semibold">Propuestas guardadas · {row.empresa} · {month}/{year}</h3>
     <p className="text-xs text-slate-400">Se guardan en el dashboard y conservan los supuestos y el corte de creación. No cambian el presupuesto ni las comisiones reales.</p>
     {model&&<form className="my-3 flex flex-wrap gap-2" onSubmit={e=>{e.preventDefault();void save();}}><input aria-label="Nombre de propuesta" required maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre de la propuesta" className="rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm"/><button type="submit" disabled={saving||loading||!name.trim()} className="rounded bg-emerald-700 px-3 py-2 text-sm disabled:opacity-40">{saving?"Guardando…":"Guardar punto actual"}</button></form>}
     {error&&<p role="alert" className="text-red-300">{error}</p>}
     <div className="overflow-x-auto"><table className="w-full text-right text-sm"><thead className="text-xs text-slate-400"><tr>{["Propuesta","Venta (t)","Descuento ($/kg)","Resultado estimado","Corte / fuente","Acciones"].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{saved.map(p=><tr key={p.id} className="border-t border-slate-700"><td className="p-2 text-left">{p.name}</td><td>{num(Number(p.volume_ton))}</td><td>{num(Number(p.discount_kg),4)}</td><td>{money(profit(p.basis,Number(p.volume_ton),Number(p.discount_kg)))}</td><td className="text-xs">{p.basis.cutoff} · {p.basis.mode}<div>Guardada {new Date(p.created_at).toLocaleDateString("es-MX")}</div></td><td className="space-x-3 p-2">{model&&<button type="button" className="text-cyan-300 underline" onClick={()=>{setQ(Number(p.volume_ton));setD(Number(p.discount_kg));}}>Usar valores</button>}<button type="button" disabled={!!busyId} className="text-red-300 underline disabled:opacity-40" onClick={()=>void remove(p.id)}>{busyId===p.id?"Eliminando…":"Eliminar"}</button></td></tr>)}</tbody></table></div>
     {!loading&&!saved.length&&<p className="mt-2 text-sm text-slate-400">Aún no hay propuestas guardadas para esta planta y mes.</p>}
+     </>}
+    </Popup>}
+    {detail&&<Popup title={`${detail.week.label} · ${DETAIL_LABELS[detail.field]||detail.field} · ${detail.week.from} – ${detail.week.to}`} onClose={()=>setDetail(null)}>
+     {detailError?<p role="alert" className="text-amber-200">{detailError}</p>:!detailData?<p role="status">Cargando detalle diario…</p>:<DailyDetail data={detailData} week={detail.week} field={detail.field}/>}
+    </Popup>}
    </div>
   </div>
  </div>;
 }
 
-type WeekChoice={key:string;label:string;from:string;to:string;state:string;available:boolean};
-function WeekControls({weeks,hidden,onChange}:{weeks:WeekChoice[];hidden:string[];onChange:(keys:string[])=>void}) {
+const DETAIL_LABELS:Record<string,string>={venta:"Venta",margen:"Margen bruto",descuento:"Comisión / descuento",operativos:"Gastos operativos",corporativos:"Gastos corporativos",gasto:"Gasto total",hg:"HG",impuestos:"Impuestos federales",resultado:"Resultado"};
+type WeekChoice={key:string;label:string;from:string;to:string;state:string;available:boolean;actualTon?:number|null;d?:number|null;actualResult?:number|null;metrics?:any;financials?:any;forecastSources?:any[]};
+function WeekControls({weeks,hidden,onChange,onDetail}:{weeks:WeekChoice[];hidden:string[];onChange:(keys:string[])=>void;onDetail?:(week:WeekChoice,field:string)=>void}) {
  const available=weeks.filter(w=>w.available);
+ const fields=["venta","margen","descuento","operativos","corporativos","gasto","hg","impuestos","resultado"];
  return <fieldset className="mt-2"><legend className="text-xs text-slate-300">Semanas visibles en gráfica · {available.filter(w=>!hidden.includes(w.key)).length}/{available.length}</legend>
   <div className="my-2 flex gap-3 text-xs"><button type="button" onClick={()=>onChange([])} className="text-cyan-300 underline">Mostrar todas</button><button type="button" onClick={()=>onChange(available.map(w=>w.key))} className="text-cyan-300 underline">Ocultar todas</button></div>
-  <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">{weeks.map(w=><label key={w.key} title={`${w.from} – ${w.to} · ${w.state}${!w.available?" · Cobertura incompleta; sin punto financiero":""}`} className={`flex items-center gap-1 rounded border border-slate-600 px-2 py-1 text-xs ${w.available?"text-slate-100":"text-slate-500"}`}><input aria-label={`Mostrar ${w.label} del ${w.from}`} type="checkbox" disabled={!w.available} checked={w.available&&!hidden.includes(w.key)} onChange={e=>onChange(e.target.checked?hidden.filter(key=>key!==w.key):[...hidden,w.key])} className="accent-purple-400"/>{w.label} · {w.from.slice(5)}{!w.available?" · incompleta":""}</label>)}</div>
+  <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-right text-xs"><thead><tr><th className="p-2 text-left">Mostrar / semana</th>{fields.map(field=><th key={field} className="p-2">{DETAIL_LABELS[field]} {field==="venta"?"(t)":field==="margen"||field==="descuento"?"($/kg)":"($)"}</th>)}</tr></thead><tbody>
+   {weeks.map(w=>{const m=w.metrics||{},f=w.financials||{},values:Record<string,number|null|undefined>={venta:w.actualTon,margen:f.margen,descuento:w.d,operativos:f.operativos,corporativos:f.corporativos,gasto:f.gasto,hg:m.hg_mxn,impuestos:m.venta_kg>0&&m.impuestos_federales_kg!=null?m.venta_kg*m.impuestos_federales_kg:null,resultado:w.actualResult};return <tr key={w.key} className="border-t border-slate-700"><td className="p-2 text-left"><label className="flex items-center gap-2"><input aria-label={`Mostrar ${w.label} del ${w.from}`} type="checkbox" disabled={!w.available} checked={w.available&&!hidden.includes(w.key)} onChange={e=>onChange(e.target.checked?hidden.filter(key=>key!==w.key):[...hidden,w.key])} className="accent-purple-400"/>{w.label}</label><div className="mt-1 text-slate-400">{w.from} – {w.to} · {w.state}{!w.available?" · incompleta":""}{!!w.forecastSources?.length?" · IGF Forecast histórico":""}</div></td>{fields.map(field=><td key={field} className="p-2"><button type="button" aria-label={`${DETAIL_LABELS[field]} de ${w.label} del ${w.from}`} onClick={()=>onDetail?.(w,field)} className="text-cyan-200 underline decoration-dotted underline-offset-4">{field==="venta"||field==="margen"||field==="descuento"?num(values[field],field==="venta"?2:4):money(values[field])}</button></td>)}</tr>;})}
+  </tbody></table></div>
  </fieldset>;
+}
+function Popup({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}) {
+ const closeRef=useRef<HTMLButtonElement|null>(null);
+ useEffect(()=>{const previous=document.activeElement as HTMLElement|null;closeRef.current?.focus();return()=>previous?.focus();},[]);
+ return <div role="dialog" aria-modal="true" aria-label={title} onKeyDown={e=>{if(e.key==="Escape"){e.stopPropagation();onClose();}if(e.key==="Tab"){const controls=Array.from(e.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]'));const first=controls[0],last=controls[controls.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}}}} className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/90 p-3"><section className="flex max-h-[90vh] w-full max-w-[1600px] flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900"><header className="flex items-center justify-between gap-3 border-b border-slate-700 p-3"><h3 className="font-semibold">{title}</h3><button ref={closeRef} type="button" onClick={onClose} className="rounded bg-slate-700 px-3 py-2">Volver</button></header><div className="overflow-auto p-3">{children}</div></section></div>;
+}
+function DailyDetail({data,week,field}:{data:any;week:any;field:string}) {
+ const days=data.days||[];
+ const metrics:Record<string,{key:string;label:string;money?:boolean}[]>={
+  venta:[{key:"venta_kg",label:"Venta (kg)"},{key:"venta_casa_kg",label:"Casa (kg)"},{key:"venta_comisionista_kg",label:"Comisionista (kg)"}],
+  margen:[{key:"precio_kg",label:"Precio ($/kg)"},{key:"costo_kg",label:"Costo ($/kg)"},{key:"flete_kg",label:"Flete ($/kg)"},{key:"margen_kg",label:"Margen bruto ($/kg)"}],
+  descuento:[{key:"venta_kg",label:"Venta (kg)"},{key:"com_desc_kg",label:"Comisión / descuento ($/kg)"}],
+  operativos:[{key:"presupuesto_nomina_gastos_kg",label:"Nómina / gastos ($/kg)"},{key:"presupuesto_imss_sua_kg",label:"IMSS / SUA ($/kg)"},{key:"extraordinarios_kg",label:"Extraordinarios ($/kg)"},{key:"provisiones_planta_kg",label:"Provisiones ($/kg)"},{key:"gasto_operativo_mxn",label:"Total operativo ($)",money:true}],
+  corporativos:[{key:"gasto_corporativo_kg",label:"Corporativo ($/kg)"},{key:"inversiones_kg",label:"Inversiones ($/kg)"},{key:"impuestos_federales_kg",label:"Impuestos federales ($/kg)"},{key:"gasto_corporativo_mxn",label:"Total corporativo ($)",money:true}],
+  gasto:[{key:"gasto_operativo_mxn",label:"Operativos ($)",money:true},{key:"gasto_corporativo_mxn",label:"Corporativos ($)",money:true}],
+  hg:[{key:"hg_kilos",label:"HG (kg)"},{key:"hg_kg",label:"HG ($/kg)"},{key:"hg_mxn",label:"HG ($)",money:true}],
+  impuestos:[{key:"impuestos_federales_kg",label:"Impuestos federales ($/kg)"}],
+  resultado:[{key:"venta_kg",label:"Venta (kg)"},{key:"resultado_kg",label:"Resultado ($/kg)"},{key:"resultado_mxn",label:"Resultado ($)",money:true}],
+ };
+ const fields=metrics[field]||metrics.resultado;
+ return <><p className="mb-3 text-xs text-slate-400">Detalle diario del IGF semanal, con el mismo corte y planta. {week.forecastSources?.length?"El resumen usa IGF Forecast histórico; esa fuente no ofrece todos los detalles diarios. Los datos faltantes permanecen sin cifra.":"Los importes corresponden al periodo; no al equivalente mensual de la gráfica."} Descuento mostrado como costo positivo. — significa dato no disponible.</p><div className="overflow-x-auto"><table className="w-full text-right text-sm"><thead><tr><th className="p-2 text-left">Día / estado</th>{fields.map(f=><th key={f.key} className="p-2">{f.label}</th>)}</tr></thead><tbody>{days.map((day:any)=><tr key={day.fecha} className="border-t border-slate-700"><td className="p-2 text-left">{day.fecha} · {day.estado}</td>{fields.map(f=>{let v=day.metrics?.[f.key]??day[f.key];if(f.key==="com_desc_kg"&&v!=null)v=-v;return <td key={f.key} className="p-2">{f.money?money(v):num(v,4)}</td>;})}</tr>)}</tbody></table></div>{!days.length&&<p>Sin detalle diario disponible para esta semana.</p>}</>;
 }
 
 function CategoryGroup({category,lines,kg,amount}:{category:string;lines:CategoryLine[];kg:number;amount:number|null}) {
