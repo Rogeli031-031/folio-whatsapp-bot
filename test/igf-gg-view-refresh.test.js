@@ -170,3 +170,32 @@ test("real gaps in the GG plant still display their warning", async () => {
   assert.match(html, /Tehuacán/);
   assert.doesNotMatch(html, /GT Puebla|GTM Queretaro|Acapulco/);
 });
+
+test("November with one missing HG keeps every plant and never calculates its final result as zero", async () => {
+  const { ui } = fixture();
+  const base = ui.state.igfMini.rows[0];
+  const puebla = { ...base, empresa: "GT Puebla", plant_code: "Puebla" };
+  const tehuacan = { ...base, empresa: "Tehuacan", plant_code: "Tehuacan" };
+  ui.state.igfForecast = { ...ui.state.igfForecast, year: 2026, month: 11 };
+  ui.state.igfMini = { rows: [puebla, tehuacan] };
+  ui.state.uploadDay = "2026-11-02";
+  ui.state.acumuladoLoading = false;
+  ui.state.acumuladoMissing = ["GT Puebla — falta HG (HG)"];
+  ui.state.acumuladoByPlant = {
+    Puebla: { margen: 6, hg: null, financials: { contract: "066", margenKg: 6, hgKg: null, ventaTon: 100, comDescKg: -2, operativosImporte: 100000, corporativosImporte: 20000, impuestosFederalesImporte: 10000 } },
+    Tehuacan: { margen: 6, hg: -.3, financials: { contract: "066", margenKg: 6, hgKg: -.3, ventaTon: 100, comDescKg: -2, operativosImporte: 100000, corporativosImporte: 20000, impuestosFederalesImporte: 10000 } },
+  };
+  const tree = ui.render(), html = renderToStaticMarkup(tree);
+  assert.match(html, /falta HG/); assert.match(html, /GT Puebla/); assert.match(html, /Tehuacan/);
+  const buttons = elements(tree).filter(n => n.props?.title === "Abrir simulador de rentabilidad y propuestas");
+  assert.equal(buttons.length, 2);
+  buttons[0].props.onClick();
+  assert.equal(ui.state.simulationRow.hgKg, null);
+  assert.equal(ui.state.simulationRow.ingreso, null);
+  assert.equal(ui.state.simulationRow.resultadoFinalImporte, null);
+  buttons[1].props.onClick();
+  assert.equal(ui.state.simulationRow.resultadoFinalImporte, 300000);
+  const rows = elements(tree).filter(n => n.type === "tr");
+  const zona = rows.find(r => renderToStaticMarkup(r).includes("Zona Provincia"));
+  assert.ok(zona); assert.ok(renderToStaticMarkup(zona).includes("—"));
+});

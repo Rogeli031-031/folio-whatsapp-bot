@@ -32,6 +32,7 @@ import {
   zonaFromPlantRows,
 } from "@/lib/igf-october-mini";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
+import IgfSimulationModal from "@/components/IgfSimulationModal";
 import IgfPresupuestoUpload from "@/components/IgfPresupuestoUpload";
 import IgfDiarioWeeklyPlantPanel from "@/components/IgfDiarioWeeklyPlantPanel";
 import IgfDiarioWeeklyAllPlantsPanel from "@/components/IgfDiarioWeeklyAllPlantsPanel";
@@ -194,23 +195,21 @@ function applyIgfDiarioAcumuladoMini(
   mini: IgfForecastMiniResponse,
   byPlant: Record<string, AcumuladoPlantHit | null>
 ): IgfForecastMiniResponse | null {
-  if (missingAcumuladoPlants(mini.rows || [], byPlant).length) return null;
   const rows = (mini.rows || []).map((row) => {
-    const hit = acumuladoHit(row, byPlant);
-    if (!hit) return null;
-    if (hit.financials && hit.financials.contract === "066") {
+    const hit: AcumuladoPlantHit = acumuladoLookup(row, byPlant) || { margen: null, hg: null };
+    if (hit?.financials && hit.financials.contract === "066") {
       return applyFinancialsToMiniRow(row, hit.financials);
     }
     const margen = hit.margen;
     const hgKg = hit.hg;
     const venta = Number(row.ventaTon) || 0;
     const com = Number(row.comDesc) || 0;
-    const ingreso = Math.round((margen + com - hgKg) * venta * 1000);
+    const ingreso = margen != null && hgKg != null ? Math.round((margen + com - hgKg) * venta * 1000) : null;
     const operativos = Math.round(Number(row.operativos) || 0);
     const corporativos = Math.round(Number(row.corporativos) || 0);
     const gasto = operativos + corporativos;
-    const utilOperImporte = ingreso - operativos;
-    const resultadoFinalImporte = utilOperImporte - corporativos;
+    const utilOperImporte = ingreso != null ? ingreso - operativos : null;
+    const resultadoFinalImporte = utilOperImporte != null ? utilOperImporte - corporativos : null;
     return {
       ...row,
       margen,
@@ -223,36 +222,16 @@ function applyIgfDiarioAcumuladoMini(
       resultadoFinalImporte,
     };
   });
-  if (rows.some((row) => row == null)) return null;
   const ready = rows as IgfForecastMiniRow[];
-  if (ready.some((row) => row.octoberContract)) {
-    return { ...mini, rows: ready, zona: zonaFromPlantRows(ready) };
+  return { ...mini, rows: ready, zona: zonaWithCompleteMetrics(ready) };
+}
+
+function zonaWithCompleteMetrics(rows: IgfForecastMiniRow[]) {
+  const zona = zonaFromPlantRows(rows);
+  for (const key of ["margen", "hgKg", "comDesc", "impuestos"] as const) {
+    if (rows.some(row => row.ventaTon == null || (row.ventaTon > 0 && row[key] == null))) zona[key] = null;
   }
-  const sumB = ready.reduce((sum, row) => sum + (Number(row.ventaTon) || 0), 0);
-  const wAvg = (getter: (row: IgfForecastMiniRow) => number) => (
-    sumB > 0
-      ? Math.round((ready.reduce((sum, row) => sum + getter(row) * (Number(row.ventaTon) || 0), 0) / sumB) * 10000) / 10000
-      : 0
-  );
-  return {
-    ...mini,
-    rows: ready,
-    zona: {
-      empresa: "Zona Provincia",
-      plant_code: null,
-      ventaTon: Math.round(sumB * 100) / 100,
-      margen: wAvg((row) => Number(row.margen) || 0),
-      comDesc: wAvg((row) => Number(row.comDesc) || 0),
-      impuestos: wAvg((row) => Number(row.impuestos) || 0),
-      hgKg: wAvg((row) => Number(row.hgKg) || 0),
-      ingreso: ready.reduce((sum, row) => sum + (Number(row.ingreso) || 0), 0),
-      operativos: ready.reduce((sum, row) => sum + (Number(row.operativos) || 0), 0),
-      corporativos: ready.reduce((sum, row) => sum + (Number(row.corporativos) || 0), 0),
-      gasto: ready.reduce((sum, row) => sum + (Number(row.gasto) || 0), 0),
-      utilOperImporte: ready.reduce((sum, row) => sum + (Number(row.utilOperImporte) || 0), 0),
-      resultadoFinalImporte: ready.reduce((sum, row) => sum + (Number(row.resultadoFinalImporte) || 0), 0),
-    },
-  };
+  return zona;
 }
 
 function foldPlantKey(value: string | null | undefined): string {
@@ -302,8 +281,8 @@ function applyManualGastosToAcumulado(
     const corporativos = manualAmount(manualCorporativos, row.corporativos);
     const ingreso = row.ingreso;
     const gasto = Number(operativos) + Number(corporativos);
-    const utilOperImporte = Number(ingreso) - Number(operativos);
-    const resultadoFinalImporte = utilOperImporte - Number(corporativos);
+    const utilOperImporte = ingreso != null ? ingreso - Number(operativos) : null;
+    const resultadoFinalImporte = utilOperImporte != null ? utilOperImporte - Number(corporativos) : null;
     return {
       ...row,
       ingreso,
@@ -316,31 +295,7 @@ function applyManualGastosToAcumulado(
       corporativosManual: manualCorporativos != null,
     };
   });
-  const sumB = rows.reduce((sum, row) => sum + (Number(row.ventaTon) || 0), 0);
-  const wAvg = (getter: (row: IgfForecastMiniRow) => number) => (
-    sumB > 0
-      ? Math.round((rows.reduce((sum, row) => sum + getter(row) * (Number(row.ventaTon) || 0), 0) / sumB) * 10000) / 10000
-      : 0
-  );
-  return {
-    ...mini,
-    rows,
-    zona: {
-      empresa: "Zona Provincia",
-      plant_code: null,
-      ventaTon: Math.round(sumB * 100) / 100,
-      margen: wAvg((row) => Number(row.margen) || 0),
-      comDesc: wAvg((row) => Number(row.comDesc) || 0),
-      impuestos: wAvg((row) => Number(row.impuestos) || 0),
-      hgKg: wAvg((row) => Number(row.hgKg) || 0),
-      ingreso: rows.reduce((sum, row) => sum + (Number(row.ingreso) || 0), 0),
-      operativos: rows.reduce((sum, row) => sum + (Number(row.operativos) || 0), 0),
-      corporativos: rows.reduce((sum, row) => sum + (Number(row.corporativos) || 0), 0),
-      gasto: rows.reduce((sum, row) => sum + (Number(row.gasto) || 0), 0),
-      utilOperImporte: rows.reduce((sum, row) => sum + (Number(row.utilOperImporte) || 0), 0),
-      resultadoFinalImporte: rows.reduce((sum, row) => sum + (Number(row.resultadoFinalImporte) || 0), 0),
-    },
-  };
+  return { ...mini, rows, zona: zonaWithCompleteMetrics(rows) };
 }
 
 const CORP_MODAL_FIELDS = [
@@ -398,7 +353,7 @@ function applyDesgloseTotals(
   return {
     ...mini,
     rows: nextRows,
-    zona: zonaFromPlantRows(nextRows),
+    zona: zonaWithCompleteMetrics(nextRows),
   };
 }
 
@@ -459,6 +414,7 @@ export function IgfForecastContent() {
   const [plantaFilter, setPlantaFilter] = useState<string>("");
   const [forecastExcelMsg, setForecastExcelMsg] = useState<string | null>(null);
   const [igfGraficaOpen, setIgfGraficaOpen] = useState(false);
+  const [simulationRow, setSimulationRow] = useState<IgfForecastMiniRow | null>(null);
   const [igfTableMode, setIgfTableMode] = useState<"forecast" | "igf_diario">("igf_diario");
   const [acumuladoByPlant, setAcumuladoByPlant] = useState<Record<string, AcumuladoPlantHit> | null>(null);
   const [acumuladoNonce, setAcumuladoNonce] = useState(0);
@@ -614,13 +570,8 @@ export function IgfForecastContent() {
     const cached = acumuladoCacheRef.current;
     if (cached && cached.key === cacheKey) {
       const cachedMissing = missingAcumuladoPlants(igfMini.rows || [], cached.byPlant);
-      if (cachedMissing.length) {
-        setAcumuladoByPlant(null);
-        setAcumuladoMissing(cachedMissing);
-      } else {
-        setAcumuladoMissing([]);
-        setAcumuladoByPlant(cached.byPlant);
-      }
+      setAcumuladoMissing(cachedMissing);
+      setAcumuladoByPlant(cached.byPlant);
       setAcumuladoError(null);
       setAcumuladoLoading(false);
       return;
@@ -656,13 +607,8 @@ export function IgfForecastContent() {
         }
         acumuladoCacheRef.current = { key: cacheKey, byPlant: next };
         const missing = missingAcumuladoPlants(igfMini.rows || [], next);
-        if (missing.length) {
-          setAcumuladoByPlant(null);
-          setAcumuladoMissing(missing);
-        } else {
-          setAcumuladoMissing([]);
-          setAcumuladoByPlant(next);
-        }
+        setAcumuladoMissing(missing);
+        setAcumuladoByPlant(next);
       } catch (error: unknown) {
         if (!cancel) {
           setAcumuladoByPlant(null);
@@ -2090,15 +2036,15 @@ export function IgfForecastContent() {
             )}
             {igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length > 0 && (
               <p className="mb-2 text-xs text-amber-300">
-                IGF Diario acumulado incompleto
+                IGF Diario acumulado incompleto. Se muestran las cifras disponibles; los resultados dependientes quedan sin cifra
                 {acumuladoMissing.length ? `: ${acumuladoMissing.join("; ")}` : ""}
               </p>
             )}
             {igfTableMode === "igf_diario" && gastoEditError && (
               <p className="mb-2 text-xs text-red-400">{gastoEditError}</p>
             )}
-            {igfMini && igfMini.rows && igfMini.rows.length > 0 && (igfTableMode === "forecast" || (igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant)) && (() => {
-              const miniView = igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoMissing.length === 0 && acumuladoByPlant
+            {igfMini && igfMini.rows && igfMini.rows.length > 0 && (igfTableMode === "forecast" || (igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoByPlant)) && (() => {
+              const miniView = igfTableMode === "igf_diario" && !acumuladoLoading && !acumuladoError && acumuladoByPlant
                 ? applyDesgloseTotals(
                     applyManualGastosToAcumulado(applyIgfDiarioAcumuladoMini(igfMini, acumuladoByPlant), gastosManuales),
                     gastosDesglose,
@@ -2280,6 +2226,10 @@ export function IgfForecastContent() {
                           >
                             {typeof v === "number" ? c.fmt(v) : "—"}
                           </button>
+                        ) : c.key === "resultadoFinalImporte" && !isZona && plantKey ? (
+                          <button type="button" title="Abrir simulador de rentabilidad y propuestas" className="w-full text-right underline decoration-dotted decoration-cyan-400 hover:text-cyan-200" onClick={() => setSimulationRow(miniRow)}>
+                            {typeof v === "number" ? c.fmt(v) : "Pendiente · ver simulador"}
+                          </button>
                         ) : ventaBtn ? (
                           <button
                             type="button"
@@ -2290,7 +2240,7 @@ export function IgfForecastContent() {
                             {c.fmt(v)}
                           </button>
                         ) : (
-                          c.fmt(v as number)
+                          typeof v === "number" ? c.fmt(v) : "—"
                         )}
                       </td>
                     );
@@ -2327,6 +2277,11 @@ export function IgfForecastContent() {
                 </div>
               );
             })()}
+            {simulationRow && igfForecast ? <IgfSimulationModal
+              key={`${simulationRow.plant_code}|${igfForecast.year}|${igfForecast.month}|${uploadDay}|${versionAsOfCorte}|${igfTableMode}`}
+              row={simulationRow} token={token} year={igfForecast.year} month={igfForecast.month}
+              cutoff={uploadDay} versionAsOf={versionAsOfCorte} mode={igfTableMode} onClose={() => setSimulationRow(null)}
+            /> : null}
             {margenModal ? (
               <div role="dialog" aria-label={`Margen diario — ${margenModal.label}`} className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 p-4">
                 <div className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded border border-slate-600 bg-slate-900 p-4 text-slate-100">

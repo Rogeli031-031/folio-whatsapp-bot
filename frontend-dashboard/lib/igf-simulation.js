@@ -1,0 +1,48 @@
+"use strict";
+const finite = v => typeof v === "number" && Number.isFinite(v);
+function modelFromRow(row) {
+ if (![row.ventaTon,row.comDesc,row.resultadoFinalImporte,row.operativos,row.corporativos,row.impuestos].every(finite) || row.ventaTon <= 0) return null;
+ const q=row.ventaTon, d=-row.comDesc;
+ const fixed=row.operativos+row.corporativos+row.impuestos*q*1000;
+ if (fixed < 0) return null;
+ // Calibrate to the selected dashboard result, preserving its tax/HG convention.
+ return { q, d, fixed, a:(row.resultadoFinalImporte+fixed)/(q*1000)+d };
+}
+const profit = (model,q,d) => q*1000*(model.a-d)-model.fixed;
+function weeklyPoints(columns, year, month) {
+ const daysInMonth=new Date(Date.UTC(year,month,0)).getUTCDate();
+ return (columns||[]).map(c=>{
+  const m=c.metrics||{}, coverage=c.coverage||{};
+  const covered=key=>coverage[key] && coverage[key].coverage_kg_pct != null && coverage[key].coverage_kg_pct>=99.999;
+  const length=(Date.parse(c.fecha_hasta)-Date.parse(c.fecha_desde))/86400000+1;
+  const available=finite(m.venta_kg)&&m.venta_kg>0&&finite(m.com_desc_kg)&&finite(m.resultado_mxn)&&covered("resultado")&&covered("com_desc_kg")&&length>0;
+  return { key:c.key,label:c.label,from:c.fecha_desde,to:c.fecha_hasta,state:c.estado,
+   q:finite(m.venta_kg)&&m.venta_kg>0&&length>0?m.venta_kg/1000/length*daysInMonth:null,
+   d:finite(m.com_desc_kg)&&covered("com_desc_kg")?-m.com_desc_kg:null,
+   z:available?m.resultado_mxn/length*daysInMonth:null,
+   actualTon:m.venta_kg==null?null:m.venta_kg/1000,actualResult:available?m.resultado_mxn:null,available };
+ });
+}
+function closestEquilibrium(s) {
+ if(!finite(s.a)||!finite(s.fixed)||s.a<=0||s.fixed<0)return null;
+ if(s.fixed===0)return {q:s.q,d:s.a};
+ const K=s.fixed/1000,volumeScale=1600,discountScale=4.5,minimum=K/s.a;
+ const eq=v=>s.a-K/v,objective=v=>((v-s.q)/volumeScale)**2+((eq(v)-s.d)/discountScale)**2;
+ const trial=Math.max(minimum,s.q),radius=Math.sqrt(objective(trial));
+ if(radius<1e-12)return {q:trial,d:Math.max(0,eq(trial))};
+ const lo=Math.max(minimum,s.q-volumeScale*radius),hi=Math.max(lo,s.q+volumeScale*radius);
+ const ratio=volumeScale**2/discountScale**2,B=ratio*K*(s.a-s.d),C=ratio*K*K;
+ const polynomial=v=>v**4-s.q*v**3+B*v-C,derivative=v=>4*v**3-3*s.q*v*v+B;
+ function rootsBetween(fn,breaks){const roots=[];for(let i=0;i<breaks.length-1;i++){
+  let l=breaks[i],r=breaks[i+1],fl=fn(l),fr=fn(r);if(fl===0)roots.push(l);if(fr===0)roots.push(r);
+  if(Math.sign(fl)===Math.sign(fr))continue;
+  for(let n=0;n<90;n++){const m=(l+r)/2;if(m===l||m===r)break;const fm=fn(m);if(fm===0){l=r=m;break;}if(Math.sign(fm)===Math.sign(fl)){l=m;fl=fm;}else r=m;}
+  roots.push((l+r)/2);
+ }return roots;}
+ const splits=[lo,...(s.q/2>lo&&s.q/2<hi?[s.q/2]:[]),hi];
+ const critical=rootsBetween(derivative,splits).filter(v=>v>lo&&v<hi).sort((a,b)=>a-b);
+ const candidates=[lo,hi,trial,...critical,...rootsBetween(polynomial,[lo,...critical,hi])];
+ const q=candidates.reduce((best,v)=>objective(v)<objective(best)?v:best,trial);
+ return {q,d:Math.max(0,eq(q))};
+}
+module.exports={modelFromRow,profit,weeklyPoints,closestEquilibrium};

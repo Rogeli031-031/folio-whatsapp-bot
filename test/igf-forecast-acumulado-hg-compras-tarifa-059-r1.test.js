@@ -31,7 +31,7 @@ test("corte, mes y versión disparan una carga que no reutiliza el acumulado pre
   assert.match(effect, /igfForecast\.year/);
   assert.match(effect, /igfForecast\.month/);
   assert.match(effect, /versionAsOfCorte/);
-  assert.match(CLIENT, /!acumuladoLoading && !acumuladoError && acumuladoMissing\.length === 0 && acumuladoByPlant/);
+  assert.match(CLIENT, /!acumuladoLoading && !acumuladoError && acumuladoByPlant/);
   assert.match(CLIENT, /Cargando IGF Diario acumulado…/);
 });
 
@@ -42,12 +42,12 @@ test("un error no conserva el acumulado anterior", () => {
   assert.doesNotMatch(catchBlock, /setAcumuladoByPlant\(next\)/);
 });
 
-test("sin margen o sin HG el modo queda incompleto y no mezcla Forecast", () => {
+test("sin margen o HG se conserva la fila parcial y no se mezcla Forecast", () => {
   assert.match(CLIENT, /Number\.isFinite\(hit\.margen\)/);
   assert.match(CLIENT, /Number\.isFinite\(hit\.hg\)/);
-  assert.match(applyFn, /if \(missingAcumuladoPlants\(mini\.rows \|\| \[\], byPlant\)\.length\) return null/);
+  assert.doesNotMatch(applyFn, /if \(missingAcumuladoPlants\(mini\.rows \|\| \[\], byPlant\)\.length\) return null/);
   assert.doesNotMatch(applyFn, /return row/);
-  assert.ok(applyFn.indexOf("return null") < applyFn.indexOf('empresa: "Zona Provincia"'));
+  assert.match(applyFn, /zonaFromPlantRows/);
   assert.match(CLIENT, /IGF Diario acumulado incompleto/);
 });
 
