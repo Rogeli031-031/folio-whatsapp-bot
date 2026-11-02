@@ -27,6 +27,17 @@ function visibleWeekPoints(weeks, hiddenKeys) {
  const hidden=new Set(hiddenKeys);
  return weeks.filter(week=>week.available&&!hidden.has(week.key)).map(week=>({...week,color:"#c084fc"}));
 }
+function axisTicks(min, max, target = 5) {
+ if(!Number.isFinite(min)||!Number.isFinite(max)||max<=min)return [];
+ const raw=(max-min)/Math.max(2,target),power=10**Math.floor(Math.log10(raw));
+ const unit=raw/power,step=(unit<=1?1:unit<=2?2:unit<=5?5:10)*power;
+ const ticks=[];
+ for(let i=Math.ceil(min/step);i<=Math.floor(max/step);i++)ticks.push(Number((i*step).toPrecision(12)));
+ // An asymmetric interval can otherwise show only zero and positive labels.
+ if(min<0&&!ticks.some(v=>v<0))ticks.unshift(min);
+ if(max>0&&!ticks.some(v=>v>0))ticks.push(max);
+ return ticks;
+}
 function weeklyPoints(columns, year, month) {
  const daysInMonth=new Date(Date.UTC(year,month,0)).getUTCDate();
  return (columns||[]).map(c=>{
@@ -63,4 +74,4 @@ function closestEquilibrium(s) {
  const q=candidates.reduce((best,v)=>objective(v)<objective(best)?v:best,trial);
  return {q,d:Math.max(0,eq(q))};
 }
-module.exports={modelFromRow,profit,weeklyPoints,closestEquilibrium,historyPeriods,mergeWeekColumns,visibleWeekPoints};
+module.exports={modelFromRow,profit,weeklyPoints,closestEquilibrium,historyPeriods,mergeWeekColumns,visibleWeekPoints,axisTicks};

@@ -58,3 +58,17 @@ test("week checkboxes toggle individual weeks, all/none and disable incomplete p
  elements(tree).find(e=>e.type==="button"&&e.props.children==="Ocultar todas").props.onClick();assert.deepEqual(hidden,["a","b"]);
  tree=render();elements(tree).find(e=>e.type==="button"&&e.props.children==="Mostrar todas").props.onClick();assert.deepEqual(hidden,[]);
 });
+
+test("three extended axes have arrows, named units and multiple tick labels, with a clear nonprobability legend",()=>{
+ const h=harness(),tree=h.render({model,q:1400,d:3.6,points:[]});
+ const axes=elements(tree).filter(e=>e.props?.["data-sim-axis"]);
+ assert.deepEqual(axes.map(e=>e.props["data-sim-axis"]),["venta","descuento","resultado"]);
+ for(const axis of axes){
+  assert.ok(elements(axis).some(e=>e.type==="line"&&e.props.markerEnd));
+  assert.ok(elements(axis).filter(e=>e.props?.["data-axis-tick"]!==undefined).length>=3);
+ }
+ const resultTicks=elements(axes[2]).filter(e=>e.props?.["data-axis-tick"]!==undefined).map(e=>e.props["data-axis-tick"]);
+ assert.ok(resultTicks.some(v=>v<0));assert.ok(resultTicks.some(v=>v>0));assert.ok(resultTicks.includes(0));
+ const html=renderToStaticMarkup(tree);assert.match(html,/Venta \(t\/mes\)/);assert.match(html,/Descuento \(\$\/kg\)/);assert.match(html,/Resultado \(MXN\/mes\)/);
+ assert.match(html,/no representan porcentajes ni probabilidades/);assert.doesNotMatch(html,/NaN|Infinity/);
+});
