@@ -15911,8 +15911,10 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
   const view = String(req.query.view || "week");
   if (!["week", "series", "periods"].includes(view)) return res.status(400).json({ error: "Vista no reconocida." });
   const periodMode = String(req.query.period_mode || "weeks");
+  const periodSource = String(req.query.source || "auto");
   const firstMonth = req.query.first_month == null ? undefined : Number(req.query.first_month);
   if (view === "periods") {
+    if (!["auto", "igf_diario", "forecast"].includes(periodSource) || periodSource === "forecast" && periodMode !== "months") return res.status(400).json({ error: "Fuente inválida: IGF Forecast solo admite periodos mensuales." });
     try { require("./lib/igf-diario-weekly-plant").periodWindows(year, month, periodMode, firstMonth); }
     catch (error) { return res.status(400).json({ error: error.message }); }
   }
@@ -15940,6 +15942,7 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
       const payload = await (view === "periods" ? weekly.loadPeriodColumns : weekly.loadWeeklyAll)(client, {
         plants,
         periodMode,
+        source: periodSource,
         firstMonth,
         year,
         month,
@@ -15983,6 +15986,7 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
       : await (view === "periods" ? weekly.loadPeriodColumns : weekly.loadWeeklyPlant)(client, {
         plant: resolvedPlant,
         periodMode,
+        source: periodSource,
         firstMonth,
         year,
         month,
