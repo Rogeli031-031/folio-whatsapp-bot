@@ -2,6 +2,21 @@
 const test=require("node:test"),assert=require("node:assert/strict");
 const {modelFromRow,profit,weeklyPoints,closestEquilibrium}=require("../frontend-dashboard/lib/igf-simulation");
 const proposals=require("../lib/igf-simulation-proposals"),register=require("../lib/igf-simulation-routes");
+const {historyPeriods,mergeWeekColumns,visibleWeekPoints}=require("../frontend-dashboard/lib/igf-simulation");
+
+test("history includes October weeks in November, crosses year boundaries and deduplicates shared weeks",()=>{
+ assert.deepEqual(historyPeriods(2026,11),[{year:2026,month:10},{year:2026,month:11}]);
+ assert.deepEqual(historyPeriods(2027,1),[{year:2026,month:12},{year:2027,month:1}]);
+ assert.equal(historyPeriods(2026,11,5).length,6);
+ const week40={key:"2026-09-27",fecha_desde:"2026-09-27",label:"Semana 40"};
+ const old={key:"2026-11-01",fecha_desde:"2026-11-01",label:"Semana 45",marker:"old"},current={...old,marker:"current"};
+ const merged=mergeWeekColumns([[week40,old],[current]]);assert.equal(merged.length,2);assert.equal(merged[0].label,"Semana 40");assert.equal(merged[1].marker,"current");
+});
+test("week filtering excludes only selected/unknown financial points and preserves their original values",()=>{
+ const weeks=[{key:"a",label:"Semana 40",available:true,q:100,d:2,z:-1000},{key:"b",available:true,q:200,d:3,z:2000},{key:"missing",available:false,q:300,d:null,z:null}];
+ const visible=visibleWeekPoints(weeks,["b"]);assert.equal(visible.length,1);assert.equal(visible[0].q,100);assert.equal(visible[0].z,-1000);
+ assert.equal(visibleWeekPoints(weeks,[]).length,2);assert.equal(weeks.length,3);
+});
 
 test("dashboard anchor reproduces signed discount, HG/tax conventions and missing values",()=>{
  const row={ventaTon:919.31,comDesc:-3.85,resultadoFinalImporte:-794397,operativos:2304423,corporativos:924897,impuestos:.24};

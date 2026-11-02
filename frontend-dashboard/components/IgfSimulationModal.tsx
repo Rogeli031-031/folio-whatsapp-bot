@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getApiUrl, type IgfForecastMiniRow } from "@/lib/api";
-import { closestEquilibrium, modelFromRow, profit, weeklyPoints } from "@/lib/igf-simulation";
+import { closestEquilibrium, historyPeriods, mergeWeekColumns, modelFromRow, profit, visibleWeekPoints, weeklyPoints } from "@/lib/igf-simulation";
 
 type Model={q:number;d:number;a:number;fixed:number};
 type Point={key:string;label:string;q:number;d:number;z:number;color:string;state?:string};
@@ -12,6 +12,13 @@ const money=(v:number|null|undefined)=>v==null?"—":`$${num(v,0)}`;
 
 function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[]}) {
  const [camera,setCamera]=useState({az:.78,el:.48}),[rotate,setRotate]=useState(false);
+ const [zoom,setZoom]=useState(1.15),[viewport,setViewport]=useState({width:1100,height:680});
+ const svgRef=useRef<SVGSVGElement|null>(null);
+ useEffect(()=>{
+  const svg=svgRef.current;if(!svg)return;
+  const measure=()=>{const box=svg.getBoundingClientRect();if(box.width>0&&box.height>0)setViewport({width:box.width,height:box.height});};
+  measure();const observer=new ResizeObserver(measure);observer.observe(svg);return()=>observer.disconnect();
+ },[]);
  const drag=useRef<{id:number;x:number;y:number;az:number;el:number}|null>(null);
  const nearest=closestEquilibrium({...model,q,d});
  const scene=useMemo(()=>{
@@ -24,10 +31,13 @@ function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[
   function raw(x:number,y:number,z:number){const u=2*(x-x0)/(x1-x0)-1,v=2*(y-y0)/(y1-y0)-1,w=2*(z-z0)/(z1-z0)-1;
    const rx=u*Math.cos(camera.az)-v*Math.sin(camera.az),ry=u*Math.sin(camera.az)+v*Math.cos(camera.az);
    return [rx,ry*Math.sin(camera.el)-w*Math.cos(camera.el),ry*Math.cos(camera.el)+w*Math.sin(camera.el)];}
-  const corners=[];for(const x of [x0,x1])for(const y of [y0,y1])for(const z of [z0,z1])corners.push(raw(x,y,z));
+  // Fit the actual surface/markers instead of an imaginary full bounding cube.
+  const corners=all.map(p=>raw(p.q,p.d,p.z));
+  for(const x of [x0,x1])for(const y of [y0,y1]){corners.push(raw(x,y,profit(model,x,y)),raw(x,y,0));}
+  corners.push(raw(x0,y0,z0),raw(x0,y0,z1));
   const minX=Math.min(...corners.map(c=>c[0])),maxX=Math.max(...corners.map(c=>c[0])),minY=Math.min(...corners.map(c=>c[1])),maxY=Math.max(...corners.map(c=>c[1]));
-  const scale=Math.min(940/(maxX-minX),550/(maxY-minY));
-  const project=(x:number,y:number,z:number)=>{const r=raw(x,y,z);return [550+(r[0]-(minX+maxX)/2)*scale,340+(r[1]-(minY+maxY)/2)*scale,r[2]];};
+  const scale=Math.min(Math.max(100,viewport.width-150)/(maxX-minX),Math.max(100,viewport.height-130)/(maxY-minY))*zoom;
+  const project=(x:number,y:number,z:number)=>{const r=raw(x,y,z);return [viewport.width/2+(r[0]-(minX+maxX)/2)*scale,viewport.height/2+(r[1]-(minY+maxY)/2)*scale,r[2]];};
   const path=(list:number[][])=>list.map(p=>`${p[0]},${p[1]}`).join(" ");
   const cells=[];for(let i=0;i<28;i++)for(let j=0;j<22;j++){
    const xa=x0+(x1-x0)*i/28,xb=x0+(x1-x0)*(i+1)/28,ya=y0+(y1-y0)*j/22,yb=y0+(y1-y0)*(j+1)/22;
@@ -37,18 +47,18 @@ function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[
   cells.sort((a,b)=>a.depth-b.depth);
   const zero=[];for(let i=0;i<=240;i++){const x=x0+(x1-x0)*i/240;if(x<=0)continue;const y=model.a-model.fixed/(x*1000);if(y>=y0&&y<=y1)zero.push(project(x,y,0));}
   return {project,path,cells,zero,x0,x1,y0,y1,z0,z1};
- },[model,q,d,points,camera,nearest?.q,nearest?.d]);
+ },[model,q,d,points,camera,nearest?.q,nearest?.d,zoom,viewport]);
  const p=scene.project(q,d,profit(model,q,d));
  const eq=nearest?scene.project(nearest.q,nearest.d,0):null;
- const trail=points.filter(p=>p.state).map(p=>scene.project(p.q,p.d,p.z));
+ const trail=points.filter(p=>p.state&&p.state!=="actual").map(p=>scene.project(p.q,p.d,p.z));
  return <>
-  <div className="flex flex-wrap items-center gap-2 text-xs"><button type="button" aria-pressed={rotate} onClick={()=>{drag.current=null;setRotate(!rotate);}} className={`rounded px-3 py-2 ${rotate?"bg-cyan-700":"bg-slate-700"}`}>{rotate?"Terminar giro":"Girar gráfica"}</button><button type="button" onClick={()=>setCamera({az:.78,el:.48})} className="rounded bg-slate-700 px-3 py-2">Vista inicial</button><span className="text-slate-400">{rotate?"Arrastra con el mouse o el dedo. Desactiva el giro para desplazar la página.":"Activa el giro para explorar la superficie."}</span></div>
-  <svg role="img" aria-label="Superficie de rentabilidad, semanas, tendencia y propuestas" viewBox="0 0 1100 680" className="w-full rounded bg-slate-950" style={{height:"min(70vh,760px)",minHeight:360,touchAction:rotate?"none":"auto",cursor:rotate?"grab":"default"}}
+  <div className="flex flex-wrap items-center gap-2 text-xs"><button type="button" aria-pressed={rotate} onClick={()=>{drag.current=null;setRotate(!rotate);}} className={`rounded px-3 py-2 ${rotate?"bg-cyan-700":"bg-slate-700"}`}>{rotate?"Terminar giro":"Girar gráfica"}</button><button type="button" onClick={()=>{setCamera({az:.78,el:.48});setZoom(1.15);}} className="rounded bg-slate-700 px-3 py-2">Vista inicial</button><button type="button" aria-label="Alejar gráfica" disabled={zoom<=.5} onClick={()=>setZoom(v=>Math.max(.5,v-.25))} className="rounded bg-slate-700 px-3 py-2 disabled:opacity-40">−</button><label className="flex items-center gap-2">Zoom <input aria-label="Zoom de gráfica" type="range" min=".5" max="4" step=".05" value={zoom} onChange={e=>setZoom(Number(e.target.value))} className="w-28 accent-cyan-400"/><output className="w-10 tabular-nums">{Math.round(zoom*100)}%</output></label><button type="button" aria-label="Acercar gráfica" disabled={zoom>=4} onClick={()=>setZoom(v=>Math.min(4,v+.25))} className="rounded bg-slate-700 px-3 py-2 disabled:opacity-40">+</button><button type="button" onClick={()=>setZoom(1)} className="rounded bg-slate-700 px-3 py-2">Ajustar gráfica</button><span className="text-slate-400">{rotate?"Arrastra con el mouse o el dedo. Desactiva el giro para desplazar la página.":"Activa el giro para explorar la superficie."}</span></div>
+  <svg ref={svgRef} role="img" aria-label="Superficie de rentabilidad, semanas, tendencia y propuestas" viewBox={`0 0 ${viewport.width} ${viewport.height}`} className="w-full rounded bg-slate-950" style={{height:"clamp(520px,80vh,1100px)",minHeight:420,touchAction:rotate?"none":"auto",cursor:rotate?"grab":"default"}}
    onPointerDown={e=>{if(!rotate||e.button!==0)return;e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,x:e.clientX,y:e.clientY,...camera};}}
    onPointerMove={e=>{const g=drag.current;if(!g||g.id!==e.pointerId)return;setCamera({az:g.az+(e.clientX-g.x)*.008,el:Math.max(.1,Math.min(1.48,g.el-(e.clientY-g.y)*.006))});}}
    onPointerUp={e=>{drag.current=null;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
    onPointerCancel={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}>
-   <text x="550" y="25" textAnchor="middle" fill="#cbd5e1" fontSize="17">Altura: resultado mensual equivalente (MXN)</text>
+   <text x={viewport.width/2} y="25" textAnchor="middle" fill="#cbd5e1" fontSize="15">Altura: resultado mensual equivalente (MXN)</text>
    <polygon points={scene.path([[scene.x0,scene.y0],[scene.x1,scene.y0],[scene.x1,scene.y1],[scene.x0,scene.y1]].map(([x,y])=>scene.project(x,y,0)))} fill="#334155" fillOpacity=".3" stroke="#64748b"/>
    {scene.cells.map((c,i)=><polygon key={i} points={c.path} fill={c.positive?"#168ca0":"#64748b"} fillOpacity=".7" stroke="#cbd5e1" strokeOpacity=".22" strokeWidth=".6"/>)}
    <polyline points={scene.path(scene.zero)} fill="none" stroke="#f8fafc" strokeWidth="3"/>
@@ -56,7 +66,7 @@ function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[
    {eq&&nearest&&<><line x1={p[0]} y1={p[1]} x2={eq[0]} y2={eq[1]} stroke="#fb923c" strokeWidth="3"/><circle cx={eq[0]} cy={eq[1]} r="7" fill="#fb923c" stroke="white"><title>{`Equilibrio: ${num(nearest.q)} t · ${num(nearest.d,4)}/kg`}</title></circle></>}
    {points.map(point=>{const at=scene.project(point.q,point.d,point.z);return <g key={point.key}><circle cx={at[0]} cy={at[1]} r="7" fill={point.state==="proyectada"?"#020617":point.color} stroke={point.state==="proyectada"?point.color:"white"} strokeDasharray={point.state==="parcial"?"3 2":undefined} strokeWidth="2"><title>{`${point.label}: ${num(point.q)} t · ${num(point.d,4)}/kg · ${money(point.z)}${point.state?` · ${point.state}`:""}`}</title></circle><text x={at[0]+10} y={at[1]-9} fill={point.color} stroke="#020617" strokeWidth="3" paintOrder="stroke" fontSize="15">{point.label}</text></g>;})}
    <circle cx={p[0]} cy={p[1]} r="9" fill="#38bdf8" stroke="white" strokeWidth="3"><title>{`Escenario: ${num(q)} t · ${num(d,4)}/kg · ${money(profit(model,q,d))}`}</title></circle>
-   <text x="40" y="635" fill="#cbd5e1" fontSize="16">Venta: {num(scene.x0,0)}–{num(scene.x1,0)} t/mes</text><text x="700" y="635" fill="#cbd5e1" fontSize="16">Descuento: ${num(scene.y0)}–${num(scene.y1)}/kg</text>
+   <text x="16" y={viewport.height-35} fill="#cbd5e1" fontSize="13">Venta: {num(scene.x0,0)}–{num(scene.x1,0)} t/mes</text><text x="16" y={viewport.height-15} fill="#cbd5e1" fontSize="13">Descuento: ${num(scene.y0)}–${num(scene.y1)}/kg</text>
    {[[scene.x0,scene.y0],[scene.x1,scene.y0],[scene.x0,scene.y1]].map(([x,y],i)=>{const at=scene.project(x,y,0);return <text key={i} x={at[0]} y={at[1]+22} textAnchor="middle" fontSize="14" fill="#e2e8f0">{i===2?`$${num(y)}/kg`:`${num(x,0)} t`}</text>;})}
    <line x1={scene.project(scene.x0,scene.y0,scene.z0)[0]} y1={scene.project(scene.x0,scene.y0,scene.z0)[1]} x2={scene.project(scene.x0,scene.y0,scene.z1)[0]} y2={scene.project(scene.x0,scene.y0,scene.z1)[1]} stroke="#94a3b8"/>
    {[scene.z0,0,scene.z1].map((z,i)=>{const at=scene.project(scene.x0,scene.y0,z);return <text key={i} x={at[0]-8} y={at[1]} textAnchor="end" fill="#e2e8f0" fontSize="13">{money(z)}</text>;})}
@@ -73,6 +83,7 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
  const [columns,setColumns]=useState<any[]>([]),[saved,setSaved]=useState<Saved[]>([]),[error,setError]=useState("");
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false),[busyId,setBusyId]=useState<string|null>(null);
  const [weekError,setWeekError]=useState("");
+ const [monthsBack,setMonthsBack]=useState(1),[hiddenWeeks,setHiddenWeeks]=useState<string[]>([]),[weeksLoading,setWeeksLoading]=useState(true);
  const [categories,setCategories]=useState<CategoryLine[]>([]),[categoryError,setCategoryError]=useState("");
  const saveLock=useRef(false);
  const plant=row.plant_code||row.empresa;
@@ -82,17 +93,33 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
   const data=await response.json();if(!response.ok)throw new Error(data.error||"No se pudo completar la operación");return data;
  }
  useEffect(()=>{let active=true;setLoading(true);
-  const weekly=new URLSearchParams(params);weekly.set("view","periods");weekly.set("period_mode","weeks");weekly.set("upload_day",cutoff);if(versionAsOf)weekly.set("version_as_of_corte","1");
-  const requests=[request(`/api/dashboard/igf-diario-semanal?${weekly}`).then(data=>{if(active)setColumns(data.columns||[]);}).catch(e=>{if(active)setWeekError(e.message);}),
-   request(`/api/dashboard/igf-simulation-proposals?${params}`).then(data=>{if(active)setSaved(data.rows||[]);}).catch(e=>{if(active)setError(e.message);}),
+  const requests=[request(`/api/dashboard/igf-simulation-proposals?${params}`).then(data=>{if(active)setSaved(data.rows||[]);}).catch(e=>{if(active)setError(e.message);}),
    request(`/api/dashboard/igf-simulation-categories?${params}&cutoff=${encodeURIComponent(cutoff)}&target_kg=${(row.ventaTon||0)*1000}`).then(data=>{if(active)setCategories(data.rows||[]);}).catch(e=>{if(active)setCategoryError(e.message);})];
   Promise.all(requests).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};
  // Request identity includes the selected cut and plant; modal remounts on context changes.
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[params,token,cutoff,versionAsOf]);
+ useEffect(()=>{
+  const controller=new AbortController();setWeeksLoading(true);setWeekError("");setColumns([]);
+  const periods=historyPeriods(year,month,monthsBack);
+  const requests=periods.map(period=>{
+   const weekly=new URLSearchParams(params);weekly.set("year",String(period.year));weekly.set("month",String(period.month));
+   weekly.set("view","periods");weekly.set("period_mode","weeks");weekly.set("upload_day",cutoff);
+   if(versionAsOf)weekly.set("version_as_of_corte","1");
+   return request(`/api/dashboard/igf-diario-semanal?${weekly}`,{signal:controller.signal});
+  });
+  void Promise.allSettled(requests).then(results=>{
+   if(controller.signal.aborted)return;
+   setColumns(mergeWeekColumns(results.filter((r):r is PromiseFulfilledResult<any>=>r.status==="fulfilled").map(r=>r.value.columns||[])));
+   const failed=results.flatMap((r,i)=>r.status==="rejected"?[`${periods[i].month}/${periods[i].year}: ${r.reason?.message||"No disponible"}`]:[]);
+   setWeekError(failed.join("; "));setWeeksLoading(false);
+  });
+  return()=>controller.abort();
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[params,token,year,month,cutoff,versionAsOf,monthsBack]);
  useEffect(()=>{const listener=(e:KeyboardEvent)=>{if(e.key==="Escape"&&!saving&&!busyId)onClose();};document.addEventListener("keydown",listener);return()=>document.removeEventListener("keydown",listener);},[onClose,saving,busyId]);
  const weeks=useMemo(()=>weeklyPoints(columns,year,month),[columns,year,month]);
- const points:Point[]=weeks.filter((w:any)=>w.available).map((w:any)=>({...w,color:"#c084fc"}));
+ const points:Point[]=visibleWeekPoints(weeks,hiddenWeeks);
  if(model)points.push({key:"current",label:"Tendencia actual",q:model.q,d:model.d,z:profit(model,model.q,model.d),color:"#facc15",state:"actual"});
  for(const proposal of saved)points.push({key:`proposal-${proposal.id}`,label:proposal.name,q:Number(proposal.volume_ton),d:Number(proposal.discount_kg),z:profit(proposal.basis,Number(proposal.volume_ton),Number(proposal.discount_kg)),color:"#4ade80"});
  async function save(){if(!model||saveLock.current)return;saveLock.current=true;setSaving(true);setError("");try{
@@ -102,15 +129,23 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
  async function remove(id:string){setBusyId(id);setError("");try{await request(`/api/dashboard/igf-simulation-proposals?${params}&id=${encodeURIComponent(id)}`,{method:"DELETE"});setSaved(rows=>rows.filter(r=>r.id!==id));}catch(e){setError((e as Error).message);}finally{setBusyId(null);}}
  const field="w-28 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-white";
  return <div role="dialog" aria-modal="true" aria-labelledby="igf-simulation-title" className="fixed inset-0 z-[80] bg-slate-950/90 p-2 sm:p-4">
-  <div className="mx-auto flex max-h-[96vh] max-w-[1600px] flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 text-slate-100">
+  <div className="mx-auto flex max-h-[96vh] w-full flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 text-slate-100">
    <header className="flex items-center justify-between gap-3 border-b border-slate-700 p-3"><div><h2 id="igf-simulation-title" className="text-lg font-semibold">Simulador de rentabilidad · {row.empresa}</h2><p className="text-xs text-slate-400">{month}/{year} · Corte {cutoff} · {mode==="forecast"?"Forecast":"IGF Diario acumulado"}</p></div><button type="button" disabled={saving||!!busyId} onClick={onClose} className="rounded bg-slate-700 px-3 py-2">Cerrar</button></header>
    <div className="overflow-y-auto p-3 sm:p-4">
+    <div className="mb-3 rounded border border-slate-700 p-2">
+     <label className="flex flex-wrap items-center gap-2 text-xs">Historial de semanas
+      <select aria-label="Historial de semanas" value={monthsBack} onChange={e=>setMonthsBack(Number(e.target.value))} className="rounded border border-slate-600 bg-slate-950 px-2 py-1">
+       <option value={0}>Solo el mes seleccionado</option><option value={1}>Mes anterior y mes seleccionado</option><option value={2}>Últimos 3 meses hasta el seleccionado</option><option value={5}>Últimos 6 meses hasta el seleccionado</option>
+      </select><span className="text-slate-400">El historial usa el mismo corte y la misma planta.</span>
+     </label>
+     {weeksLoading?<p role="status" className="mt-2 text-xs text-slate-400">Cargando semanas…</p>:<WeekControls weeks={weeks} hidden={hiddenWeeks} onChange={setHiddenWeeks}/>}
+    </div>
     {model?<>
      <div className="mb-3 flex flex-wrap items-center gap-4 text-xs"><label>Venta (t/mes) <input aria-label="Venta simulada en toneladas" type="number" min="1" max="1000000" step="1" value={q} onChange={e=>setQ(Math.max(1,Math.min(1000000,Number(e.target.value)||1)))} className={field}/></label><label>Comisión / descuento ($/kg) <input aria-label="Descuento simulado por kilo" type="number" min="-100" max="100" step=".01" value={d} onChange={e=>setD(Math.max(-100,Math.min(100,Number(e.target.value)||0)))} className={field}/></label><strong className="text-base text-cyan-200">Resultado: {money(profit(model,q,d))}</strong><button type="button" onClick={()=>{setQ(model.q);setD(model.d);}} className="rounded bg-slate-700 px-2 py-1">Restaurar actual</button></div>
      <Surface model={model} q={q} d={d} points={points}/>
      <p className="my-3 text-xs text-slate-400">La superficie reproduce el resultado seleccionado y mantiene fijos los gastos e impuestos mensuales: {money(model.fixed)}. Se modifica venta y descuento; no predice la reacción de los clientes. Las semanas se convierten a ritmo mensual (venta y resultado ÷ días del periodo × días del mes) para compararlas. Pueden quedar fuera de la superficie por cambios en margen, HG o gastos. La tendencia actual es el cierre mensual seleccionado, con la proyección que incluya el dashboard.</p>
     </>:<p className="mb-4 rounded border border-amber-700 p-3 text-amber-200">Faltan venta, comisión, impuestos, gastos o resultado final para calcular la superficie. Completa los datos de esta planta; no se sustituye HG faltante por cero. Puedes consultar sus semanas y propuestas guardadas.</p>}
-    {loading&&<p role="status" className="text-sm text-slate-400">Cargando semanas y propuestas…</p>}
+    {loading&&<p role="status" className="text-sm text-slate-400">Cargando propuestas y categorías…</p>}
     {weekError&&<p role="alert" className="text-amber-200">Semanas: {weekError}</p>}
     <h3 className="mt-4 font-semibold">Venta y descuentos por categoría y subcategoría</h3>
     <p className="text-xs text-slate-400">Fuente ARR: mezcla de clientes con venta anterior al corte, distribuida al volumen mensual seleccionado. Clasificación vigente de clientes. El descuento se muestra como costo positivo y se pondera por kilos. Esta tabla es la base de referencia; los cambios globales del simulador no modifican la mezcla ni los descuentos reales de cada grupo.</p>
@@ -122,7 +157,7 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
     </tbody></table></div>
     {!loading&&!categoryError&&!categories.length&&<p className="text-sm text-amber-200">Sin ventas de clientes anteriores al corte para distribuir por categoría.</p>}
     {categories.length>0&&model&&(()=>{const kg=categories.reduce((s,c)=>s+c.kg,0),amount=categories.every(c=>c.discount_amount!=null)?categories.reduce((s,c)=>s+c.discount_amount!,0):null;const discount=amount!=null&&kg>0?amount/kg:null;return <p className="mt-2 text-xs text-amber-200">Conciliación con el resultado seleccionado: diferencia de venta {num(kg/1000-model.q)} t; diferencia de descuento {num(discount!=null?discount-model.d:null,4)} $/kg. ARR y el IGF pueden usar fuentes o ponderaciones distintas; no se fuerza la coincidencia del descuento.</p>;})()}
-    <h3 className="mt-4 font-semibold">Resultados por semana</h3><div className="overflow-x-auto"><table className="w-full text-right text-sm"><thead className="text-xs text-slate-400"><tr>{["Semana / estado","Venta del periodo (t)","Descuento ($/kg)","Resultado del periodo","Ritmo mensual (t)","Resultado mensual equivalente"].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{weeks.map((w:any)=><tr key={w.key} className="border-t border-slate-700"><td className="p-2 text-left">{w.label} · {w.state}<div className="text-xs text-slate-400">{w.from} – {w.to}{!w.available?" · Cobertura incompleta; sin punto financiero":""}</div></td><td>{num(w.actualTon)}</td><td>{num(w.d,4)}</td><td>{money(w.actualResult)}</td><td>{num(w.q)}</td><td>{money(w.z)}</td></tr>)}</tbody></table></div>
+    <h3 className="mt-4 font-semibold">Resultados por semana</h3><p className="text-xs text-slate-400">La tabla conserva todas las semanas cargadas; las casillas superiores controlan cuáles aparecen en la gráfica. Los equivalentes mensuales usan {new Date(year,month,0).getDate()} días del mes seleccionado, también para las semanas históricas.</p><div className="overflow-x-auto"><table className="w-full text-right text-sm"><thead className="text-xs text-slate-400"><tr>{["Semana / estado","Venta del periodo (t)","Descuento ($/kg)","Resultado del periodo","Ritmo mensual (t)","Resultado mensual equivalente"].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{weeks.map((w:any)=><tr key={w.key} className={`border-t border-slate-700 ${hiddenWeeks.includes(w.key)?"opacity-50":""}`}><td className="p-2 text-left">{w.label} · {w.state}<div className="text-xs text-slate-400">{w.from} – {w.to}{!w.available?" · Cobertura incompleta; sin punto financiero":hiddenWeeks.includes(w.key)?" · Oculta en gráfica":""}</div></td><td>{num(w.actualTon)}</td><td>{num(w.d,4)}</td><td>{money(w.actualResult)}</td><td>{num(w.q)}</td><td>{money(w.z)}</td></tr>)}</tbody></table></div>
     <h3 className="mt-5 font-semibold">Propuestas guardadas · {row.empresa} · {month}/{year}</h3>
     <p className="text-xs text-slate-400">Se guardan en el dashboard y conservan los supuestos y el corte de creación. No cambian el presupuesto ni las comisiones reales.</p>
     {model&&<form className="my-3 flex flex-wrap gap-2" onSubmit={e=>{e.preventDefault();void save();}}><input aria-label="Nombre de propuesta" required maxLength={120} value={name} onChange={e=>setName(e.target.value)} placeholder="Nombre de la propuesta" className="rounded border border-slate-600 bg-slate-950 px-3 py-2 text-sm"/><button type="submit" disabled={saving||loading||!name.trim()} className="rounded bg-emerald-700 px-3 py-2 text-sm disabled:opacity-40">{saving?"Guardando…":"Guardar punto actual"}</button></form>}
@@ -132,6 +167,15 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
    </div>
   </div>
  </div>;
+}
+
+type WeekChoice={key:string;label:string;from:string;to:string;state:string;available:boolean};
+function WeekControls({weeks,hidden,onChange}:{weeks:WeekChoice[];hidden:string[];onChange:(keys:string[])=>void}) {
+ const available=weeks.filter(w=>w.available);
+ return <fieldset className="mt-2"><legend className="text-xs text-slate-300">Semanas visibles en gráfica · {available.filter(w=>!hidden.includes(w.key)).length}/{available.length}</legend>
+  <div className="my-2 flex gap-3 text-xs"><button type="button" onClick={()=>onChange([])} className="text-cyan-300 underline">Mostrar todas</button><button type="button" onClick={()=>onChange(available.map(w=>w.key))} className="text-cyan-300 underline">Ocultar todas</button></div>
+  <div className="flex max-h-28 flex-wrap gap-2 overflow-y-auto">{weeks.map(w=><label key={w.key} title={`${w.from} – ${w.to} · ${w.state}${!w.available?" · Cobertura incompleta; sin punto financiero":""}`} className={`flex items-center gap-1 rounded border border-slate-600 px-2 py-1 text-xs ${w.available?"text-slate-100":"text-slate-500"}`}><input aria-label={`Mostrar ${w.label} del ${w.from}`} type="checkbox" disabled={!w.available} checked={w.available&&!hidden.includes(w.key)} onChange={e=>onChange(e.target.checked?hidden.filter(key=>key!==w.key):[...hidden,w.key])} className="accent-purple-400"/>{w.label} · {w.from.slice(5)}{!w.available?" · incompleta":""}</label>)}</div>
+ </fieldset>;
 }
 
 function CategoryGroup({category,lines,kg,amount}:{category:string;lines:CategoryLine[];kg:number;amount:number|null}) {
