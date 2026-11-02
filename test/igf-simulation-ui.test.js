@@ -34,7 +34,7 @@ test("3D renders weekly/current/proposal markers, touch rotation and cancel with
 });
 test("partial financial data shows an explicit explanation rather than a fictional 3D scenario",()=>{
  const h=harness();const tree=h.renderModal({row:{empresa:"GT Puebla",plant_code:"Puebla",ventaTon:100,comDesc:-2,resultadoFinalImporte:null},token:"test",year:2026,month:11,cutoff:"2026-11-02",mode:"igf_diario",versionAsOf:true,onClose(){}});
- const html=renderToStaticMarkup(tree);assert.match(html,/Faltan venta/);assert.match(html,/HG faltante/);assert.doesNotMatch(html,/<svg/);assert.match(html,/categoría y subcategoría/);
+ const html=renderToStaticMarkup(tree);assert.match(html,/Faltan venta/);assert.match(html,/HG faltante/);assert.doesNotMatch(html,/<svg/);assert.match(html,/Categorías del mes/);
 });
 
 test("zoom grows the plotted surface, has bounds and resets without changing the scenario",()=>{
@@ -71,4 +71,25 @@ test("three extended axes have arrows, named units and multiple tick labels, wit
  assert.ok(resultTicks.some(v=>v<0));assert.ok(resultTicks.some(v=>v>0));assert.ok(resultTicks.includes(0));
  const html=renderToStaticMarkup(tree);assert.match(html,/Venta \(t\/mes\)/);assert.match(html,/Descuento \(\$\/kg\)/);assert.match(html,/Resultado \(MXN\/mes\)/);
  assert.match(html,/no representan porcentajes ni probabilidades/);assert.doesNotMatch(html,/NaN|Infinity/);
+});
+
+test("weekly summary stays in a popup, with categories and proposals accessible without long bottom tables",()=>{
+ const h=harness(),props={row:{empresa:"GT Puebla",plant_code:"Puebla",ventaTon:801,comDesc:-3.62,margen:6.2,operativos:3012592,corporativos:837601,impuestos:.53,resultadoFinalImporte:-2744015},token:"test",year:2026,month:11,cutoff:"2026-11-02",mode:"igf_diario",versionAsOf:true,onClose(){}};
+ let tree=h.renderModal(props),html=renderToStaticMarkup(tree);
+ assert.match(html,/Margen/);assert.match(html,/3,012,592/);assert.doesNotMatch(html,/Resultados por semana|TOTAL ARR|Nombre de propuesta|Historial de semanas/);
+ elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Semanas · ").props.onClick();
+ tree=h.renderModal(props);html=renderToStaticMarkup(tree);assert.match(html,/Semanas · selección y resumen financiero/);assert.match(html,/Historial de semanas/);
+ const popup=elements(tree).find(e=>typeof e.type==="function"&&e.props.title==="Semanas · selección y resumen financiero");popup.props.onClose();
+ tree=h.renderModal(props);elements(tree).find(e=>e.type==="button"&&e.props.children==="Categorías del mes").props.onClick();
+ html=renderToStaticMarkup(h.renderModal(props));assert.match(html,/categoría y subcategoría/);assert.match(html,/TOTAL CASA/);
+ tree=h.renderModal(props);elements(tree).find(e=>typeof e.type==="function"&&e.props.title?.includes("categoría y subcategoría")).props.onClose();
+ tree=h.renderModal(props);elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Agregar punto / propuestas (").props.onClick();
+ html=renderToStaticMarkup(h.renderModal(props));assert.match(html,/Nombre de propuesta/);assert.match(html,/Guardar punto actual/);
+});
+test("each weekly financial cell opens the chosen week's detail without toggling its visibility",()=>{
+ const h=harness();let selected=null,hidden=[];
+ const week={key:"a",label:"Semana 40",from:"2026-09-27",to:"2026-10-03",available:true,state:"real",actualTon:100,d:3,actualResult:-20,financials:{margen:6,operativos:100,corporativos:50,gasto:150}};
+ const tree=h.renderWeeks({weeks:[week],hidden,onChange:v=>hidden=v,onDetail:(w,field)=>selected={w,field}});
+ elements(tree).find(e=>e.props?.["aria-label"]==="Gastos operativos de Semana 40 del 2026-09-27").props.onClick();
+ assert.equal(selected.w,week);assert.equal(selected.field,"operativos");assert.deepEqual(hidden,[]);assert.match(renderToStaticMarkup(tree),/Margen bruto/);
 });

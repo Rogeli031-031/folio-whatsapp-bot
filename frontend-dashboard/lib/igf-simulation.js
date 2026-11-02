@@ -9,6 +9,13 @@ function modelFromRow(row) {
  return { q, d, fixed, a:(row.resultadoFinalImporte+fixed)/(q*1000)+d };
 }
 const profit = (model,q,d) => q*1000*(model.a-d)-model.fixed;
+function weeklyFinancials(metrics) {
+ const m=metrics||{},kg=m.venta_kg;
+ const amount=keys=>finite(kg)&&kg>0&&keys.every(k=>finite(m[k]))?keys.reduce((s,k)=>s+m[k],0)*kg:null;
+ const operativos=finite(m.gasto_operativo_forecast_kg)?amount(["gasto_operativo_forecast_kg"]):amount(["presupuesto_nomina_gastos_kg","presupuesto_imss_sua_kg","extraordinarios_kg","provisiones_planta_kg"]);
+ const corporativos=amount(["gasto_corporativo_kg","inversiones_kg","impuestos_federales_kg"]);
+ return {margen:finite(m.margen_kg)?m.margen_kg:null,operativos,corporativos,gasto:operativos!=null&&corporativos!=null?operativos+corporativos:null};
+}
 function historyPeriods(year, month, monthsBack = 1) {
  const back = Math.max(0, Math.min(5, Math.trunc(monthsBack)));
  return Array.from({length:back+1},(_,i)=>{
@@ -45,7 +52,7 @@ function weeklyPoints(columns, year, month) {
   const covered=key=>coverage[key] && coverage[key].coverage_kg_pct != null && coverage[key].coverage_kg_pct>=99.999;
   const length=(Date.parse(c.fecha_hasta)-Date.parse(c.fecha_desde))/86400000+1;
   const available=finite(m.venta_kg)&&m.venta_kg>0&&finite(m.com_desc_kg)&&finite(m.resultado_mxn)&&covered("resultado")&&covered("com_desc_kg")&&length>0;
-  return { key:c.key,label:c.label,from:c.fecha_desde,to:c.fecha_hasta,state:c.estado,
+  return { key:c.key,label:c.label,from:c.fecha_desde,to:c.fecha_hasta,state:c.estado,metrics:m,financials:weeklyFinancials(m),forecastSources:c.forecast_sources||[],
    q:finite(m.venta_kg)&&m.venta_kg>0&&length>0?m.venta_kg/1000/length*daysInMonth:null,
    d:finite(m.com_desc_kg)&&covered("com_desc_kg")?-m.com_desc_kg:null,
    z:available?m.resultado_mxn/length*daysInMonth:null,
@@ -74,4 +81,4 @@ function closestEquilibrium(s) {
  const q=candidates.reduce((best,v)=>objective(v)<objective(best)?v:best,trial);
  return {q,d:Math.max(0,eq(q))};
 }
-module.exports={modelFromRow,profit,weeklyPoints,closestEquilibrium,historyPeriods,mergeWeekColumns,visibleWeekPoints,axisTicks};
+module.exports={modelFromRow,profit,weeklyPoints,closestEquilibrium,historyPeriods,mergeWeekColumns,visibleWeekPoints,axisTicks,weeklyFinancials};

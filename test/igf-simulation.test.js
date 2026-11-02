@@ -103,3 +103,13 @@ test("ARR simulator cutoff caps sales and discounts without changing the default
  queries.length=0;await forecast.computeClientesDescuentoMes(client,2026,11,"Puebla",{historico:true});
  query=queries.find(q=>q.sql.includes("FULL OUTER JOIN descs"));assert.deepEqual(query.args,["2026-11-01","2026-11-30","Puebla"]);
 });
+
+test("weekly expense summary sums the contract groups, preserves gaps and uses the explicit historical operating total",()=>{
+ const {weeklyFinancials}=require("../frontend-dashboard/lib/igf-simulation");
+ const m={venta_kg:1000,margen_kg:6,gasto_corporativo_kg:.4,inversiones_kg:.1,impuestos_federales_kg:.2,presupuesto_nomina_gastos_kg:1,presupuesto_imss_sua_kg:.2,extraordinarios_kg:0,provisiones_planta_kg:.1};
+ const result=weeklyFinancials(m);assert.equal(result.margen,6);assert.equal(result.operativos,1300);assert.equal(result.corporativos,700);assert.equal(result.gasto,2000);
+ assert.equal(weeklyFinancials({...m,presupuesto_imss_sua_kg:null}).operativos,null);
+ assert.equal(weeklyFinancials({...m,venta_kg:0}).corporativos,null);
+ assert.equal(weeklyFinancials({...m,presupuesto_imss_sua_kg:null,gasto_operativo_forecast_kg:1.8}).operativos,1800);
+ assert.equal(weeklyFinancials({}).gasto,null);
+});
