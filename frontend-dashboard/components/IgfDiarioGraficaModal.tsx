@@ -264,11 +264,16 @@ export default function IgfDiarioGraficaModal({
   const [error, setError] = useState<string | null>(null);
   const [hover, setHover] = useState<number | null>(null);
   const [arrCliente, setArrCliente] = useState<string | null>(null);
+  const currentExcelMonth = `${year}-${String(month).padStart(2, "0")}`;
+  const [excelMonth, setExcelMonth] = useState(currentExcelMonth);
+  useEffect(() => { setExcelMonth(currentExcelMonth); }, [currentExcelMonth]);
   const excelWeeks = useMemo(
-    () => excelWeekChoices(year, month, uploadDay || ""),
-    [year, month, uploadDay],
+    () => excelWeekChoices(Number(excelMonth.slice(0,4)), Number(excelMonth.slice(5,7)), uploadDay || ""),
+    [excelMonth, uploadDay],
   );
   const [excelWeekAnchor, setExcelWeekAnchor] = useState("");
+  const selectedExcelWeekAnchor = excelWeeks.some(week => week.fecha_desde === excelWeekAnchor)
+    ? excelWeekAnchor : defaultExcelWeekAnchor(excelWeeks, weekAnchor, uploadDay);
   const arrEmpresa = todas ? "Provincia" : scopeLabel;
 
   useEffect(() => {
@@ -373,17 +378,22 @@ export default function IgfDiarioGraficaModal({
       <div className="flex max-h-[96vh] w-full max-w-[1600px] flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 shadow-2xl">
         <div className="relative flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 px-4 py-3">
           <h2 className="text-base font-semibold text-white">{seriesMetric && seriesLabel ? `Gráfica · ${seriesLabel}` : "Gráfica · Rentabilidad IGF Diario"}</h2>
-          <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 text-center">
+          <div className="text-center">
             <div className="text-3xl font-black tracking-[0.12em] text-sky-300 sm:text-4xl">
               {scopeLabel}
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <label className="flex items-center gap-2 text-xs text-slate-200">Mes de la semana:
+              <input type="month" aria-label="Mes de la semana a descargar" min="2000-01" max={currentExcelMonth}
+                value={excelMonth} onChange={event => {const value=event.target.value;if(/^\d{4}-\d{2}$/.test(value)&&value>="2000-01"&&value<=currentExcelMonth){setExcelMonth(value);setExcelWeekAnchor("");}}}
+                className="rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-white"/>
+            </label>
             <label className="flex flex-wrap items-center gap-2 text-xs text-slate-200">
               <span id="excel-week-label">Semana a descargar:</span>
               <select
                 aria-labelledby="excel-week-label"
-                value={excelWeekAnchor}
+                value={selectedExcelWeekAnchor}
                 onChange={(event) => setExcelWeekAnchor(event.target.value)}
                 className="max-w-full rounded border border-slate-600 bg-slate-800 px-2 py-1.5 text-xs text-white"
               >
@@ -396,11 +406,12 @@ export default function IgfDiarioGraficaModal({
             </label>
             <button
               type="button"
-              onClick={() => window.open(excelDownloadHref(excelUrl, excelWeekAnchor || weekAnchor, seriesMetric), "_blank", "noopener,noreferrer")}
+              onClick={() => window.open(excelDownloadHref(excelUrl, selectedExcelWeekAnchor, seriesMetric), "_blank", "noopener,noreferrer")}
               className="rounded bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
             >
               Descargar Excel
             </button>
+            <span className="text-xs text-slate-400">RESUMEN: semana elegida · corte {uploadDay || "sin corte"}</span>
             <button
               type="button"
               onClick={onClose}
