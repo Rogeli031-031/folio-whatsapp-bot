@@ -65,7 +65,7 @@ test("F-H. la semana elegida entra como week_anchor y conserva summary_metric", 
   assert.match(proyectada, /week_anchor=2026-10-25/);
   assert.match(historica, /summary_metric=resultado_kg/);
   assert.match(proyectada, /summary_metric=resultado_kg/);
-  assert.match(MODAL, /excelDownloadHref\(excelUrl, excelWeekAnchor \|\| weekAnchor, seriesMetric\)/);
+  assert.match(MODAL, /excelDownloadHref\(excelUrl, selectedExcelWeekAnchor, seriesMetric\)/);
 });
 
 test("I. elegir la semana del Excel no entra en la carga de la gráfica", () => {
