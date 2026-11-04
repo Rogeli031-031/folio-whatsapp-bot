@@ -9,6 +9,11 @@ function modelFromRow(row) {
  return { q, d, fixed, a:(row.resultadoFinalImporte+fixed)/(q*1000)+d };
 }
 const profit = (model,q,d) => q*1000*(model.a-d)-model.fixed;
+function modelWithHg(model, baseHg, hg) {
+ // HG is a signed cost per kg: a higher HG reduces contribution and profit.
+ if(!model||!finite(baseHg)||!finite(hg))return model;
+ return {...model,a:model.a+baseHg-hg};
+}
 function weeklyFinancials(metrics) {
  const m=metrics||{},kg=m.venta_kg;
  const amount=keys=>finite(kg)&&kg>0&&keys.every(k=>finite(m[k]))?keys.reduce((s,k)=>s+m[k],0)*kg:null;
@@ -81,4 +86,4 @@ function closestEquilibrium(s) {
  const q=candidates.reduce((best,v)=>objective(v)<objective(best)?v:best,trial);
  return {q,d:Math.max(0,eq(q))};
 }
-module.exports={modelFromRow,profit,weeklyPoints,closestEquilibrium,historyPeriods,mergeWeekColumns,visibleWeekPoints,axisTicks,weeklyFinancials};
+module.exports={modelFromRow,modelWithHg,profit,weeklyPoints,closestEquilibrium,historyPeriods,mergeWeekColumns,visibleWeekPoints,axisTicks,weeklyFinancials};

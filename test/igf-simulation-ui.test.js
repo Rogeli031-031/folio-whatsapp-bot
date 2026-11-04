@@ -4,18 +4,18 @@ const ts=require("../frontend-dashboard/node_modules/typescript"),React=require(
 const {renderToStaticMarkup}=require("../frontend-dashboard/node_modules/react-dom/server");
 const root=path.join(__dirname,"../frontend-dashboard");
 const text=fs.readFileSync(path.join(root,"components/IgfSimulationModal.tsx"),"utf8");
-function harness(){
+function harness(fetcher){
  let index=0;const state=[];
  const hooks={...React,useMemo:fn=>fn(),useEffect(){},useState(initial){const i=index++;if(!(i in state))state[i]=initial;return [state[i],v=>{state[i]=typeof v==="function"?v(state[i]):v;}];},useRef(initial){const i=index++;if(!(i in state))state[i]={current:initial};return state[i];}};
  const code=ts.transpileModule(text,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  const module={exports:{}};
- new Function("require","module","exports",code+"\nmodule.exports.Surface=Surface;module.exports.WeekControls=WeekControls;")((name)=>{
+ new Function("require","module","exports","fetch",code+"\nmodule.exports.Surface=Surface;module.exports.WeekControls=WeekControls;")((name)=>{
   if(name==="react")return hooks;
   if(name==="react/jsx-runtime")return require("../frontend-dashboard/node_modules/react/jsx-runtime");
   if(name==="@/lib/api")return {getApiUrl:x=>x};
   if(name==="@/lib/igf-simulation")return require("../frontend-dashboard/lib/igf-simulation");
   throw new Error(name);
- },module,module.exports);
+ },module,module.exports,fetcher);
  return {render(props){index=0;return module.exports.Surface(props);},renderModal(props){index=0;return module.exports.default(props);},renderWeeks(props){return module.exports.WeekControls(props);}};
 }
 function elements(node){if(!node||typeof node!=="object")return [];if(Array.isArray(node))return node.flatMap(elements);return [node,...elements(node.props?.children)];}
@@ -92,4 +92,31 @@ test("each weekly financial cell opens the chosen week's detail without toggling
  const tree=h.renderWeeks({weeks:[week],hidden,onChange:v=>hidden=v,onDetail:(w,field)=>selected={w,field}});
  elements(tree).find(e=>e.props?.["aria-label"]==="Gastos operativos de Semana 40 del 2026-09-27").props.onClick();
  assert.equal(selected.w,week);assert.equal(selected.field,"operativos");assert.deepEqual(hidden,[]);assert.match(renderToStaticMarkup(tree),/Margen bruto/);
+});
+
+test("HG editing moves the surface and result, keeps actual trend unchanged and restores all three inputs",()=>{
+ const h=harness(),row={empresa:"GT Puebla",plant_code:"Puebla",ventaTon:800,comDesc:-3,margen:6.2,operativos:2200000,corporativos:800000,impuestos:.5,resultadoFinalImporte:-200000,hgKg:.4};
+ const props={row,token:"test",year:2026,month:11,cutoff:"2026-11-04",mode:"igf_diario",versionAsOf:true,onClose(){}};
+ const field=(tree,label)=>elements(tree).find(e=>e.props?.["aria-label"]===label);
+ let tree=h.renderModal(props);const originalSurface=elements(tree).find(e=>e.props?.points&&e.props?.model);const originalA=originalSurface.props.model.a;
+ assert.equal(field(tree,"HG simulado por kilo").props.value,.4);
+ field(tree,"HG simulado por kilo").props.onChange({target:{value:".6"}});field(tree,"Venta simulada en toneladas").props.onChange({target:{value:"1000"}});
+ tree=h.renderModal(props);const surface=elements(tree).find(e=>e.props?.points&&e.props?.model);
+ assert.ok(Math.abs(surface.props.model.a-originalA+.2)<1e-10);assert.equal(surface.props.q,1000);
+ assert.deepEqual(surface.props.points.find(p=>p.key==="current"),originalSurface.props.points.find(p=>p.key==="current"));
+ elements(tree).find(e=>e.type==="button"&&e.props.children==="Restaurar actual").props.onClick();tree=h.renderModal(props);
+ assert.equal(field(tree,"Venta simulada en toneladas").props.value,800);assert.equal(field(tree,"Descuento simulado por kilo").props.value,3);assert.equal(field(tree,"HG simulado por kilo").props.value,.4);assert.equal(row.hgKg,.4);
+ const missing=harness().renderModal({...props,row:{...row,hgKg:null}});assert.equal(field(missing,"HG simulado por kilo").props.disabled,true);assert.match(renderToStaticMarkup(missing),/HG sin dato/);
+});
+test("saving a proposal sends the simulated HG and calibrated contribution together",async()=>{
+ let posted;const h=harness(async(path,options)=>{posted=JSON.parse(options.body);return{ok:true,json:async()=>({row:{id:"1",name:posted.name,volume_ton:posted.volume_ton,discount_kg:posted.discount_kg,basis:posted.basis,created_at:"2026-11-04"}})};});
+ const props={row:{empresa:"GT Puebla",plant_code:"Puebla",ventaTon:800,comDesc:-3,operativos:2200000,corporativos:800000,impuestos:.5,resultadoFinalImporte:-200000,hgKg:.4},token:"test",year:2026,month:11,cutoff:"2026-11-04",mode:"igf_diario",versionAsOf:true,onClose(){}};
+ let tree=h.renderModal(props);elements(tree).find(e=>e.props?.["aria-label"]==="HG simulado por kilo").props.onChange({target:{value:"-.2"}});
+ elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Agregar punto / propuestas (").props.onClick();tree=h.renderModal(props);
+ elements(tree).find(e=>e.props?.["aria-label"]==="Nombre de propuesta").props.onChange({target:{value:"HG alternativo"}});tree=h.renderModal(props);
+ elements(tree).find(e=>e.type==="form").props.onSubmit({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(posted.basis.hg_kg,-.2);const {modelFromRow}=require("../frontend-dashboard/lib/igf-simulation");assert.ok(Math.abs(posted.basis.a-modelFromRow(props.row).a-.6)<1e-10);
+ tree=h.renderModal(props);assert.match(renderToStaticMarkup(tree),/HG alternativo/);
+ elements(tree).find(e=>e.props?.["aria-label"]==="HG de propuesta por kilo").props.onChange({target:{value:".9"}});tree=h.renderModal(props);
+ elements(tree).find(e=>e.type==="button"&&e.props.children==="Usar valores").props.onClick();tree=h.renderModal(props);assert.equal(elements(tree).find(e=>e.props?.["aria-label"]==="HG de propuesta por kilo").props.value,-.2);
 });
