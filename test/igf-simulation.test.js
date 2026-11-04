@@ -113,3 +113,24 @@ test("weekly expense summary sums the contract groups, preserves gaps and uses t
  assert.equal(weeklyFinancials({...m,presupuesto_imss_sua_kg:null,gasto_operativo_forecast_kg:1.8}).operativos,1800);
  assert.equal(weeklyFinancials({}).gasto,null);
 });
+
+test("editable signed HG changes profit by simulated kilos, preserves the baseline and moves breakeven",()=>{
+ const {modelWithHg}=require("../frontend-dashboard/lib/igf-simulation");
+ const row={ventaTon:800,comDesc:-3,resultadoFinalImporte:-200000,operativos:2200000,corporativos:800000,impuestos:.5,hgKg:.4};
+ const base=modelFromRow(row),same=modelWithHg(base,.4,.4),higher=modelWithHg(base,.4,.6),negative=modelWithHg(base,.4,-.2);
+ assert.ok(Math.abs(profit(same,800,3)+200000)<1e-6);
+ for(const q of [800,1000]){
+  assert.ok(Math.abs((profit(higher,q,3)-profit(base,q,3))+q*1000*.2)<1e-6);
+  assert.ok(Math.abs((profit(negative,q,3)-profit(base,q,3))-q*1000*.6)<1e-6);
+ }
+ assert.equal(modelWithHg(base,null,0),base);assert.equal(modelWithHg(base,.4,NaN),base);assert.notEqual(closestEquilibrium({...higher,q:800,d:3}).q,closestEquilibrium({...base,q:800,d:3}).q);
+ assert.equal(base.a,same.a);assert.equal(higher.fixed,base.fixed);
+});
+test("proposals persist numeric HG including zero/negative and retain compatibility with older proposals",async()=>{
+ for(const hg of [0,.4,-.2]){
+  const parsed=proposals.parseProposal({...valid,basis:{...valid.basis,hg_kg:hg}});assert.equal(parsed.basis.hg_kg,hg);
+  const h=harness();await h.call("post",route,{...valid,plant_code:"Puebla",basis:{...valid.basis,hg_kg:hg}});assert.equal(JSON.parse(h.queries.find(q=>q.sql.includes("INSERT INTO")).args[6]).hg_kg,hg);
+ }
+ assert.equal(proposals.parseProposal(valid).basis.hg_kg,undefined);
+ for(const hg of [null,".4",true,NaN,Infinity,101,-101])assert.ok(proposals.parseProposal({...valid,basis:{...valid.basis,hg_kg:hg}}).error);
+});
