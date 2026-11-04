@@ -12227,6 +12227,8 @@ async function computeIgfForecastMiniPayload(client, igf, year, month, uploadDay
       comDesc: D,
       impuestos: F,
       hgKg: H,
+      hgPct: G,
+      hgDollar: G !== 0 && Number.isFinite(H / G) ? Math.abs(H / G) : null,
       ingreso,
       operativos,
       corporativos,

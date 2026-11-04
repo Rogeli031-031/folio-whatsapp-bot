@@ -134,3 +134,23 @@ test("proposals persist numeric HG including zero/negative and retain compatibil
  assert.equal(proposals.parseProposal(valid).basis.hg_kg,undefined);
  for(const hg of [null,".4",true,NaN,Infinity,101,-101])assert.ok(proposals.parseProposal({...valid,basis:{...valid.basis,hg_kg:hg}}).error);
 });
+
+test("HG percent means generated kilos over sold kilos, valued at gas plus freight, with baseline parity",()=>{
+ const {hgPercentContext,hgCostFromPercent,modelWithHg}=require("../frontend-dashboard/lib/igf-simulation");
+ const row={ventaTon:1000,comDesc:-3,resultadoFinalImporte:200000,operativos:2200000,corporativos:800000,impuestos:.5,hgKg:-.98,hgDollar:14,hgPct:.07};
+ const c=hgPercentContext(row);assert.ok(Math.abs(c.percent-7)<1e-10);assert.equal(c.price,14);
+ const base=modelFromRow(row);assert.ok(Math.abs(profit(modelWithHg(base,c.cost,hgCostFromPercent(c.percent,c.price)),1000,3)-200000)<1e-6);
+ const without=modelWithHg(base,c.cost,hgCostFromPercent(0,c.price)),seven=modelWithHg(base,c.cost,hgCostFromPercent(7,c.price));
+ assert.ok(Math.abs(profit(seven,1000,3)-profit(without,1000,3)-70000*14)<1e-6);
+ assert.ok(Math.abs(profit(seven,500,3)-profit(without,500,3)-35000*14)<1e-6);
+ assert.equal(hgCostFromPercent(-7,14),.9800000000000001);assert.equal(hgPercentContext({hgKg:0,hgDollar:14}).percent,0);
+ assert.ok(Math.abs(hgPercentContext({hgKg:-.98,hgPct:.07}).price-14)<1e-10);
+ assert.equal(hgPercentContext({hgKg:0,hgPct:0}).percent,null);assert.equal(hgPercentContext({hgKg:null,hgDollar:14}).percent,null);
+ assert.equal(hgCostFromPercent(null,14),null);assert.equal(hgCostFromPercent(7,0),null);
+});
+test("proposals retain percent fraction and HG valuation, reject inconsistent conversion and accept old unit-based records",()=>{
+ const b={...valid.basis,hg_pct:.07,hg_price_kg:14,hg_kg:-.98};
+ const p=proposals.parseProposal({...valid,basis:b});assert.equal(p.basis.hg_pct,.07);assert.equal(p.basis.hg_price_kg,14);
+ for(const changes of [{hg_pct:7},{hg_pct:null},{hg_price_kg:0},{hg_price_kg:null},{hg_kg:.98},{hg_kg:undefined}])assert.ok(proposals.parseProposal({...valid,basis:{...b,...changes}}).error);
+ assert.ok(!proposals.parseProposal({...valid,basis:{...valid.basis,hg_kg:-.98}}).error);
+});
