@@ -60,19 +60,27 @@ test("proposal validation retains only assumptions and rejects malformed or nonn
  assert.ok(proposals.parseProposal({...valid,name:" "}).error);
  assert.ok(proposals.parsePeriod({year:2026,month:13}).error);
 });
-function harness(auth={role:"GG",plantas_permitidas:[2]},computeCategories=async()=>({rows:[]})){
+function harness(auth={role:"GG",plantas_permitidas:[2]},computeCategories=async()=>({rows:[]}),updateExists=true){
  const routes={},queries=[];let released=0;
- const client={release(){released++;},async query(sql,args){queries.push({sql,args});return {rows:[{id:"7",name:"Saved"}],rowCount:1};}};
- const app={};for(const method of ["get","post","delete"])app[method]=(path,middleware,fn)=>{routes[`${method}:${path}`]=fn;};
+ const client={release(){released++;},async query(sql,args){queries.push({sql,args});return {rows:sql.startsWith("UPDATE")&&!updateExists?[]:[{id:"7",name:"Saved"}],rowCount:1};}};
+ const app={};for(const method of ["get","post","put","delete"])app[method]=(path,middleware,fn)=>{routes[`${method}:${path}`]=fn;};
  register(app,{pool:{connect:async()=>client},auth(){},blockGA:(_req,res)=>{if(auth.role==="GA"){res.status(403).json({error:"Forbidden"});return true;}return false;},blockGV:()=>false,resolvePlant:async(_client,code)=>({plantaId:code==="Puebla"?2:3,provinciaPlantCode:code}),computeCategories});
  async function call(method,path,input){const res={code:200,status(n){this.code=n;return this;},json(body){this.body=body;return this;}};await routes[`${method}:${path}`]({dashboardAuth:auth,body:input,query:input},res);return res;}
  return {call,queries,get released(){return released;}};
 }
 const route="/api/dashboard/igf-simulation-proposals";
 test("plant scope is enforced on read/write/delete before any proposal query",async()=>{
- const h=harness();for(const method of ["get","post","delete"]){const res=await h.call(method,route,{...valid,plant_code:"Other",id:7});assert.equal(res.code,403);}
- assert.equal(h.queries.length,0);assert.equal(h.released,3);
+ const h=harness();for(const method of ["get","post","put","delete"]){const res=await h.call(method,route,{...valid,plant_code:"Other",id:7});assert.equal(res.code,403);}
+ assert.equal(h.queries.length,0);assert.equal(h.released,4);
  const ga=harness({role:"GA",plantas_permitidas:[2]});assert.equal((await ga.call("post",route,{...valid,plant_code:"Puebla"})).code,403);assert.equal(ga.queries.length,0);
+});
+
+test("updating an existing point preserves identity and name, scopes by plant/month and never inserts on missing IDs",async()=>{
+ const h=harness();const result=await h.call("put",route,{...valid,id:7,plant_code:"Puebla"});assert.equal(result.code,200);assert.equal(result.body.row.id,"7");assert.equal(result.body.row.name,"Saved");
+ const update=h.queries.find(q=>q.sql.startsWith("UPDATE"));assert.deepEqual(update.args.slice(0,6),[7,2,2026,11,1400,3.6]);assert.doesNotMatch(update.sql,/SET name|created_at=|created_by=/);assert.equal(JSON.parse(update.args[6]).a,6.5);assert.ok(!h.queries.some(q=>q.sql.includes("INSERT INTO")));
+ const missing=harness(undefined,undefined,false);assert.equal((await missing.call("put",route,{...valid,id:7,plant_code:"Puebla"})).code,404);assert.ok(!missing.queries.some(q=>q.sql.includes("INSERT INTO")));
+ for(const id of [undefined,0,-1,"abc",1.5])assert.equal((await h.call("put",route,{...valid,id,plant_code:"Puebla"})).code,400);
+ assert.equal((await h.call("put",route,{...valid,id:7,volume_ton:0,plant_code:"Puebla"})).code,400);
 });
 test("saved proposals use plant/month scope and numeric assumptions without production financial writes",async()=>{
  const h=harness();await h.call("post",route,{...valid,plant_code:"Puebla"});
