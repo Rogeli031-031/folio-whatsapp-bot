@@ -120,6 +120,7 @@ test("category edits weight discounts, retain HG/comments, save snapshot and sel
  let tree=h.renderModal(props);await h.load();tree=h.renderModal(props);
  let surface=elements(tree).find(e=>e.props?.points&&e.props?.model);assert.deepEqual(surface.props.points.map(p=>p.key),["current"]);assert.ok(!field(tree,"HG simulado como porcentaje de venta"));
  button(tree,"Categorías del mes").props.onClick();tree=h.renderModal(props);
+ const categoryHtml=renderToStaticMarkup(tree);assert.ok(categoryHtml.indexOf("Agregar punto / propuesta")<categoryHtml.indexOf("Comentarios de la propuesta"));
  field(tree,"HG simulado como porcentaje de venta").props.onChange({target:{value:"5"}});field(tree,"Comentarios de la propuesta").props.onChange({target:{value:"Más venta de casa"}});
  let group=elements(tree).find(e=>typeof e.type==="function"&&e.props.category==="CASA");group.props.onEdit(group.props.lines[0],"kg",300000);tree=h.renderModal(props);
  group=elements(tree).find(e=>typeof e.type==="function"&&e.props.category==="CASA");group.props.onEdit(group.props.lines[0],"discount_kg",2);tree=h.renderModal(props);
@@ -131,4 +132,21 @@ test("category edits weight discounts, retain HG/comments, save snapshot and sel
  button(tree,"Restaurar actual").props.onClick();tree=h.renderModal(props);elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Puntos guardados (").props.onClick();tree=h.renderModal(props);
  assert.match(renderToStaticMarkup(tree),/Más venta de casa/);button(tree,"Punto #12").props.onClick();tree=h.renderModal(props);
  surface=elements(tree).find(e=>e.props?.points&&e.props?.model);assert.equal(surface.props.q,1000);assert.equal(surface.props.d,3.4);assert.equal(surface.props.model.a,posted.basis.a);assert.equal(surface.props.model.fixed,posted.basis.fixed);
+});
+
+test("multiple saved proposals toggle independently without changing the active surface or their original results",async()=>{
+ const saved=[{id:"1",name:"Primera",volume_ton:900,discount_kg:2,basis:{a:6,fixed:3000000,hg_pct:.07,hg_price_kg:10,hg_kg:-.7,comments:"Venta casa mayor",cutoff:"2026-11-02",mode:"igf_diario",version_as_of:true}},{id:"2",name:"Segunda",volume_ton:1300,discount_kg:3,basis:{a:7,fixed:3400000,hg_pct:.08,hg_price_kg:12,hg_kg:-.96,comments:"Más comisionistas",cutoff:"2026-11-03",mode:"forecast",version_as_of:true}}];
+ const h=harness(async path=>({ok:true,json:async()=>path.includes("proposals?")?{rows:saved}:{rows:[],columns:[]}}));
+ const props={row:{empresa:"GT Puebla",plant_code:"Puebla",ventaTon:800,comDesc:-3,operativos:2200000,corporativos:800000,impuestos:.5,resultadoFinalImporte:-200000,hgKg:-.7,hgDollar:10},token:"test",year:2026,month:11,cutoff:"2026-11-04",mode:"igf_diario",versionAsOf:true,onClose(){}};
+ const field=(tree,label)=>elements(tree).find(e=>e.props?.["aria-label"]===label);
+ const surface=tree=>elements(tree).find(e=>e.props?.points&&e.props?.model).props;
+ let tree=h.renderModal(props);await h.load();tree=h.renderModal(props);const original=surface(tree);
+ elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Puntos guardados (").props.onClick();tree=h.renderModal(props);
+ field(tree,"Comparar punto #1").props.onChange({target:{checked:true}});tree=h.renderModal(props);field(tree,"Comparar punto #2").props.onChange({target:{checked:true}});tree=h.renderModal(props);
+ const plotted=surface(tree);assert.equal(plotted.q,original.q);assert.equal(plotted.d,original.d);assert.equal(plotted.model.a,original.model.a);
+ assert.deepEqual(plotted.points.map(p=>p.key),["current","proposal-1","proposal-2"]);assert.equal(plotted.points[1].z,600000);assert.equal(plotted.points[2].z,1800000);assert.notEqual(plotted.points[1].color,plotted.points[2].color);assert.equal(plotted.points[2].comments,"Más comisionistas");
+ const chartHtml=renderToStaticMarkup(harness().render(plotted));assert.match(chartHtml,/Punto #1/);assert.match(chartHtml,/Venta casa mayor/);assert.match(chartHtml,/Punto #2/);assert.match(chartHtml,/Más comisionistas/);assert.doesNotMatch(chartHtml,/NaN|Infinity/);
+ tree=h.renderModal(props);field(tree,"Comparar punto #1").props.onChange({target:{checked:false}});tree=h.renderModal(props);assert.deepEqual(surface(tree).points.map(p=>p.key),["current","proposal-2"]);assert.equal(surface(tree).model.a,original.model.a);
+ elements(tree).find(e=>e.type==="button"&&e.props.children==="Mostrar todos los puntos").props.onClick();tree=h.renderModal(props);assert.equal(surface(tree).points.length,3);
+ elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children.join("")==="Punto #1").props.onClick();tree=h.renderModal(props);assert.equal(surface(tree).q,900);assert.equal(surface(tree).model.a,6);assert.equal(surface(tree).points.find(p=>p.key==="proposal-2").z,1800000);
 });
