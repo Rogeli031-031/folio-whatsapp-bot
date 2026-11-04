@@ -154,3 +154,12 @@ test("proposals retain percent fraction and HG valuation, reject inconsistent co
  for(const changes of [{hg_pct:7},{hg_pct:null},{hg_price_kg:0},{hg_price_kg:null},{hg_kg:.98},{hg_kg:undefined}])assert.ok(proposals.parseProposal({...valid,basis:{...b,...changes}}).error);
  assert.ok(!proposals.parseProposal({...valid,basis:{...valid.basis,hg_kg:-.98}}).error);
 });
+
+test("proposal comments and category snapshots survive validation; totals and weights cannot be forged",()=>{
+ const lines=[{category:"CASA",subcategory:"Autotanque",kg:300000,discount_kg:2,discount_amount:1,token:"discard"},{category:"COMISIONISTA",subcategory:"Portátil",kg:700000,discount_kg:4}];
+ const input={...valid,volume_ton:1000,discount_kg:3.4,basis:{...valid.basis,comments:"  Aumentar venta casa  ",category_lines:lines}};
+ const parsed=proposals.parseProposal(input);assert.ok(!parsed.error);assert.equal(parsed.basis.comments,"Aumentar venta casa");assert.equal(parsed.basis.category_lines[0].discount_amount,600000);assert.equal(parsed.basis.category_lines[0].token,undefined);
+ for(const changes of [{comments:42},{comments:"x".repeat(2001)},{category_lines:[]},{category_lines:[...lines,lines[0]]},{category_lines:[{...lines[0],discount_kg:null},lines[1]]},{category_lines:[{...lines[0],kg:-1},lines[1]]},{category_lines:[{...lines[0],category:"OTRA"},lines[1]]}])assert.ok(proposals.parseProposal({...input,basis:{...input.basis,...changes}}).error);
+ assert.ok(proposals.parseProposal({...input,volume_ton:1001}).error);assert.ok(proposals.parseProposal({...input,discount_kg:3.5}).error);
+ assert.ok(!proposals.parseProposal(valid).error);
+});
