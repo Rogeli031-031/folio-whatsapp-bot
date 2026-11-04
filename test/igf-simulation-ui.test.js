@@ -95,28 +95,28 @@ test("each weekly financial cell opens the chosen week's detail without toggling
 });
 
 test("HG editing moves the surface and result, keeps actual trend unchanged and restores all three inputs",()=>{
- const h=harness(),row={empresa:"GT Puebla",plant_code:"Puebla",ventaTon:800,comDesc:-3,margen:6.2,operativos:2200000,corporativos:800000,impuestos:.5,resultadoFinalImporte:-200000,hgKg:.4};
+ const h=harness(),row={empresa:"GT Puebla",plant_code:"Puebla",ventaTon:800,comDesc:-3,margen:6.2,operativos:2200000,corporativos:800000,impuestos:.5,resultadoFinalImporte:-200000,hgKg:-.7,hgDollar:10};
  const props={row,token:"test",year:2026,month:11,cutoff:"2026-11-04",mode:"igf_diario",versionAsOf:true,onClose(){}};
  const field=(tree,label)=>elements(tree).find(e=>e.props?.["aria-label"]===label);
  let tree=h.renderModal(props);const originalSurface=elements(tree).find(e=>e.props?.points&&e.props?.model);const originalA=originalSurface.props.model.a;
- assert.equal(field(tree,"HG simulado por kilo").props.value,.4);
- field(tree,"HG simulado por kilo").props.onChange({target:{value:".6"}});field(tree,"Venta simulada en toneladas").props.onChange({target:{value:"1000"}});
+ assert.equal(field(tree,"HG simulado como porcentaje de venta").props.value,7);
+ field(tree,"HG simulado como porcentaje de venta").props.onChange({target:{value:"8"}});field(tree,"Venta simulada en toneladas").props.onChange({target:{value:"1000"}});
  tree=h.renderModal(props);const surface=elements(tree).find(e=>e.props?.points&&e.props?.model);
- assert.ok(Math.abs(surface.props.model.a-originalA+.2)<1e-10);assert.equal(surface.props.q,1000);
+ assert.ok(Math.abs(surface.props.model.a-originalA-.1)<1e-10);assert.equal(surface.props.q,1000);
  assert.deepEqual(surface.props.points.find(p=>p.key==="current"),originalSurface.props.points.find(p=>p.key==="current"));
  elements(tree).find(e=>e.type==="button"&&e.props.children==="Restaurar actual").props.onClick();tree=h.renderModal(props);
- assert.equal(field(tree,"Venta simulada en toneladas").props.value,800);assert.equal(field(tree,"Descuento simulado por kilo").props.value,3);assert.equal(field(tree,"HG simulado por kilo").props.value,.4);assert.equal(row.hgKg,.4);
- const missing=harness().renderModal({...props,row:{...row,hgKg:null}});assert.equal(field(missing,"HG simulado por kilo").props.disabled,true);assert.match(renderToStaticMarkup(missing),/HG sin dato/);
+ assert.equal(field(tree,"Venta simulada en toneladas").props.value,800);assert.equal(field(tree,"Descuento simulado por kilo").props.value,3);assert.equal(field(tree,"HG simulado como porcentaje de venta").props.value,7);assert.equal(row.hgKg,-.7);
+ const missing=harness().renderModal({...props,row:{...row,hgKg:null}});assert.equal(field(missing,"HG simulado como porcentaje de venta").props.disabled,true);assert.match(renderToStaticMarkup(missing),/Falta HG o su valor por kilo/);
 });
 test("saving a proposal sends the simulated HG and calibrated contribution together",async()=>{
  let posted;const h=harness(async(path,options)=>{posted=JSON.parse(options.body);return{ok:true,json:async()=>({row:{id:"1",name:posted.name,volume_ton:posted.volume_ton,discount_kg:posted.discount_kg,basis:posted.basis,created_at:"2026-11-04"}})};});
- const props={row:{empresa:"GT Puebla",plant_code:"Puebla",ventaTon:800,comDesc:-3,operativos:2200000,corporativos:800000,impuestos:.5,resultadoFinalImporte:-200000,hgKg:.4},token:"test",year:2026,month:11,cutoff:"2026-11-04",mode:"igf_diario",versionAsOf:true,onClose(){}};
- let tree=h.renderModal(props);elements(tree).find(e=>e.props?.["aria-label"]==="HG simulado por kilo").props.onChange({target:{value:"-.2"}});
+ const props={row:{empresa:"GT Puebla",plant_code:"Puebla",ventaTon:800,comDesc:-3,operativos:2200000,corporativos:800000,impuestos:.5,resultadoFinalImporte:-200000,hgKg:-.7,hgDollar:10},token:"test",year:2026,month:11,cutoff:"2026-11-04",mode:"igf_diario",versionAsOf:true,onClose(){}};
+ let tree=h.renderModal(props);elements(tree).find(e=>e.props?.["aria-label"]==="HG simulado como porcentaje de venta").props.onChange({target:{value:"5"}});
  elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Agregar punto / propuestas (").props.onClick();tree=h.renderModal(props);
  elements(tree).find(e=>e.props?.["aria-label"]==="Nombre de propuesta").props.onChange({target:{value:"HG alternativo"}});tree=h.renderModal(props);
  elements(tree).find(e=>e.type==="form").props.onSubmit({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));
- assert.equal(posted.basis.hg_kg,-.2);const {modelFromRow}=require("../frontend-dashboard/lib/igf-simulation");assert.ok(Math.abs(posted.basis.a-modelFromRow(props.row).a-.6)<1e-10);
+ assert.equal(posted.basis.hg_pct,.05);assert.equal(posted.basis.hg_price_kg,10);assert.equal(posted.basis.hg_kg,-.5);const {modelFromRow}=require("../frontend-dashboard/lib/igf-simulation");assert.ok(Math.abs(posted.basis.a-modelFromRow(props.row).a+.2)<1e-10);
  tree=h.renderModal(props);assert.match(renderToStaticMarkup(tree),/HG alternativo/);
- elements(tree).find(e=>e.props?.["aria-label"]==="HG de propuesta por kilo").props.onChange({target:{value:".9"}});tree=h.renderModal(props);
- elements(tree).find(e=>e.type==="button"&&e.props.children==="Usar valores").props.onClick();tree=h.renderModal(props);assert.equal(elements(tree).find(e=>e.props?.["aria-label"]==="HG de propuesta por kilo").props.value,-.2);
+ elements(tree).find(e=>e.props?.["aria-label"]==="HG de propuesta como porcentaje de venta").props.onChange({target:{value:".9"}});tree=h.renderModal(props);
+ elements(tree).find(e=>e.type==="button"&&e.props.children==="Usar valores").props.onClick();tree=h.renderModal(props);assert.equal(elements(tree).find(e=>e.props?.["aria-label"]==="HG de propuesta como porcentaje de venta").props.value,5);
 });

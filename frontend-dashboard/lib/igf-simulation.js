@@ -14,6 +14,15 @@ function modelWithHg(model, baseHg, hg) {
  if(!model||!finite(baseHg)||!finite(hg))return model;
  return {...model,a:model.a+baseHg-hg};
 }
+function hgPercentContext(row) {
+ const cost=finite(row.hgKg)?row.hgKg:null;
+ let price=finite(row.hgDollar)&&row.hgDollar>0?row.hgDollar:null;
+ if(price==null&&cost!=null&&finite(row.hgPct)&&row.hgPct!==0)price=Math.abs(cost/row.hgPct)||null;
+ return {cost,price,percent:cost!=null&&price!=null?(Number((-cost/price*100).toPrecision(12))||0):null};
+}
+function hgCostFromPercent(percent,price) {
+ return finite(percent)&&finite(price)&&price>0?-percent/100*price:null;
+}
 function weeklyFinancials(metrics) {
  const m=metrics||{},kg=m.venta_kg;
  const amount=keys=>finite(kg)&&kg>0&&keys.every(k=>finite(m[k]))?keys.reduce((s,k)=>s+m[k],0)*kg:null;
@@ -86,4 +95,4 @@ function closestEquilibrium(s) {
  const q=candidates.reduce((best,v)=>objective(v)<objective(best)?v:best,trial);
  return {q,d:Math.max(0,eq(q))};
 }
-module.exports={modelFromRow,modelWithHg,profit,weeklyPoints,closestEquilibrium,historyPeriods,mergeWeekColumns,visibleWeekPoints,axisTicks,weeklyFinancials};
+module.exports={modelFromRow,modelWithHg,hgPercentContext,hgCostFromPercent,profit,weeklyPoints,closestEquilibrium,historyPeriods,mergeWeekColumns,visibleWeekPoints,axisTicks,weeklyFinancials};
