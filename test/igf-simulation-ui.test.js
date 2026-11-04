@@ -5,8 +5,8 @@ const {renderToStaticMarkup}=require("../frontend-dashboard/node_modules/react-d
 const root=path.join(__dirname,"../frontend-dashboard");
 const text=fs.readFileSync(path.join(root,"components/IgfSimulationModal.tsx"),"utf8");
 function harness(fetcher){
- let index=0;const state=[];
- const hooks={...React,useMemo:fn=>fn(),useEffect(){},useState(initial){const i=index++;if(!(i in state))state[i]=initial;return [state[i],v=>{state[i]=typeof v==="function"?v(state[i]):v;}];},useRef(initial){const i=index++;if(!(i in state))state[i]={current:initial};return state[i];}};
+ let index=0;const state=[],effects=[];
+ const hooks={...React,useMemo:fn=>fn(),useEffect(fn){effects.push(fn);},useState(initial){const i=index++;if(!(i in state))state[i]=initial;return [state[i],v=>{state[i]=typeof v==="function"?v(state[i]):v;}];},useRef(initial){const i=index++;if(!(i in state))state[i]={current:initial};return state[i];}};
  const code=ts.transpileModule(text,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  const module={exports:{}};
  new Function("require","module","exports","fetch",code+"\nmodule.exports.Surface=Surface;module.exports.WeekControls=WeekControls;")((name)=>{
@@ -16,7 +16,7 @@ function harness(fetcher){
   if(name==="@/lib/igf-simulation")return require("../frontend-dashboard/lib/igf-simulation");
   throw new Error(name);
  },module,module.exports,fetcher);
- return {render(props){index=0;return module.exports.Surface(props);},renderModal(props){index=0;return module.exports.default(props);},renderWeeks(props){return module.exports.WeekControls(props);}};
+ return {async load(){effects[0]();effects[1]();await new Promise(resolve=>setImmediate(resolve));},render(props){index=0;return module.exports.Surface(props);},renderModal(props){index=0;return module.exports.default(props);},renderWeeks(props){return module.exports.WeekControls(props);}};
 }
 function elements(node){if(!node||typeof node!=="object")return [];if(Array.isArray(node))return node.flatMap(elements);return [node,...elements(node.props?.children)];}
 const model={q:1400,d:3.6,a:6.525225303866561,fixed:3850193.5114285713};
@@ -26,7 +26,7 @@ test("3D renders weekly/current/proposal markers, touch rotation and cancel with
  elements(tree).find(e=>e.type==="button"&&e.props["aria-pressed"]===false).props.onClick();tree=h.render(props);
  const svg=elements(tree).find(e=>e.type==="svg");assert.equal(svg.props.style.touchAction,"none");
  const target={setPointerCapture(){},hasPointerCapture(){return true;},releasePointerCapture(){}};
- const event=(x,y)=>({pointerId:1,button:0,clientX:x,clientY:y,currentTarget:target});
+ const event=(x,y)=>({pointerId:1,button:0,clientX:x,clientY:y,currentTarget:target,preventDefault(){}});
  svg.props.onPointerDown(event(10,10));svg.props.onPointerMove(event(180,60));
  const rotated=renderToStaticMarkup(h.render(props));assert.notEqual(html,rotated);assert.doesNotMatch(rotated,/NaN|Infinity/);
  svg.props.onPointerCancel();svg.props.onPointerMove(event(280,80));assert.equal(renderToStaticMarkup(h.render(props)),rotated);
@@ -37,16 +37,19 @@ test("partial financial data shows an explicit explanation rather than a fiction
  const html=renderToStaticMarkup(tree);assert.match(html,/Faltan venta/);assert.match(html,/HG faltante/);assert.doesNotMatch(html,/<svg/);assert.match(html,/Categorías del mes/);
 });
 
-test("zoom grows the plotted surface, has bounds and resets without changing the scenario",()=>{
+test("middle-button drag zooms up/in, down/out, clamps, cancels and resets without rotating",()=>{
  const h=harness(),props={model,q:1400,d:3.6,points:[]};
- const width=tree=>{const polys=elements(tree).filter(e=>e.type==="polygon");const xs=polys.flatMap(p=>p.props.points.split(" ").map(pair=>Number(pair.split(",")[0])));return Math.max(...xs)-Math.min(...xs);};
- let tree=h.render(props),base=width(tree);
- const find=(tree,label)=>elements(tree).find(e=>e.props?.["aria-label"]===label);
- find(tree,"Acercar gráfica").props.onClick();tree=h.render(props);assert.ok(width(tree)>base);
- find(tree,"Zoom de gráfica").props.onChange({target:{value:"4"}});tree=h.render(props);assert.equal(find(tree,"Acercar gráfica").props.disabled,true);
- find(tree,"Zoom de gráfica").props.onChange({target:{value:".5"}});tree=h.render(props);assert.equal(find(tree,"Alejar gráfica").props.disabled,true);
- elements(tree).find(e=>e.type==="button"&&e.props.children==="Ajustar gráfica").props.onClick();tree=h.render(props);assert.ok(renderToStaticMarkup(tree).includes("100%"));
- assert.equal(props.q,1400);assert.equal(props.d,3.6);assert.doesNotMatch(renderToStaticMarkup(tree),/NaN|Infinity/);
+ const width=tree=>{const xs=elements(tree).filter(e=>e.type==="polygon").flatMap(p=>p.props.points.split(" ").map(pair=>Number(pair.split(",")[0])));return Math.max(...xs)-Math.min(...xs);};
+ let tree=h.render(props),base=width(tree);const svg=()=>elements(h.render(props)).find(e=>e.type==="svg");
+ const target={setPointerCapture(){},hasPointerCapture(){return true;},releasePointerCapture(){}};
+ const event=y=>({pointerId:1,button:1,clientX:100,clientY:y,currentTarget:target,preventDefault(){}});
+ let view=svg();view.props.onPointerDown(event(200));view.props.onPointerMove(event(100));assert.ok(width(h.render(props))>base);
+ view.props.onPointerMove(event(300));assert.ok(width(h.render(props))<base);
+ view.props.onPointerMove(event(10000));const min=width(h.render(props));view.props.onPointerMove(event(20000));assert.equal(width(h.render(props)),min);
+ view.props.onPointerMove(event(-10000));const max=width(h.render(props));view.props.onPointerMove(event(-20000));assert.equal(width(h.render(props)),max);
+ view.props.onPointerCancel();view.props.onPointerMove(event(200));assert.equal(width(h.render(props)),max);
+ elements(h.render(props)).find(e=>e.type==="button"&&e.props.children==="Vista inicial").props.onClick();assert.equal(width(h.render(props)),base);
+ assert.doesNotMatch(renderToStaticMarkup(h.render(props)),/type="range"|Acercar gráfica|Alejar gráfica/);assert.equal(props.q,1400);assert.equal(props.d,3.6);
 });
 
 test("week checkboxes toggle individual weeks, all/none and disable incomplete points",()=>{
@@ -83,8 +86,8 @@ test("weekly summary stays in a popup, with categories and proposals accessible 
  tree=h.renderModal(props);elements(tree).find(e=>e.type==="button"&&e.props.children==="Categorías del mes").props.onClick();
  html=renderToStaticMarkup(h.renderModal(props));assert.match(html,/categoría y subcategoría/);assert.match(html,/TOTAL CASA/);
  tree=h.renderModal(props);elements(tree).find(e=>typeof e.type==="function"&&e.props.title?.includes("categoría y subcategoría")).props.onClose();
- tree=h.renderModal(props);elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Agregar punto / propuestas (").props.onClick();
- html=renderToStaticMarkup(h.renderModal(props));assert.match(html,/Nombre de propuesta/);assert.match(html,/Guardar punto actual/);
+ tree=h.renderModal(props);elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Puntos guardados (").props.onClick();
+ html=renderToStaticMarkup(h.renderModal(props));assert.match(html,/Puntos guardados/);assert.doesNotMatch(html,/Nombre de propuesta|Guardar punto actual/);
 });
 test("each weekly financial cell opens the chosen week's detail without toggling its visibility",()=>{
  const h=harness();let selected=null,hidden=[];
@@ -98,7 +101,7 @@ test("HG editing moves the surface and result, keeps actual trend unchanged and 
  const h=harness(),row={empresa:"GT Puebla",plant_code:"Puebla",ventaTon:800,comDesc:-3,margen:6.2,operativos:2200000,corporativos:800000,impuestos:.5,resultadoFinalImporte:-200000,hgKg:-.7,hgDollar:10};
  const props={row,token:"test",year:2026,month:11,cutoff:"2026-11-04",mode:"igf_diario",versionAsOf:true,onClose(){}};
  const field=(tree,label)=>elements(tree).find(e=>e.props?.["aria-label"]===label);
- let tree=h.renderModal(props);const originalSurface=elements(tree).find(e=>e.props?.points&&e.props?.model);const originalA=originalSurface.props.model.a;
+ let tree=h.renderModal(props);elements(tree).find(e=>e.type==="button"&&e.props.children==="Categorías del mes").props.onClick();tree=h.renderModal(props);const originalSurface=elements(tree).find(e=>e.props?.points&&e.props?.model);const originalA=originalSurface.props.model.a;
  assert.equal(field(tree,"HG simulado como porcentaje de venta").props.value,7);
  field(tree,"HG simulado como porcentaje de venta").props.onChange({target:{value:"8"}});field(tree,"Venta simulada en toneladas").props.onChange({target:{value:"1000"}});
  tree=h.renderModal(props);const surface=elements(tree).find(e=>e.props?.points&&e.props?.model);
@@ -106,17 +109,26 @@ test("HG editing moves the surface and result, keeps actual trend unchanged and 
  assert.deepEqual(surface.props.points.find(p=>p.key==="current"),originalSurface.props.points.find(p=>p.key==="current"));
  elements(tree).find(e=>e.type==="button"&&e.props.children==="Restaurar actual").props.onClick();tree=h.renderModal(props);
  assert.equal(field(tree,"Venta simulada en toneladas").props.value,800);assert.equal(field(tree,"Descuento simulado por kilo").props.value,3);assert.equal(field(tree,"HG simulado como porcentaje de venta").props.value,7);assert.equal(row.hgKg,-.7);
- const missing=harness().renderModal({...props,row:{...row,hgKg:null}});assert.equal(field(missing,"HG simulado como porcentaje de venta").props.disabled,true);assert.match(renderToStaticMarkup(missing),/Falta HG o su valor por kilo/);
+ const mh=harness(),mp={...props,row:{...row,hgKg:null}};let missing=mh.renderModal(mp);elements(missing).find(e=>e.type==="button"&&e.props.children==="Categorías del mes").props.onClick();missing=mh.renderModal(mp);assert.equal(field(missing,"HG simulado como porcentaje de venta").props.disabled,true);assert.match(renderToStaticMarkup(missing),/Falta HG o su valor por kilo/);
 });
-test("saving a proposal sends the simulated HG and calibrated contribution together",async()=>{
- let posted;const h=harness(async(path,options)=>{posted=JSON.parse(options.body);return{ok:true,json:async()=>({row:{id:"1",name:posted.name,volume_ton:posted.volume_ton,discount_kg:posted.discount_kg,basis:posted.basis,created_at:"2026-11-04"}})};});
+test("category edits weight discounts, retain HG/comments, save snapshot and selecting restores the saved model",async()=>{
+ let posted;const lines=[{category:"CASA",subcategory:"Autotanque",kg:100000,discount_kg:1,discount_amount:100000,missing_discount_kg:0},{category:"COMISIONISTA",subcategory:"Portátil",kg:700000,discount_kg:4,discount_amount:2800000,missing_discount_kg:0}];
+ const h=harness(async(path,options)=>{let data={rows:[]};if(options.method==="POST"){posted=JSON.parse(options.body);data={row:{id:"12",name:posted.name,volume_ton:posted.volume_ton,discount_kg:posted.discount_kg,basis:posted.basis,created_at:"2026-11-04"}};}else if(path.includes("categories?"))data={rows:lines};else if(path.includes("semanal?"))data={columns:[{key:"week",label:"Semana 45",fecha_desde:"2026-11-01",fecha_hasta:"2026-11-07",estado:"real",metrics:{venta_kg:70000,com_desc_kg:-3,resultado_mxn:7000},coverage:{resultado:{coverage_kg_pct:100},com_desc_kg:{coverage_kg_pct:100}}}]};return {ok:true,json:async()=>data};});
  const props={row:{empresa:"GT Puebla",plant_code:"Puebla",ventaTon:800,comDesc:-3,operativos:2200000,corporativos:800000,impuestos:.5,resultadoFinalImporte:-200000,hgKg:-.7,hgDollar:10},token:"test",year:2026,month:11,cutoff:"2026-11-04",mode:"igf_diario",versionAsOf:true,onClose(){}};
- let tree=h.renderModal(props);elements(tree).find(e=>e.props?.["aria-label"]==="HG simulado como porcentaje de venta").props.onChange({target:{value:"5"}});
- elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Agregar punto / propuestas (").props.onClick();tree=h.renderModal(props);
- elements(tree).find(e=>e.props?.["aria-label"]==="Nombre de propuesta").props.onChange({target:{value:"HG alternativo"}});tree=h.renderModal(props);
- elements(tree).find(e=>e.type==="form").props.onSubmit({preventDefault(){}});await new Promise(resolve=>setImmediate(resolve));
- assert.equal(posted.basis.hg_pct,.05);assert.equal(posted.basis.hg_price_kg,10);assert.equal(posted.basis.hg_kg,-.5);const {modelFromRow}=require("../frontend-dashboard/lib/igf-simulation");assert.ok(Math.abs(posted.basis.a-modelFromRow(props.row).a+.2)<1e-10);
- tree=h.renderModal(props);assert.match(renderToStaticMarkup(tree),/HG alternativo/);
- elements(tree).find(e=>e.props?.["aria-label"]==="HG de propuesta como porcentaje de venta").props.onChange({target:{value:".9"}});tree=h.renderModal(props);
- elements(tree).find(e=>e.type==="button"&&e.props.children==="Usar valores").props.onClick();tree=h.renderModal(props);assert.equal(elements(tree).find(e=>e.props?.["aria-label"]==="HG de propuesta como porcentaje de venta").props.value,5);
+ const field=(tree,label)=>elements(tree).find(e=>e.props?.["aria-label"]===label);
+ const button=(tree,label)=>elements(tree).find(e=>e.type==="button"&&(Array.isArray(e.props.children)?e.props.children.join(""):e.props.children)===label);
+ let tree=h.renderModal(props);await h.load();tree=h.renderModal(props);
+ let surface=elements(tree).find(e=>e.props?.points&&e.props?.model);assert.deepEqual(surface.props.points.map(p=>p.key),["current"]);assert.ok(!field(tree,"HG simulado como porcentaje de venta"));
+ button(tree,"Categorías del mes").props.onClick();tree=h.renderModal(props);
+ field(tree,"HG simulado como porcentaje de venta").props.onChange({target:{value:"5"}});field(tree,"Comentarios de la propuesta").props.onChange({target:{value:"Más venta de casa"}});
+ let group=elements(tree).find(e=>typeof e.type==="function"&&e.props.category==="CASA");group.props.onEdit(group.props.lines[0],"kg",300000);tree=h.renderModal(props);
+ group=elements(tree).find(e=>typeof e.type==="function"&&e.props.category==="CASA");group.props.onEdit(group.props.lines[0],"discount_kg",2);tree=h.renderModal(props);
+ surface=elements(tree).find(e=>e.props?.points&&e.props?.model);assert.equal(surface.props.q,1000);assert.equal(surface.props.d,3.4);
+ button(tree,"Agregar punto / propuesta").props.onClick();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(posted.basis.hg_pct,.05);assert.equal(posted.basis.hg_price_kg,10);assert.equal(posted.basis.hg_kg,-.5);assert.equal(posted.basis.comments,"Más venta de casa");assert.equal(posted.basis.category_lines[0].kg,300000);assert.equal(posted.volume_ton,1000);assert.equal(posted.discount_kg,3.4);
+ const parsed=require("../lib/igf-simulation-proposals").parseProposal(posted);assert.ok(!parsed.error);assert.equal(parsed.basis.category_lines[0].discount_amount,600000);
+ tree=h.renderModal(props);assert.match(renderToStaticMarkup(tree),/Punto #12/);assert.ok(!field(tree,"HG simulado como porcentaje de venta"));
+ button(tree,"Restaurar actual").props.onClick();tree=h.renderModal(props);elements(tree).find(e=>e.type==="button"&&Array.isArray(e.props.children)&&e.props.children[0]==="Puntos guardados (").props.onClick();tree=h.renderModal(props);
+ assert.match(renderToStaticMarkup(tree),/Más venta de casa/);button(tree,"Punto #12").props.onClick();tree=h.renderModal(props);
+ surface=elements(tree).find(e=>e.props?.points&&e.props?.model);assert.equal(surface.props.q,1000);assert.equal(surface.props.d,3.4);assert.equal(surface.props.model.a,posted.basis.a);assert.equal(surface.props.model.fixed,posted.basis.fixed);
 });
