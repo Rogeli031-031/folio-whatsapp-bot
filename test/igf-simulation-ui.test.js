@@ -198,3 +198,20 @@ test("full comparison keeps every variable and original fixed basis, leaving leg
  for(const label of ["Gastos operativos","Gastos corporativos","Margen bruto","Impuestos mensuales","HG generado","Valoración HG","Resultado final","Venta de equilibrio","Descuento de equilibrio","Otro volumen y gastos"])assert.match(html,new RegExp(label));
  assert.match(html,/No registrado/);assert.match(html,/3,600,000/);assert.match(html,/96,000/);assert.match(html,/1,200/);assert.match(html,/Δ/);assert.doesNotMatch(html,/NaN|Infinity/);
 });
+
+test("Ctrl-left drag pans all geometry in mouse direction without rotating or zooming in either view",()=>{
+ for(const top of [false,true]){
+  const h=harness(),props={model,q:1400,d:3.6,points:[{key:"p",label:"Punto #7",q:1000,d:2,z:300000,color:"magenta"}]};let tree=h.render(props);
+  if(top){elements(tree).find(e=>e.type==="button"&&e.props.children==="Vista superior").props.onClick();tree=h.render(props);}
+  const svg=()=>elements(h.render(props)).find(e=>e.type==="svg");
+  const coordinates=()=>elements(h.render(props)).filter(e=>e.type==="polygon").map(e=>e.props.points.split(" ").map(pair=>pair.split(",").map(Number)));
+  const before=coordinates();const target={setPointerCapture(){},hasPointerCapture(){return true;},releasePointerCapture(){},getBoundingClientRect(){return {width:550,height:340};}};
+  const event=(x,y,ctrlKey=true)=>({pointerId:1,button:0,ctrlKey,clientX:x,clientY:y,currentTarget:target,preventDefault(){}});
+  let active=svg();active.props.onPointerDown(event(100,100));active.props.onPointerMove(event(140,70));const after=coordinates();assert.equal(after.length,before.length);
+  before.forEach((poly,i)=>poly.forEach((point,j)=>{assert.ok(Math.abs(after[i][j][0]-point[0]-80)<1e-8);assert.ok(Math.abs(after[i][j][1]-point[1]+60)<1e-8);}));
+  active.props.onPointerUp(event(140,70));active.props.onPointerMove(event(220,220));assert.deepEqual(coordinates(),after);
+  active=svg();active.props.onPointerDown(event(140,70));active.props.onPointerMove(event(100,100));const restored=coordinates();before.forEach((poly,i)=>poly.forEach((point,j)=>{assert.ok(Math.abs(restored[i][j][0]-point[0])<1e-8);assert.ok(Math.abs(restored[i][j][1]-point[1])<1e-8);}));
+  active.props.onPointerCancel();active.props.onPointerMove(event(400,400));assert.deepEqual(coordinates(),restored);assert.equal(props.q,1400);assert.equal(props.d,3.6);assert.equal(props.model.a,model.a);
+  assert.match(renderToStaticMarkup(h.render(props)),/Ctrl \+ botón izquierdo: desplazar/);assert.doesNotMatch(renderToStaticMarkup(h.render(props)),/NaN|Infinity/);
+ }
+});
