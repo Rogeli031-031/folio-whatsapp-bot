@@ -112,6 +112,8 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
  const [q,setQ]=useState(baseModel?.q||0),[d,setD]=useState(baseModel?.d||0);
  const [columns,setColumns]=useState<any[]>([]),[saved,setSaved]=useState<Saved[]>([]),[error,setError]=useState("");
  const [loading,setLoading]=useState(true),[saving,setSaving]=useState(false);
+ const [pendingDelete,setPendingDelete]=useState<Saved|null>(null),[deleting,setDeleting]=useState(false);
+ const deleteLock=useRef(false);
  const [weekError,setWeekError]=useState("");
  const [monthsBack,setMonthsBack]=useState(1),[selectedWeeks,setSelectedWeeks]=useState<string[]>([]),[weeksLoading,setWeeksLoading]=useState(true);
  const [categories,setCategories]=useState<CategoryLine[]>([]),[categoryError,setCategoryError]=useState("");
@@ -181,6 +183,15 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
   const data=await request("/api/dashboard/igf-simulation-proposals",{method:editingId?"PUT":"POST",body:JSON.stringify({year,month,plant_code:plant,...(editingId?{id:editingId}:{}),name:editingId&&selected?selected.name:"Punto de simulación",volume_ton:q,discount_kg:d,basis:{a:model.a,fixed:model.fixed,cutoff:selected?.basis.cutoff??cutoff,mode:selected?.basis.mode??mode,version_as_of:selected?.basis.version_as_of??versionAsOf,comments,...(edits?{category_lines:edits}:{}),...(hg!=null&&hgPrice!=null?{hg_kg:hgCostFromPercent(hg,hgPrice),hg_pct:hg/100,hg_price_kg:hgPrice}:{})}})});
   setSaved(rows=>editingId?rows.map(p=>p.id===editingId?data.row:p):[data.row,...rows].slice(0,200));setComparisonIds(ids=>ids.includes(String(data.row.id))?ids:[...ids,String(data.row.id)]);setSelected(data.row);setPanel(null);
  }catch(e){setError((e as Error).message);}finally{saveLock.current=false;setSaving(false);}}
+ async function removePoint(){
+  if(!pendingDelete||deleteLock.current||saveLock.current)return;
+  const id=pendingDelete.id;deleteLock.current=true;setDeleting(true);setError("");
+  try{
+   await request(`/api/dashboard/igf-simulation-proposals?${params}&id=${encodeURIComponent(id)}`,{method:"DELETE"});
+   setSaved(rows=>rows.filter(p=>p.id!==id));setComparisonIds(ids=>ids.filter(value=>value!==id));
+   if(selected?.id===id)reset();setPendingDelete(null);
+  }catch(e){setError((e as Error).message);}finally{deleteLock.current=false;setDeleting(false);}
+ }
  const field="w-28 rounded border border-slate-600 bg-slate-950 px-2 py-1 text-sm text-white";
  return <div role="dialog" aria-modal="true" aria-labelledby="igf-simulation-title" className="fixed inset-0 z-[80] bg-slate-950/90 p-2 sm:p-4">
   <div className="mx-auto flex max-h-[96vh] w-full flex-col overflow-hidden rounded-xl border border-slate-600 bg-slate-900 text-slate-100">
@@ -235,7 +246,7 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
       <h3 className="font-semibold">Puntos guardados · {row.empresa} · {month}/{year}</h3>
       <p className="mb-3 text-xs text-slate-400">Marca varios puntos para compararlos al mismo tiempo. Las casillas solo muestran u ocultan propuestas; pulsa su número para cargar una como escenario activo. Cada punto conserva su resultado original. Crea nuevos puntos desde Categorías del mes.</p>
       <div className="mb-3 flex flex-wrap gap-3 text-sm"><button type="button" className="text-cyan-300 underline" onClick={()=>setComparisonIds(saved.map(p=>p.id))}>Mostrar todos los puntos</button><button type="button" className="text-cyan-300 underline" onClick={()=>setComparisonIds([])}>Ocultar todos los puntos</button><span>{comparisons.length} puntos visibles</span></div>
-      <div className="overflow-x-auto"><table className="w-full text-right text-sm"><thead><tr>{["Comparar","Punto","Comentarios","Venta (t)","Descuento ($/kg)","HG (%)","Resultado","Corte"].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{saved.map(p=><tr key={p.id} className="border-t border-slate-700"><td className="p-2"><input type="checkbox" aria-label={`Comparar punto #${p.id}`} checked={comparisonIds.includes(p.id)} onChange={e=>setComparisonIds(ids=>e.target.checked?(ids.includes(p.id)?ids:[...ids,p.id]):ids.filter(id=>id!==p.id))} className="accent-emerald-400"/></td><td className="p-2"><button type="button" onClick={()=>choose(p)} style={{color:proposalColor(p.id)}} className="underline">Punto #{p.id}</button></td><td className="max-w-lg whitespace-pre-wrap break-words p-2 text-left">{p.basis.comments||p.name}</td><td>{num(Number(p.volume_ton))}</td><td>{num(Number(p.discount_kg),4)}</td><td>{p.basis.hg_pct==null?"—":num(p.basis.hg_pct*100,4)}</td><td>{money(profit(p.basis,Number(p.volume_ton),Number(p.discount_kg)))}</td><td>{p.basis.cutoff}</td></tr>)}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full text-right text-sm"><thead><tr>{["Comparar","Punto","Comentarios","Venta (t)","Descuento ($/kg)","HG (%)","Resultado","Corte","Acciones"].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{saved.map(p=><tr key={p.id} className="border-t border-slate-700"><td className="p-2"><input type="checkbox" aria-label={`Comparar punto #${p.id}`} checked={comparisonIds.includes(p.id)} onChange={e=>setComparisonIds(ids=>e.target.checked?(ids.includes(p.id)?ids:[...ids,p.id]):ids.filter(id=>id!==p.id))} className="accent-emerald-400"/></td><td className="p-2"><button type="button" onClick={()=>choose(p)} style={{color:proposalColor(p.id)}} className="underline">Punto #{p.id}</button></td><td className="max-w-lg whitespace-pre-wrap break-words p-2 text-left">{p.basis.comments||p.name}</td><td>{num(Number(p.volume_ton))}</td><td>{num(Number(p.discount_kg),4)}</td><td>{p.basis.hg_pct==null?"—":num(p.basis.hg_pct*100,4)}</td><td>{money(profit(p.basis,Number(p.volume_ton),Number(p.discount_kg)))}</td><td>{p.basis.cutoff}</td><td className="p-2"><button type="button" aria-label={`Eliminar punto #${p.id}`} disabled={saving||deleting} onClick={()=>{setError("");setPendingDelete(p);}} className="rounded bg-red-900 px-3 py-1 text-red-100 hover:bg-red-700 disabled:opacity-40">Eliminar</button></td></tr>)}</tbody></table></div>
       {!loading&&!saved.length&&<p>Aún no hay puntos guardados para esta planta y mes.</p>}
       {error&&<p role="alert" className="text-red-300">{error}</p>}
 
@@ -243,6 +254,12 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
     </Popup>}
     {detail&&<Popup title={`${detail.week.label} · ${DETAIL_LABELS[detail.field]||detail.field} · ${detail.week.from} – ${detail.week.to}`} onClose={()=>setDetail(null)}>
      {detailError?<p role="alert" className="text-amber-200">{detailError}</p>:!detailData?<p role="status">Cargando detalle diario…</p>:<DailyDetail data={detailData} week={detail.week} field={detail.field}/>}
+    </Popup>}
+    {pendingDelete&&<Popup title={`Eliminar punto #${pendingDelete.id}`} onClose={()=>{if(!deleting)setPendingDelete(null);}}>
+     <p className="mb-2 font-semibold">Punto #{pendingDelete.id} · {pendingDelete.basis.comments||pendingDelete.name}</p>
+     <p className="mb-4 text-sm text-slate-300">Se eliminará esta propuesta guardada y se quitará de la comparación. Esta acción no se puede deshacer.</p>
+     <div className="flex gap-3"><button type="button" disabled={deleting} onClick={()=>setPendingDelete(null)} className="rounded bg-slate-700 px-3 py-2 disabled:opacity-40">Cancelar</button><button type="button" disabled={deleting} onClick={()=>void removePoint()} className="rounded bg-red-700 px-3 py-2 disabled:opacity-40">{deleting?"Eliminando…":"Eliminar definitivamente"}</button></div>
+     {error&&<p role="alert" className="mt-3 text-red-300">{error}</p>}
     </Popup>}
    </div>
   </div>
