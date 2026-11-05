@@ -1,35 +1,55 @@
-task_id: "FIX-IGF-DIARIO-COMDESC-NO-DISCOUNTS-ZERO-078-R3"
-status: CLOSED
+# Propuesta de CURRENT_TASK. La persona responsable registra su decisión en la rama de trabajo.
+task_id: "IMPL-IGF-SIMULADOR-PLAN-AL-CIERRE"
+status: AUTHORIZED
 authorized_by: "HUMAN_APPROVER"
-approver_name: "Luis rogelio Zaragoza alvarez"
-authorized_at: "2026-10-28T13:26:18.9896096-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza alvarez 2026-10-28"
-
-base_sha: "2a6c4a20044f3d0b0158a00600dbabe73645ff2a"
-branch: "fix/igf-diario-comdesc-no-discounts-zero-078-r3"
-
-objective: "Cuando exista venta positiva y no haya ningún descuento registrado para la planta/fecha, Comisiones y Descuentos debe ser cero real y no LAST_REAL_FALLBACK. Verificar todas las fórmulas y reportes dependientes."
-
-business_rule: "venta > 0 AND zero discount rows => com_desc = 0"
-
-protected:
-  - "LAST_REAL_FALLBACK para casos realmente desconocidos"
-  - "Forecast"
-  - "IGF Diario semanal"
-  - "IGF Diario acumulado"
-  - "Provincia Comisiones"
-  - "Compras"
-  - "HG"
-  - "gastos"
-  - "margen bruto"
-
-forbidden:
-  - "hardcode San Luis"
-  - "hardcode fechas"
-  - "DB writes"
-  - "migration"
-  - "PR"
-  - "merge"
-  - "deploy"
-
-result_report_path: "docs/dev-loop/reports/FIX-IGF-DIARIO-COMDESC-NO-DISCOUNTS-ZERO-078-R3.md"
+authorized_at: "2026-11-05T16:34:03-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza Alvarez 2026-11-05"
+objective: "Integrar en el simulador Plan al cierre con edición de descuento y meta por comprador, descarga de Excel y guardado del escenario como punto."
+branch: "feat/igf-simulador-plan-al-cierre"
+base_sha: "bab5dd65da07e60a3b5a924750f07b7ef1a6baeb"
+in_scope:
+  - "docs/dev-loop/CURRENT_TASK.md"
+  - "frontend-dashboard/components/IgfSimulationModal.tsx"
+  - "frontend-dashboard/components/IgfPlanAlCierre.tsx"
+  - "frontend-dashboard/lib/igf-plan-al-cierre.js"
+  - "lib/igf-plan-al-cierre.js"
+  - "lib/igf-plan-al-cierre-excel.js"
+  - "lib/igf-simulation-routes.js"
+  - "lib/igf-simulation-proposals.js"
+  - "server.js"
+  - "test/igf-plan-al-cierre.test.js"
+  - "test/igf-simulation-ui.test.js"
+  - "docs/dev-loop/reports/IMPL-IGF-SIMULADOR-PLAN-AL-CIERRE.md"
+out_of_scope:
+  - "Modificar precios, descuentos pactados, ventas reales o presupuestos."
+  - "Enviar comunicaciones a clientes o crear puntos de prueba en producción."
+  - "Cambiar los contratos de Director IA, el flujo de aprobación o la configuración de Render."
+contracts_in_force:
+  - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+  - "docs/dev-loop/LOOP_PROTOCOL.md"
+allowed_actions:
+  - "Implementar y probar el flujo en la rama de la tarea, con datos autorizados de la planta y el corte elegidos."
+  - "Ejecutar pruebas de cálculo, autorización por planta/punto, exportación y navegación del simulador."
+  - "Registrar y subir únicamente los cambios de esta tarea a su rama y preparar la solicitud de integración para revisión humana."
+forbidden_actions:
+  - "Autoaprobar gates o escribir atribuciones de autorización humana."
+  - "Commit o push a main, auto-merge, despliegue fuera del flujo humano del proyecto."
+  - "Incluir tokens, credenciales, exportaciones reales o datos de clientes en Git."
+max_attempts: 1
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-SIMULADOR-PLAN-AL-CIERRE.md"
+acceptance:
+  - "Abrir Plan al cierre junto a Comparación completa, con la planta, período, fuente y corte del simulador."
+  - "Mostrar exactamente A–J: comprador, venta real, descuento real, cierre DICF, descuento sin cambio, nuevo descuento, meta de cierre, cierre mínimo, cambio si cumple, cambio si sólo vende el forecast. Fechas y unidades visibles."
+  - "Editar exclusivamente F (tasa para todos los kilos pendientes) y G (venta mensual total). Confirmar la edición antes de reordenar para no interrumpir la captura."
+  - "Ordenar I numéricamente de mayor a menor, incluidos ceros y negativos, con valores pendientes al final y desempate por comprador. Usar identificadores estables para preservar edición y selección al cambiar de orden."
+  - "Respetar los reales previos al corte. Si Q0 y Q1 son cierres en kg, r los kg ya vendidos, m el margen DICF, d0 y d1 los descuentos, la columna I es (Q1-r)*(m-d1) - (Q0-r)*(m-d0). La J es (Q0-r)*(d0-d1)."
+  - "Evitar metas menores que la venta real, tasas inválidas y división por márgenes sin aporte positivo. Distinguir ausencia de tasa y cero comprobado."
+  - "Construir la cartera con el historial disponible al corte, incluyendo compradores sin venta este mes y aquellos con menor consumo; distinguir venta registrada, proyección base y meta propuesta."
+  - "Sumar las cuentas del comprador cuya equivalencia confirmó el responsable, conservando la condición de contado para el plan futuro y el desglose por cuenta. Verificar con datos de prueba anónimos."
+  - "Heredar la selección del plan; mostrar cuántos compradores entran al punto. Permitir elegir compradores sin añadir columnas financieras a A–J. Distinguir escenario seleccionado y cartera completa."
+  - "Descargar Excel debe producir un .xlsx con las ediciones y la selección actuales, el detalle por comprador y condición comercial, teléfono si está disponible para el usuario, venta y descuentos acumulados por categoría/subcategoría, IGF conciliado y el mismo orden por I. No exportar un archivo estático de noviembre."
+  - "Agregar punto Plan debe guardar una propuesta persistente en el simulador y mostrarla en la gráfica. Conservar planta, corte, selección y los datos necesarios para reabrir/editar el plan. Un doble clic o un reintento no debe crear duplicados."
+  - "Para el punto, Q = kg del IGF base + suma de cambios de kg seleccionados. El descuento ponderado es (costo base IGF + suma de cambios de descuentos seleccionados) / Q. Verificar el resultado con el modelo de la superficie, incluido HG."
+  - "Prueba aislada: ejemplo 10→11 kg y $1→$3 produce una disminución de ingreso de $16.9778 con margen $6.0222. Conciliar por separado el escenario de dos compradores con el Excel de referencia autorizado; usar valores ficticios en Git."
+  - "Verificar protección por planta en lectura, exportación y escritura y compatibilidad con propuestas anteriores sin plan."
