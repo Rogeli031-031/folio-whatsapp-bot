@@ -1,6 +1,6 @@
 # Propuesta para la revisión del responsable
 task_id: "FIX-IGF-PLAN-AL-CIERRE-MULTIPLANTA"
-status: IN_PROGRESS
+status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-11-05T17:33:46-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-05"
