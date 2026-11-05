@@ -216,6 +216,7 @@ export async function fetchIgfDiarioSemanal(opts: {
   month: number;
   plantCode?: string;
   todas?: boolean;
+  historicalNavigation?: boolean;
   weekAnchor?: string | null;
   uploadDay?: string | null;
   versionAsOfCorte?: boolean;
@@ -229,6 +230,7 @@ export async function fetchIgfDiarioSemanal(opts: {
   });
   if (opts.todas) params.set("todas", "1");
   else if (opts.plantCode) params.set("plant_code", opts.plantCode);
+  if (opts.historicalNavigation) params.set("historical_navigation", "1");
   const up = (opts.uploadDay || "").trim();
   const anchor = (opts.weekAnchor || "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(up)) params.set("upload_day", up);

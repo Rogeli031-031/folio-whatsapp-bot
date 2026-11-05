@@ -43,6 +43,7 @@ export default function IgfDiarioWeeklyAllPlantsPanel({
       month,
       todas: true,
       weekAnchor: anchor,
+      historicalNavigation: true,
       uploadDay,
       versionAsOfCorte,
     })

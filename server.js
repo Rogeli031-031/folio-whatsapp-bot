@@ -15922,6 +15922,7 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
   }
   if (todas && view === "series") return res.status(400).json({ error: "La serie semanal requiere una planta." });
   const weekAnchor = String(req.query.week_anchor || uploadDay || "").slice(0, 10);
+  const historicalNavigation = /^(1|true|yes)$/i.test(String(req.query.historical_navigation || "").trim());
   const metric = String(req.query.metric || "resultado_mxn");
   const client = await pool.connect();
   try {
@@ -15949,6 +15950,7 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
         year,
         month,
         weekAnchor,
+        historicalNavigation,
         corteYmd: uploadDay,
         versionAsOfCorte,
         projection,
@@ -15993,6 +15995,7 @@ app.get("/api/dashboard/igf-diario-semanal", dashboardAuthMiddleware, async (req
         year,
         month,
         weekAnchor,
+        historicalNavigation,
         corteYmd: uploadDay,
         versionAsOfCorte,
         projection,

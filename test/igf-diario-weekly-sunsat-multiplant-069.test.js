@@ -45,6 +45,28 @@ function day(fecha, extra) {
   };
 }
 
+test("daily historical navigation crosses months/years in both directions without expanding graph-chain defaults",()=>{
+ const first=weekly.navigationFor("2026-11-04",2026,11,true);assert.equal(first.prev_enabled,true);assert.equal(first.prev_anchor,"2026-10-25");
+ const prior=weekly.navigationFor(first.prev_anchor,2026,11,true);assert.equal(prior.prev_anchor,"2026-10-18");assert.equal(prior.prev_enabled,true);assert.equal(prior.next_anchor,"2026-11-01");assert.equal(prior.next_enabled,true);
+ let cursor=first.prev_anchor;for(let i=0;i<5;i++){const nav=weekly.navigationFor(cursor,2026,11,true);assert.equal(nav.prev_enabled,true);assert.equal(nav.next_enabled,true);cursor=nav.prev_anchor;}
+ const year=weekly.navigationFor("2027-01-03",2027,1,true);assert.equal(year.prev_anchor,"2026-12-27");assert.equal(year.prev_enabled,true);assert.equal(weekly.navigationFor(year.prev_anchor,2027,1,true).next_enabled,true);
+ assert.equal(weekly.navigationFor("2026-11-29",2026,11,true).next_enabled,false);
+ assert.equal(weekly.navigationFor("2026-11-04",2026,11).prev_enabled,false);
+ assert.match(PANEL,/historicalNavigation: true/);assert.match(ALL,/historicalNavigation: true/);assert.match(API,/historical_navigation/);
+ const route=SERVER.slice(SERVER.indexOf('app.get("/api/dashboard/igf-diario-semanal"'),SERVER.indexOf('app.get("/api/dashboard/igf-diario-semanal"')+9000);assert.equal((route.match(/historicalNavigation,/g)||[]).length,2);
+});
+
+test("historical daily requests preserve plant, selected month, cutoff and prior-week anchor",async()=>{
+ const ts=require("../frontend-dashboard/node_modules/typescript");
+ const source=API.slice(API.indexOf("export async function fetchIgfDiarioSemanal"),API.indexOf("export type IgfDiarioFolioDepositoItem"));
+ const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+ let request;const exported={};new Function("fetch","exports",`function getApiUrl(path){return path;}\n${code}`)(async url=>{request=new URL(url,"http://test");return {ok:true,json:async()=>({ok:true})};},exported);
+ await exported.fetchIgfDiarioSemanal({token:"test",year:2026,month:11,plantCode:"Puebla",historicalNavigation:true,weekAnchor:"2026-10-25",uploadDay:"2026-11-05",versionAsOfCorte:true});
+ for(const [key,value] of Object.entries({plant_code:"Puebla",historical_navigation:"1",week_anchor:"2026-10-25",upload_day:"2026-11-05",version_as_of_corte:"1",year:"2026",month:"11"}))assert.equal(request.searchParams.get(key),value);
+ await exported.fetchIgfDiarioSemanal({token:"test",year:2026,month:11,todas:true,historicalNavigation:true,weekAnchor:"2026-10-18",uploadDay:"2026-11-05"});assert.equal(request.searchParams.get("todas"),"1");assert.equal(request.searchParams.get("historical_navigation"),"1");assert.equal(request.searchParams.has("plant_code"),false);
+ await exported.fetchIgfDiarioSemanal({token:"test",year:2026,month:11,plantCode:"Puebla"});assert.equal(request.searchParams.has("historical_navigation"),false);
+});
+
 test("06/10 abre domingo 04/10 a sábado 10/10, semana 41, sin ISO", () => {
   const opened = weekly.weekOf("2026-10-06");
   assert.equal(opened.fecha_desde, "2026-10-04");
@@ -171,7 +193,7 @@ test("filas, separadores visuales y resaltado no meten registros falsos", () => 
   assert.match(ROWS, /text-emerald-300/);
   assert.match(ROWS, /return "—"/);
   assert.doesNotMatch(PANEL, /key: "separator"|ventaKg: 0/);
-  assert.doesNotMatch(ALL, /Gráfica/);
+  assert.match(ALL, /IgfDiarioWeeklyExecutiveModal/);
   assert.match(PANEL, /Gráfica/);
   assert.match(PANEL, /weekly-day-proyectado/);
 });
