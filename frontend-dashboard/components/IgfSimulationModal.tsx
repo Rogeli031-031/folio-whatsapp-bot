@@ -4,16 +4,22 @@ import { getApiUrl, type IgfForecastMiniRow } from "@/lib/api";
 import { axisTicks, closestEquilibrium, historyPeriods, mergeWeekColumns, modelFromRow, modelWithHg, hgPercentContext, hgCostFromPercent, profit, visibleWeekPoints, weeklyPoints } from "@/lib/igf-simulation";
 
 type Model={q:number;d:number;a:number;fixed:number};
+type Layer={key:string;label:string;color:string;model:Model};
+type Financials={margen_kg:number|null;operativos_mxn:number|null;corporativos_mxn:number|null;gasto_mxn:number|null;impuestos_mxn:number|null};
 type Point={key:string;label:string;q:number;d:number;z:number;color:string;state?:string;comments?:string};
-type Saved={id:string;name:string;volume_ton:number|string;discount_kg:number|string;basis:{a:number;fixed:number;cutoff:string;mode:string;version_as_of:boolean;hg_kg?:number;hg_pct?:number;hg_price_kg?:number;comments?:string;category_lines?:CategoryLine[]};created_at:string};
+type Saved={id:string;name:string;volume_ton:number|string;discount_kg:number|string;basis:{a:number;fixed:number;cutoff:string;mode:string;version_as_of:boolean;hg_kg?:number;hg_pct?:number;hg_price_kg?:number;financials?:Financials;comments?:string;category_lines?:CategoryLine[]};created_at:string};
 type CategoryLine={category:string;subcategory:string;kg:number;discount_amount:number|null;discount_kg:number|null;missing_discount_kg:number};
 const num=(v:number|null|undefined,d=2)=>v==null||!Number.isFinite(v)?"—":v.toLocaleString("es-MX",{maximumFractionDigits:d});
 const money=(v:number|null|undefined)=>v==null?"—":`$${num(v,0)}`;
 const proposalColors=["#4ade80","#fb923c","#f472b6","#22d3ee","#a3e635","#818cf8","#fbbf24","#e879f9"];
 const proposalColor=(id:string)=>proposalColors[Array.from(String(id)).reduce((n,c)=>(n*10+Number(c))%proposalColors.length,0)];
 
-function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[]}) {
- const [camera,setCamera]=useState({az:.78,el:.48}),[rotate,setRotate]=useState(false);
+function Surface({model,q,d,points,layers}:{model:Model;q:number;d:number;points:Point[];layers?:Layer[]}) {
+ const [camera,setCamera]=useState({az:.78,el:.48}),[view,setView]=useState<"3d"|"top">("3d");
+ const rotate=view==="3d";
+ const [hiddenLayers,setHiddenLayers]=useState<string[]>([]),[showCurves,setShowCurves]=useState(true),[opacity,setOpacity]=useState(.3);
+ const available=layers??[{key:"scenario",label:"Escenario",color:"#38bdf8",model:{...model,q,d}}];
+ const visible=available.filter(layer=>!hiddenLayers.includes(layer.key));
  const [zoom,setZoom]=useState(1.15),[viewport,setViewport]=useState({width:1100,height:680});
  const svgRef=useRef<SVGSVGElement|null>(null);
  useEffect(()=>{
@@ -26,49 +32,53 @@ function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[
  const scene=useMemo(()=>{
   const all=[...points,{q,d,z:profit(model,q,d)}];
   if(nearest)all.push({...nearest,z:0});
+  for(const layer of available){const eq=closestEquilibrium(layer.model);if(eq)all.push({...eq,z:0});}
   const x0=Math.max(0,Math.min(model.q*.4,...all.map(p=>p.q*.8))),x1=Math.max(model.q*1.5,1,...all.map(p=>p.q*1.1));
   const y0=Math.min(0,d-1,...all.map(p=>p.d-.3)),y1=Math.max(5.5,d+1,...all.map(p=>p.d+.5));
-  const zValues=[...all.map(p=>p.z),profit(model,x0,y0),profit(model,x0,y1),profit(model,x1,y0),profit(model,x1,y1),0];
+  const zValues=[...all.map(p=>p.z),...available.flatMap(layer=>[profit(layer.model,x0,y0),profit(layer.model,x0,y1),profit(layer.model,x1,y0),profit(layer.model,x1,y1)]),0];
   const z0=Math.min(...zValues),z1=Math.max(z0+1,...zValues);
   const axes=[
    {key:"venta",label:"Venta (t/mes)",color:"#93c5fd",min:0,max:x1+(x1-x0)*.18,at:(v:number)=>[v,0,0],format:(v:number)=>`${num(v,0)} t`},
    {key:"descuento",label:"Descuento ($/kg)",color:"#c4b5fd",min:Math.min(0,y0),max:y1+(y1-y0)*.18,at:(v:number)=>[0,v,0],format:(v:number)=>`$${num(v)}/kg`},
    {key:"resultado",label:"Resultado (MXN/mes)",color:"#e2e8f0",min:z0-(z1-z0)*.12,max:z1+(z1-z0)*.12,at:(v:number)=>[0,0,v],format:money},
-  ];
+  ].filter(axis=>view!=="top"||axis.key!=="resultado");
   function raw(x:number,y:number,z:number){const u=2*(x-x0)/(x1-x0)-1,v=2*(y-y0)/(y1-y0)-1,w=2*(z-z0)/(z1-z0)-1;
+   if(view==="top")return [u,-v,w];
    const rx=u*Math.cos(camera.az)-v*Math.sin(camera.az),ry=u*Math.sin(camera.az)+v*Math.cos(camera.az);
    return [rx,ry*Math.sin(camera.el)-w*Math.cos(camera.el),ry*Math.cos(camera.el)+w*Math.sin(camera.el)];}
   // Fit the actual surface/markers instead of an imaginary full bounding cube.
   const corners=all.map(p=>raw(p.q,p.d,p.z));
-  for(const x of [x0,x1])for(const y of [y0,y1]){corners.push(raw(x,y,profit(model,x,y)),raw(x,y,0));}
+  for(const x of [x0,x1])for(const y of [y0,y1])for(const layer of available){corners.push(raw(x,y,profit(layer.model,x,y)),raw(x,y,0));}
   for(const axis of axes)for(const value of [axis.min,axis.max]){const at=axis.at(value);corners.push(raw(at[0],at[1],at[2]));}
   const minX=Math.min(...corners.map(c=>c[0])),maxX=Math.max(...corners.map(c=>c[0])),minY=Math.min(...corners.map(c=>c[1])),maxY=Math.max(...corners.map(c=>c[1]));
   const scale=Math.min(Math.max(100,viewport.width-150)/(maxX-minX),Math.max(100,viewport.height-130)/(maxY-minY))*zoom;
   const project=(x:number,y:number,z:number)=>{const r=raw(x,y,z);return [viewport.width/2+(r[0]-(minX+maxX)/2)*scale,viewport.height/2+(r[1]-(minY+maxY)/2)*scale,r[2]];};
   const path=(list:number[][])=>list.map(p=>`${p[0]},${p[1]}`).join(" ");
-  const cells=[];for(let i=0;i<28;i++)for(let j=0;j<22;j++){
-   const xa=x0+(x1-x0)*i/28,xb=x0+(x1-x0)*(i+1)/28,ya=y0+(y1-y0)*j/22,yb=y0+(y1-y0)*(j+1)/22;
-   const vertices=[[xa,ya],[xb,ya],[xb,yb],[xa,yb]].map(([x,y])=>project(x,y,profit(model,x,y)));
-   cells.push({path:path(vertices),depth:vertices.reduce((s,p)=>s+p[2],0)/4,positive:profit(model,(xa+xb)/2,(ya+yb)/2)>=0});
+  const nx=Math.max(6,Math.min(28,Math.floor(Math.sqrt(6000/Math.max(1,visible.length))))),ny=Math.max(5,Math.floor(nx*.8));
+  const cells=[];for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){
+   const xa=x0+(x1-x0)*i/nx,xb=x0+(x1-x0)*(i+1)/nx,ya=y0+(y1-y0)*j/ny,yb=y0+(y1-y0)*(j+1)/ny;
+   for(const layer of visible){const vertices=[[xa,ya],[xb,ya],[xb,yb],[xa,yb]].map(([x,y])=>project(x,y,profit(layer.model,x,y)));
+    cells.push({path:path(vertices),depth:vertices.reduce((s,p)=>s+p[2],0)/4,color:layer.color,key:layer.key});}
   }
   cells.sort((a,b)=>a.depth-b.depth);
-  const zero=[];for(let i=0;i<=240;i++){const x=x0+(x1-x0)*i/240;if(x<=0)continue;const y=model.a-model.fixed/(x*1000);if(y>=y0&&y<=y1)zero.push(project(x,y,0));}
-  return {project,path,cells,zero,x0,x1,y0,y1,z0,z1,axes};
- },[model,q,d,points,camera,nearest?.q,nearest?.d,zoom,viewport]);
+  const curves=visible.map(layer=>{const zero=[];for(let i=0;i<=240;i++){const x=x0+(x1-x0)*i/240;if(x<=0)continue;const y=layer.model.a-layer.model.fixed/(x*1000);if(y>=y0&&y<=y1)zero.push(project(x,y,0));}return {...layer,zero,eq:closestEquilibrium(layer.model)};});
+  return {project,path,cells,curves,x0,x1,y0,y1,z0,z1,axes};
+ },[model,q,d,points,camera,nearest?.q,nearest?.d,zoom,viewport,view,available,visible]);
  const p=scene.project(q,d,profit(model,q,d));
  const eq=nearest?scene.project(nearest.q,nearest.d,0):null;
  const trail=points.filter(p=>p.state&&p.state!=="actual").map(p=>scene.project(p.q,p.d,p.z));
  return <>
-  <div className="flex flex-wrap items-center gap-2 text-xs"><button type="button" aria-pressed={rotate} onClick={()=>{drag.current=null;setRotate(!rotate);}} className={`rounded px-3 py-2 ${rotate?"bg-cyan-700":"bg-slate-700"}`}>{rotate?"Terminar giro":"Girar gráfica"}</button><button type="button" onClick={()=>{setCamera({az:.78,el:.48});setZoom(1.15);}} className="rounded bg-slate-700 px-3 py-2">Vista inicial</button><span className="text-slate-400">Mantén presionada la rueda y mueve arriba para acercar, abajo para alejar. </span></div>
+  <div className="mb-2 flex flex-wrap items-center gap-3 text-xs"><button type="button" aria-pressed={view==="3d"} onClick={()=>{drag.current=null;setView("3d");}} className={`rounded px-3 py-2 ${rotate?"bg-cyan-700":"bg-slate-700"}`}>Vista 3D</button><button type="button" aria-pressed={view==="top"} onClick={()=>{drag.current=null;setView("top");}} className={`rounded px-3 py-2 ${view==="top"?"bg-cyan-700":"bg-slate-700"}`}>Vista superior</button><span className="text-slate-400">{rotate?"Arrastra para girar. ":"Curvas sobre resultado cero. "}Rueda presionada: arriba acerca, abajo aleja.</span></div>
+  <fieldset className="mb-2 flex flex-wrap items-center gap-3 text-xs"><legend>Superficies y equilibrios</legend>{available.map(layer=><label key={layer.key} style={{color:layer.color}}><input type="checkbox" aria-label={`Mostrar superficie ${layer.label}`} checked={!hiddenLayers.includes(layer.key)} onChange={e=>setHiddenLayers(keys=>e.target.checked?keys.filter(key=>key!==layer.key):[...keys,layer.key])}/> {layer.label}</label>)}<label><input type="checkbox" checked={showCurves} onChange={e=>setShowCurves(e.target.checked)}/> Curvas de equilibrio</label><label>Opacidad <input aria-label="Opacidad de superficies" type="range" min=".1" max=".7" step=".05" value={opacity} onChange={e=>setOpacity(Number(e.target.value))}/></label></fieldset>
   <svg ref={svgRef} role="img" aria-label="Superficie de rentabilidad, semanas, tendencia y propuestas" viewBox={`0 0 ${viewport.width} ${viewport.height}`} className="w-full rounded bg-slate-950" style={{height:"clamp(520px,80vh,1100px)",minHeight:420,touchAction:rotate?"none":"auto",cursor:rotate?"grab":"default"}}
    onPointerDown={e=>{if(e.button!==1&&(!rotate||e.button!==0))return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,x:e.clientX,y:e.clientY,...camera,zoom,kind:e.button===1?"zoom":"rotate"};}}
    onMouseDown={e=>{if(e.button===1)e.preventDefault();}} onAuxClick={e=>{if(e.button===1)e.preventDefault();}}
    onPointerMove={e=>{const g=drag.current;if(!g||g.id!==e.pointerId)return;if(g.kind==="zoom"){setZoom(Math.max(.5,Math.min(4,g.zoom*Math.exp((g.y-e.clientY)*.006))));}else setCamera({az:g.az+(e.clientX-g.x)*.008,el:Math.max(.1,Math.min(1.48,g.el-(e.clientY-g.y)*.006))});}}
    onPointerUp={e=>{drag.current=null;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
    onPointerCancel={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}>
-   <text x={viewport.width/2} y="25" textAnchor="middle" fill="#cbd5e1" fontSize="15">Altura: resultado mensual equivalente (MXN)</text>
+   <text x={viewport.width/2} y="25" textAnchor="middle" fill="#cbd5e1" fontSize="15">{rotate?"Altura: resultado mensual equivalente (MXN)":"Vista superior · venta y descuento · curvas de resultado cero"}</text>
    <polygon points={scene.path([[scene.x0,scene.y0],[scene.x1,scene.y0],[scene.x1,scene.y1],[scene.x0,scene.y1]].map(([x,y])=>scene.project(x,y,0)))} fill="#334155" fillOpacity=".3" stroke="#64748b"/>
-   {scene.cells.map((c,i)=><polygon key={i} points={c.path} fill={c.positive?"#168ca0":"#64748b"} fillOpacity=".7" stroke="#cbd5e1" strokeOpacity=".22" strokeWidth=".6"/>)}
+   {rotate&&scene.cells.map((c,i)=><polygon key={i} data-surface={c.key} points={c.path} fill={c.color} fillOpacity={opacity} stroke={c.color} strokeOpacity=".25" strokeWidth=".6"/>)}
    <defs>{scene.axes.map(axis=><marker key={axis.key} id={`igf-axis-${axis.key}`} viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill={axis.color}/></marker>)}</defs>
    {scene.axes.map(axis=>{
     const project=(value:number)=>{const at=axis.at(value);return scene.project(at[0],at[1],at[2]);};
@@ -81,15 +91,15 @@ function Surface({model,q,d,points}:{model:Model;q:number;d:number;points:Point[
      <text x={end[0]+dx*14} y={end[1]+dy*14-8} textAnchor={dx>.3?"start":dx<-.3?"end":"middle"} fill={axis.color} stroke="#020617" strokeWidth="3" paintOrder="stroke" fontSize="14" fontWeight="600">{axis.label}</text>
     </g>;
    })}
-   <polyline points={scene.path(scene.zero)} fill="none" stroke="#f8fafc" strokeWidth="3"/>
+   {showCurves&&scene.curves.map(layer=><g key={layer.key} data-equilibrium={layer.key}><polyline points={scene.path(layer.zero)} fill="none" stroke={layer.color} strokeWidth="3"><title>{`Equilibrio · ${layer.label}`}</title></polyline>{layer.eq&&(()=>{const at=scene.project(layer.eq.q,layer.eq.d,0);return <circle cx={at[0]} cy={at[1]} r="5" fill={layer.color} stroke="white"><title>{`Equilibrio: ${layer.label} · ${num(layer.eq.q)} t · $${num(layer.eq.d,4)}/kg`}</title></circle>;})()}</g>)}
    {trail.length>1&&<polyline points={scene.path(trail)} fill="none" stroke="#c084fc" strokeWidth="3" strokeDasharray="7 5"/>}
    {eq&&nearest&&<><line x1={p[0]} y1={p[1]} x2={eq[0]} y2={eq[1]} stroke="#fb923c" strokeWidth="3"/><circle cx={eq[0]} cy={eq[1]} r="7" fill="#fb923c" stroke="white"><title>{`Equilibrio: ${num(nearest.q)} t · ${num(nearest.d,4)}/kg`}</title></circle></>}
    {points.map(point=>{const at=scene.project(point.q,point.d,point.z);return <g key={point.key} aria-label={point.comments?`${point.label} · ${point.comments}`:point.label}><circle cx={at[0]} cy={at[1]} r="7" fill={point.state==="proyectada"?"#020617":point.color} stroke={point.state==="proyectada"?point.color:"white"} strokeDasharray={point.state==="parcial"?"3 2":undefined} strokeWidth="2"><title>{`${point.label}: ${num(point.q)} t · ${num(point.d,4)}/kg · ${money(point.z)}${point.state?` · ${point.state}`:""}${point.comments?` · ${point.comments}`:""}`}</title></circle><text x={at[0]+10} y={at[1]-9} fill={point.color} stroke="#020617" strokeWidth="3" paintOrder="stroke" fontSize="15">{point.label}</text></g>;})}
    <circle cx={p[0]} cy={p[1]} r="9" fill="#38bdf8" stroke="white" strokeWidth="3"><title>{`Escenario: ${num(q)} t · ${num(d,4)}/kg · ${money(profit(model,q,d))}`}</title></circle>
    <text x="16" y={viewport.height-35} fill="#cbd5e1" fontSize="13">Venta: {num(scene.x0,0)}–{num(scene.x1,0)} t/mes</text><text x="16" y={viewport.height-15} fill="#cbd5e1" fontSize="13">Descuento: ${num(scene.y0)}–${num(scene.y1)}/kg</text>
   </svg>
-  <p className="text-xs text-slate-300">Superficie gris: pérdida · Superficie azul: utilidad · Línea blanca: equilibrio. Los tamaños de estas áreas no representan porcentajes ni probabilidades; dependen de los rangos de venta y descuento y de la vista.</p>
-  <p className="text-xs text-slate-300">Punto azul: escenario · Morado: semanas y trayectoria (punto hueco: proyectada; borde discontinuo: parcial) · Amarillo: tendencia actual · Propuestas: colores identificados por número y comentarios · Naranja: ruta más corta al equilibrio. Cada propuesta conserva sus supuestos y puede quedar fuera de la superficie activa.</p>
+  <p className="text-xs text-slate-300">Cada color identifica una superficie y su curva de resultado cero. Por encima de cero hay utilidad; por debajo, pérdida. Las áreas no representan porcentajes ni probabilidades.</p>
+  <p className="text-xs text-slate-300">Punto azul: escenario · Morado: semanas · Amarillo: tendencia actual · Propuestas: número y comentarios. Cada propuesta usa todos sus supuestos guardados, no solo HG. Las semanas pueden quedar fuera de estas superficies por usar otros supuestos.</p>
   <p className="text-sm text-orange-200">{nearest?`Equilibrio cercano: ${num(nearest.q)} t/mes · $${num(nearest.d,4)}/kg. Cambio: ${num(nearest.q-q)} t y $${num(nearest.d-d,4)}/kg.`:"Sin equilibrio con venta positiva y descuento no negativo."}</p>
   <p className="text-xs text-slate-400">Distancia normalizada: 1,600 t y $4.50/kg por unidad. La línea es geométrica; llegar a cero no mejora un escenario que ya tiene utilidad.</p>
  </>;
@@ -129,7 +139,7 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
  }
  function choose(p:Saved){setEditingId(null);setComparisonIds(ids=>ids.includes(p.id)?ids:[...ids,p.id]);setSelected(p);setQ(Number(p.volume_ton));setD(Number(p.discount_kg));setHg(savedHg(p));setEdits(p.basis.category_lines??null);setComments(p.basis.comments||p.name);setError("");setPanel(null);}
  function edit(p:Saved){choose(p);setEditingId(p.id);setPanel("categories");}
- const [panel,setPanel]=useState<"weeks"|"categories"|"proposals"|null>(null);
+ const [panel,setPanel]=useState<"weeks"|"categories"|"proposals"|"comparison"|null>(null);
  const [detail,setDetail]=useState<{week:any;field:string}|null>(null),[detailData,setDetailData]=useState<any>(null),[detailError,setDetailError]=useState("");
  const saveLock=useRef(false);
  const plant=row.plant_code||row.empresa;
@@ -178,9 +188,14 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
  const points:Point[]=visibleWeekPoints(weeks,hiddenWeeks);
  if(baseModel)points.push({key:"current",label:"Tendencia actual",q:baseModel.q,d:baseModel.d,z:profit(baseModel,baseModel.q,baseModel.d),color:"#facc15",state:"actual"});
  const comparisons=saved.filter(p=>comparisonIds.includes(p.id));
+ const baseFinancials:Financials={margen_kg:row.margen??null,operativos_mxn:row.operativos??null,corporativos_mxn:row.corporativos??null,gasto_mxn:row.gasto??(row.operativos!=null&&row.corporativos!=null?row.operativos+row.corporativos:null),impuestos_mxn:baseModel&&row.impuestos!=null?row.impuestos*baseModel.q*1000:null};
+ const financials=selected?selected.basis.financials:baseFinancials;
+ const layers:Layer[]=[...(baseModel?[{key:"actual",label:"Actual",color:"#38bdf8",model:baseModel}]:[]),...comparisons.map(p=>({key:`proposal-${p.id}`,label:`Punto #${p.id}`,color:proposalColor(p.id),model:{...p.basis,q:Number(p.volume_ton),d:Number(p.discount_kg)}}))];
+ if(model&&!layers.some(layer=>Math.abs(layer.model.a-model.a)<1e-10&&Math.abs(layer.model.fixed-model.fixed)<1e-5))layers.push({key:"scenario",label:"Escenario en edición",color:"#f8fafc",model:{...model,q,d}});
+ const comparisonData:ComparisonRecord[]=[...(baseModel?[{label:"Actual",model:baseModel,hg:baseHg,price:hgContext.price,financials:baseFinancials,cutoff,mode,comments:"Corte del dashboard"}]:[]),...(model?[{label:"Escenario activo",model:{...model,q,d},hg,price:hgPrice,financials,cutoff:selected?.basis.cutoff??cutoff,mode:selected?.basis.mode??mode,comments}]:[]),...comparisons.map(p=>({label:`Punto #${p.id}`,model:{...p.basis,q:Number(p.volume_ton),d:Number(p.discount_kg)},hg:p.basis.hg_pct!=null?p.basis.hg_pct*100:null,price:p.basis.hg_price_kg??null,financials:p.basis.financials,cutoff:p.basis.cutoff,mode:p.basis.mode,comments:p.basis.comments||p.name}))];
  for(const proposal of comparisons)points.push({key:`proposal-${proposal.id}`,label:`Punto #${proposal.id}`,comments:proposal.basis.comments||proposal.name,q:Number(proposal.volume_ton),d:Number(proposal.discount_kg),z:profit(proposal.basis,Number(proposal.volume_ton),Number(proposal.discount_kg)),color:proposalColor(proposal.id)});
  async function save(){if(!model||!scenarioReady||saveLock.current)return;saveLock.current=true;setSaving(true);setError("");try{
-  const data=await request("/api/dashboard/igf-simulation-proposals",{method:editingId?"PUT":"POST",body:JSON.stringify({year,month,plant_code:plant,...(editingId?{id:editingId}:{}),name:editingId&&selected?selected.name:"Punto de simulación",volume_ton:q,discount_kg:d,basis:{a:model.a,fixed:model.fixed,cutoff:selected?.basis.cutoff??cutoff,mode:selected?.basis.mode??mode,version_as_of:selected?.basis.version_as_of??versionAsOf,comments,...(edits?{category_lines:edits}:{}),...(hg!=null&&hgPrice!=null?{hg_kg:hgCostFromPercent(hg,hgPrice),hg_pct:hg/100,hg_price_kg:hgPrice}:{})}})});
+  const data=await request("/api/dashboard/igf-simulation-proposals",{method:editingId?"PUT":"POST",body:JSON.stringify({year,month,plant_code:plant,...(editingId?{id:editingId}:{}),name:editingId&&selected?selected.name:"Punto de simulación",volume_ton:q,discount_kg:d,basis:{a:model.a,fixed:model.fixed,cutoff:selected?.basis.cutoff??cutoff,mode:selected?.basis.mode??mode,version_as_of:selected?.basis.version_as_of??versionAsOf,comments,...(financials?{financials}:{}),...(edits?{category_lines:edits}:{}),...(hg!=null&&hgPrice!=null?{hg_kg:hgCostFromPercent(hg,hgPrice),hg_pct:hg/100,hg_price_kg:hgPrice}:{})}})});
   setSaved(rows=>editingId?rows.map(p=>p.id===editingId?data.row:p):[data.row,...rows].slice(0,200));setComparisonIds(ids=>ids.includes(String(data.row.id))?ids:[...ids,String(data.row.id)]);setSelected(data.row);setPanel(null);
  }catch(e){setError((e as Error).message);}finally{saveLock.current=false;setSaving(false);}}
  async function removePoint(){
@@ -201,18 +216,20 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
      <button type="button" onClick={()=>setPanel("weeks")} className="rounded bg-purple-800 px-3 py-2">Semanas · {weeks.filter((w:any)=>w.available&&!hiddenWeeks.includes(w.key)).length}/{weeks.filter((w:any)=>w.available).length}</button>
      <button type="button" onClick={()=>setPanel("categories")} className="rounded bg-slate-700 px-3 py-2">Categorías del mes</button>
      <button type="button" onClick={()=>setPanel("proposals")} className="rounded bg-emerald-800 px-3 py-2">Puntos guardados ({saved.length})</button>
+     <button type="button" onClick={()=>setPanel("comparison")} className="rounded bg-indigo-800 px-3 py-2">Comparación completa</button>
      {weeksLoading&&<span role="status">Cargando semanas…</span>}
     </div>
     <div className="mb-3 overflow-x-auto rounded border border-slate-700"><table className="w-full text-right text-xs"><caption className="p-2 text-left text-slate-400">Base mensual de la superficie · {month}/{year} · Margen bruto del IGF; contribución efectiva antes del descuento: {num(baseModel?.a,4)} $/kg (incluye HG y ajustes del resultado seleccionado).</caption><thead><tr>{["Venta (t)","Margen ($/kg)","Descuento ($/kg)","HG (% venta)","Operativos ($)","Corporativos ($)","Gasto ($)","Resultado ($)"].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody><tr className="bg-slate-800"><td className="p-2"><button type="button" className="text-cyan-300 underline" onClick={()=>setPanel("categories")}>{num(row.ventaTon)}</button></td><td>{num(row.margen,4)}</td><td><button type="button" className="text-cyan-300 underline" onClick={()=>setPanel("categories")}>{num(baseModel?.d,4)}</button></td><td>{num(baseHg,4)}</td><td>{money(row.operativos)}</td><td>{money(row.corporativos)}</td><td>{money(row.gasto)}</td><td>{money(row.resultadoFinalImporte)}</td></tr></tbody></table></div>
     {model?<>
      <div className="mb-2 flex flex-wrap items-center gap-3 text-sm"><strong className="text-cyan-200">{selected?`Punto #${selected.id} · `:""}Resultado: {scenarioReady?money(profit(model,q,d)):"Pendiente de completar venta / descuentos"}</strong><button type="button" onClick={reset} className="rounded bg-slate-700 px-2 py-1">Restaurar actual</button>{selected&&<span className="whitespace-pre-wrap text-slate-300">{selected.basis.comments||selected.name}</span>}</div>
      {!!comparisons.length&&<div aria-label="Propuestas comparadas" className="mb-2 flex flex-wrap gap-2 text-xs">{comparisons.map(p=><button type="button" key={p.id} aria-label={`Editar punto #${p.id}`} disabled={saving} onClick={()=>edit(p)} className="max-w-lg rounded border border-slate-600 bg-slate-800 px-3 py-2 text-left hover:border-cyan-400 focus-visible:outline focus-visible:outline-cyan-400"><strong style={{color:proposalColor(p.id)}}>Punto #{p.id} · {money(profit(p.basis,Number(p.volume_ton),Number(p.discount_kg)))}</strong><span className="block whitespace-pre-wrap break-words text-slate-200">{p.basis.comments||p.name}</span><span className="text-slate-400">{num(Number(p.volume_ton))} t · ${num(Number(p.discount_kg),4)}/kg · HG {p.basis.hg_pct==null?"—":`${num(p.basis.hg_pct*100,4)}%`} · Corte {p.basis.cutoff}</span><span className="mt-1 block text-cyan-300">Editar este punto</span></button>)}</div>}
-     {scenarioReady?<Surface model={model} q={q} d={d} points={points}/>:<p role="alert" className="p-3 text-amber-200">Completa los descuentos de cada subcategoría y una venta total mayor que cero para calcular el escenario.</p>}
+     {scenarioReady?<Surface model={model} q={q} d={d} points={points} layers={layers}/>:<p role="alert" className="p-3 text-amber-200">Completa los descuentos de cada subcategoría y una venta total mayor que cero para calcular el escenario.</p>}
      <p className="my-3 text-xs text-slate-400">La superficie reproduce el resultado seleccionado y mantiene fijos los gastos e impuestos mensuales: {money(model.fixed)}. Se modifican venta, descuento y HG; no predice la reacción de los clientes. Las semanas se convierten a ritmo mensual (venta y resultado ÷ días del periodo × días del mes) para compararlas. Pueden quedar fuera de la superficie por cambios en margen, HG o gastos. La tendencia actual es el cierre mensual seleccionado, con la proyección que incluya el dashboard.</p>
     </>:<p className="mb-4 rounded border border-amber-700 p-3 text-amber-200">Faltan venta, comisión, impuestos, gastos o resultado final para calcular la superficie. Completa los datos de esta planta; no se sustituye HG faltante por cero. Puedes consultar sus semanas y propuestas guardadas.</p>}
     {loading&&<p role="status" className="text-sm text-slate-400">Cargando propuestas y categorías…</p>}
     {weekError&&<p role="alert" className="text-amber-200">Semanas: {weekError}</p>}
-    {panel&&<Popup title={panel==="weeks"?"Semanas · selección y resumen financiero":panel==="categories"?"Venta y descuentos por categoría y subcategoría · mes seleccionado":"Puntos y propuestas"} onClose={()=>setPanel(null)}>
+    {panel&&<Popup title={panel==="comparison"?"Comparación completa de escenarios":panel==="weeks"?"Semanas · selección y resumen financiero":panel==="categories"?"Venta y descuentos por categoría y subcategoría · mes seleccionado":"Puntos y propuestas"} onClose={()=>setPanel(null)}>
+     {panel==="comparison"&&<FullComparison records={comparisonData}/>}
      {panel==="weeks"&&<>
      <label className="flex flex-wrap items-center gap-2 text-xs">Historial de semanas
       <select aria-label="Historial de semanas" value={monthsBack} onChange={e=>setMonthsBack(Number(e.target.value))} className="rounded border border-slate-600 bg-slate-950 px-2 py-1">
@@ -277,6 +294,25 @@ function WeekControls({weeks,hidden,onChange,onDetail}:{weeks:WeekChoice[];hidde
    {weeks.map(w=>{const m=w.metrics||{},f=w.financials||{},values:Record<string,number|null|undefined>={venta:w.actualTon,margen:f.margen,descuento:w.d,operativos:f.operativos,corporativos:f.corporativos,gasto:f.gasto,hg:m.hg_mxn,impuestos:m.venta_kg>0&&m.impuestos_federales_kg!=null?m.venta_kg*m.impuestos_federales_kg:null,resultado:w.actualResult};return <tr key={w.key} className="border-t border-slate-700"><td className="p-2 text-left"><label className="flex items-center gap-2"><input aria-label={`Mostrar ${w.label} del ${w.from}`} type="checkbox" disabled={!w.available} checked={w.available&&!hidden.includes(w.key)} onChange={e=>onChange(e.target.checked?hidden.filter(key=>key!==w.key):[...hidden,w.key])} className="accent-purple-400"/>{w.label}</label><div className="mt-1 text-slate-400">{w.from} – {w.to} · {w.state}{!w.available?" · incompleta":""}{!!w.forecastSources?.length?" · IGF Forecast histórico":""}</div></td>{fields.map(field=><td key={field} className="p-2"><button type="button" aria-label={`${DETAIL_LABELS[field]} de ${w.label} del ${w.from}`} onClick={()=>onDetail?.(w,field)} className="text-cyan-200 underline decoration-dotted underline-offset-4">{field==="venta"||field==="margen"||field==="descuento"?num(values[field],field==="venta"?2:4):money(values[field])}</button></td>)}</tr>;})}
   </tbody></table></div>
  </fieldset>;
+}
+type ComparisonRecord={label:string;model:Model;hg:number|null;price:number|null;financials?:Financials;cutoff:string;mode:string;comments:string};
+function FullComparison({records}:{records:ComparisonRecord[]}) {
+ const values=(r:ComparisonRecord)=>{
+  const m=r.model,hgKg=r.hg==null?null:m.q*1000*r.hg/100,eq=closestEquilibrium(m);
+  return {q:m.q,d:m.d,commission:m.q*1000*m.d,hg:r.hg,hgKg,hgPrice:r.price,hgAmount:hgKg!=null&&r.price!=null?hgKg*r.price:null,
+   margin:r.financials?.margen_kg,a:m.a,operating:r.financials?.operativos_mxn,corporate:r.financials?.corporativos_mxn,total:r.financials?.gasto_mxn,taxes:r.financials?.impuestos_mxn,fixed:m.fixed,contribution:m.q*1000*(m.a-m.d),result:profit(m,m.q,m.d),
+   eqQ:m.a-m.d>0?m.fixed/(m.a-m.d)/1000:null,eqD:m.q>0?m.a-m.fixed/(m.q*1000):null,closestQ:eq?.q,closestD:eq?.d};
+ };
+ const fields:{key:keyof ReturnType<typeof values>;label:string;format:(v:number)=>string}[]=[
+  {key:"q",label:"Venta mensual (t)",format:v=>num(v)}, {key:"d",label:"Descuento ponderado ($/kg)",format:v=>num(v,4)}, {key:"commission",label:"Comisiones / descuentos ($)",format:money},
+  {key:"hg",label:"HG (% de venta)",format:v=>`${num(v,4)}%`}, {key:"hgKg",label:"HG generado / perdido (kg)",format:v=>num(v)}, {key:"hgPrice",label:"Valoración HG ($/kg)",format:v=>num(v,4)}, {key:"hgAmount",label:"Importe HG ($)",format:money},
+  {key:"margin",label:"Margen bruto IGF ($/kg)",format:v=>num(v,4)}, {key:"a",label:"Contribución efectiva antes de descuento ($/kg)",format:v=>num(v,4)},
+  {key:"operating",label:"Gastos operativos ($)",format:money}, {key:"corporate",label:"Gastos corporativos ($)",format:money}, {key:"total",label:"Gasto operativo + corporativo ($)",format:money}, {key:"taxes",label:"Impuestos mensuales en la base ($)",format:money}, {key:"fixed",label:"Gastos e impuestos fijos del modelo ($)",format:money},
+  {key:"contribution",label:"Contribución antes de gastos ($)",format:money}, {key:"result",label:"Resultado final ($)",format:money},
+  {key:"eqQ",label:"Venta de equilibrio al mismo descuento (t)",format:v=>num(v)}, {key:"eqD",label:"Descuento de equilibrio a la misma venta ($/kg)",format:v=>num(v,4)}, {key:"closestQ",label:"Equilibrio cercano: venta (t)",format:v=>num(v)}, {key:"closestD",label:"Equilibrio cercano: descuento ($/kg)",format:v=>num(v,4)},
+ ];
+ const data=records.map(values),base=data[0];
+ return <><p className="mb-3 text-xs text-slate-300">Se comparan todas las variables guardadas, sin igualar venta, descuento, HG ni gastos entre propuestas. Δ indica diferencia contra Actual. Cada superficie y equilibrio usa su propia contribución efectiva y gastos fijos.</p><div className="overflow-x-auto"><table className="w-full text-right text-sm"><thead><tr><th className="p-2 text-left">Variable</th>{records.map((r,i)=><th key={i} className="min-w-48 p-2">{r.label}<div className="font-normal text-slate-400">{r.cutoff} · {r.mode}</div><div className="max-w-xs whitespace-pre-wrap break-words font-normal">{r.comments}</div></th>)}</tr></thead><tbody>{fields.map(field=><tr key={field.key} className="border-t border-slate-700"><th className="p-2 text-left font-normal">{field.label}</th>{data.map((r,i)=>{const value=r[field.key],reference=base?.[field.key];return <td key={i} className="p-2">{value==null?"No registrado":field.format(value)}{i>0&&value!=null&&reference!=null&&<div className="text-xs text-slate-400">Δ {field.format(value-reference)}</div>}</td>;})}</tr>)}</tbody></table></div><p className="mt-3 text-xs text-amber-200">Los gastos desglosados no registrados en propuestas antiguas permanecen sin cifra; sus resultados y superficies siguen usando los supuestos originales a y gasto fijo. Un descuento de equilibrio negativo no es viable con descuento no negativo. Los impuestos del modelo se mantienen fijos como en la simulación existente; no se recalculan con la venta simulada. El equilibrio cercano usa la distancia normalizada de la gráfica y no es una recomendación comercial.</p></>;
 }
 function Popup({title,onClose,children}:{title:string;onClose:()=>void;children:React.ReactNode}) {
  const closeRef=useRef<HTMLButtonElement|null>(null);
