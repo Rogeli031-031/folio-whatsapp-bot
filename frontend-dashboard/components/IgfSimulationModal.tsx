@@ -21,13 +21,14 @@ function Surface({model,q,d,points,layers}:{model:Model;q:number;d:number;points
  const available=layers??[{key:"scenario",label:"Escenario",color:"#38bdf8",model:{...model,q,d}}];
  const visible=available.filter(layer=>!hiddenLayers.includes(layer.key));
  const [zoom,setZoom]=useState(1.15),[viewport,setViewport]=useState({width:1100,height:680});
+ const [pan,setPan]=useState({x:0,y:0});
  const svgRef=useRef<SVGSVGElement|null>(null);
  useEffect(()=>{
   const svg=svgRef.current;if(!svg)return;
   const measure=()=>{const box=svg.getBoundingClientRect();if(box.width>0&&box.height>0)setViewport({width:box.width,height:box.height});};
   measure();const observer=new ResizeObserver(measure);observer.observe(svg);return()=>observer.disconnect();
  },[]);
- const drag=useRef<{id:number;x:number;y:number;az:number;el:number;zoom:number;kind:"rotate"|"zoom"}|null>(null);
+ const drag=useRef<{id:number;x:number;y:number;az:number;el:number;zoom:number;panX:number;panY:number;kind:"rotate"|"zoom"|"pan"}|null>(null);
  const nearest=closestEquilibrium({...model,q,d});
  const scene=useMemo(()=>{
   const all=[...points,{q,d,z:profit(model,q,d)}];
@@ -52,7 +53,7 @@ function Surface({model,q,d,points,layers}:{model:Model;q:number;d:number;points
   for(const axis of axes)for(const value of [axis.min,axis.max]){const at=axis.at(value);corners.push(raw(at[0],at[1],at[2]));}
   const minX=Math.min(...corners.map(c=>c[0])),maxX=Math.max(...corners.map(c=>c[0])),minY=Math.min(...corners.map(c=>c[1])),maxY=Math.max(...corners.map(c=>c[1]));
   const scale=Math.min(Math.max(100,viewport.width-150)/(maxX-minX),Math.max(100,viewport.height-130)/(maxY-minY))*zoom;
-  const project=(x:number,y:number,z:number)=>{const r=raw(x,y,z);return [viewport.width/2+(r[0]-(minX+maxX)/2)*scale,viewport.height/2+(r[1]-(minY+maxY)/2)*scale,r[2]];};
+  const project=(x:number,y:number,z:number)=>{const r=raw(x,y,z);return [viewport.width/2+(r[0]-(minX+maxX)/2)*scale+pan.x,viewport.height/2+(r[1]-(minY+maxY)/2)*scale+pan.y,r[2]];};
   const path=(list:number[][])=>list.map(p=>`${p[0]},${p[1]}`).join(" ");
   const nx=Math.max(6,Math.min(28,Math.floor(Math.sqrt(6000/Math.max(1,visible.length))))),ny=Math.max(5,Math.floor(nx*.8));
   const cells=[];for(let i=0;i<nx;i++)for(let j=0;j<ny;j++){
@@ -63,17 +64,17 @@ function Surface({model,q,d,points,layers}:{model:Model;q:number;d:number;points
   cells.sort((a,b)=>a.depth-b.depth);
   const curves=visible.map(layer=>{const zero=[];for(let i=0;i<=240;i++){const x=x0+(x1-x0)*i/240;if(x<=0)continue;const y=layer.model.a-layer.model.fixed/(x*1000);if(y>=y0&&y<=y1)zero.push(project(x,y,0));}return {...layer,zero,eq:closestEquilibrium(layer.model)};});
   return {project,path,cells,curves,x0,x1,y0,y1,z0,z1,axes};
- },[model,q,d,points,camera,nearest?.q,nearest?.d,zoom,viewport,view,available,visible]);
+ },[model,q,d,points,camera,nearest?.q,nearest?.d,zoom,viewport,view,available,visible,pan]);
  const p=scene.project(q,d,profit(model,q,d));
  const eq=nearest?scene.project(nearest.q,nearest.d,0):null;
  const trail=points.filter(p=>p.state&&p.state!=="actual").map(p=>scene.project(p.q,p.d,p.z));
  return <>
-  <div className="mb-2 flex flex-wrap items-center gap-3 text-xs"><button type="button" aria-pressed={view==="3d"} onClick={()=>{drag.current=null;setView("3d");}} className={`rounded px-3 py-2 ${rotate?"bg-cyan-700":"bg-slate-700"}`}>Vista 3D</button><button type="button" aria-pressed={view==="top"} onClick={()=>{drag.current=null;setView("top");}} className={`rounded px-3 py-2 ${view==="top"?"bg-cyan-700":"bg-slate-700"}`}>Vista superior</button><span className="text-slate-400">{rotate?"Arrastra para girar. ":"Curvas sobre resultado cero. "}Rueda presionada: arriba acerca, abajo aleja.</span></div>
+  <div className="mb-2 flex flex-wrap items-center gap-3 text-xs"><button type="button" aria-pressed={view==="3d"} onClick={()=>{drag.current=null;setView("3d");}} className={`rounded px-3 py-2 ${rotate?"bg-cyan-700":"bg-slate-700"}`}>Vista 3D</button><button type="button" aria-pressed={view==="top"} onClick={()=>{drag.current=null;setView("top");}} className={`rounded px-3 py-2 ${view==="top"?"bg-cyan-700":"bg-slate-700"}`}>Vista superior</button><span className="text-slate-400">{rotate?"Arrastra para girar. ":"Curvas sobre resultado cero. "}Ctrl + botón izquierdo: desplazar. Rueda presionada: arriba acerca, abajo aleja.</span></div>
   <fieldset className="mb-2 flex flex-wrap items-center gap-3 text-xs"><legend>Superficies y equilibrios</legend>{available.map(layer=><label key={layer.key} style={{color:layer.color}}><input type="checkbox" aria-label={`Mostrar superficie ${layer.label}`} checked={!hiddenLayers.includes(layer.key)} onChange={e=>setHiddenLayers(keys=>e.target.checked?keys.filter(key=>key!==layer.key):[...keys,layer.key])}/> {layer.label}</label>)}<label><input type="checkbox" checked={showCurves} onChange={e=>setShowCurves(e.target.checked)}/> Curvas de equilibrio</label><label>Opacidad <input aria-label="Opacidad de superficies" type="range" min=".1" max=".7" step=".05" value={opacity} onChange={e=>setOpacity(Number(e.target.value))}/></label></fieldset>
   <svg ref={svgRef} role="img" aria-label="Superficie de rentabilidad, semanas, tendencia y propuestas" viewBox={`0 0 ${viewport.width} ${viewport.height}`} className="w-full rounded bg-slate-950" style={{height:"clamp(520px,80vh,1100px)",minHeight:420,touchAction:rotate?"none":"auto",cursor:rotate?"grab":"default"}}
-   onPointerDown={e=>{if(e.button!==1&&(!rotate||e.button!==0))return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,x:e.clientX,y:e.clientY,...camera,zoom,kind:e.button===1?"zoom":"rotate"};}}
+   onPointerDown={e=>{const isPan=e.button===0&&e.ctrlKey;if(e.button!==1&&!isPan&&(!rotate||e.button!==0))return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);drag.current={id:e.pointerId,x:e.clientX,y:e.clientY,...camera,zoom,panX:pan.x,panY:pan.y,kind:e.button===1?"zoom":isPan?"pan":"rotate"};}}
    onMouseDown={e=>{if(e.button===1)e.preventDefault();}} onAuxClick={e=>{if(e.button===1)e.preventDefault();}}
-   onPointerMove={e=>{const g=drag.current;if(!g||g.id!==e.pointerId)return;if(g.kind==="zoom"){setZoom(Math.max(.5,Math.min(4,g.zoom*Math.exp((g.y-e.clientY)*.006))));}else setCamera({az:g.az+(e.clientX-g.x)*.008,el:Math.max(.1,Math.min(1.48,g.el-(e.clientY-g.y)*.006))});}}
+   onPointerMove={e=>{const g=drag.current;if(!g||g.id!==e.pointerId)return;if(g.kind==="pan"){const box=e.currentTarget.getBoundingClientRect();setPan({x:g.panX+(e.clientX-g.x)*viewport.width/(box.width||viewport.width),y:g.panY+(e.clientY-g.y)*viewport.height/(box.height||viewport.height)});}else if(g.kind==="zoom"){setZoom(Math.max(.5,Math.min(4,g.zoom*Math.exp((g.y-e.clientY)*.006))));}else setCamera({az:g.az+(e.clientX-g.x)*.008,el:Math.max(.1,Math.min(1.48,g.el-(e.clientY-g.y)*.006))});}}
    onPointerUp={e=>{drag.current=null;if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
    onPointerCancel={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}}>
    <text x={viewport.width/2} y="25" textAnchor="middle" fill="#cbd5e1" fontSize="15">{rotate?"Altura: resultado mensual equivalente (MXN)":"Vista superior · venta y descuento · curvas de resultado cero"}</text>
