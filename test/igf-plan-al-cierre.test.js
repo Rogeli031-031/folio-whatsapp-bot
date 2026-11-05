@@ -42,11 +42,76 @@ test("verified consolidation preserves cash/credit account detail and missing di
   assert.equal(merged.actual,null);assert.equal(merged.continuity,null);
   assert.equal(evaluateRow(merged,null,6).gain,null);
 });
-test("a missing exact DICF snapshot cannot be replaced with a future version or zero sales",async()=>{
-  const q=[];
-  await assert.rejects(loadSource({query:async(sql,args)=>{q.push([sql,args]);return {rows:[]};}},
-    {canon:"Prueba"},2026,11,"2026-11-05"),e=>e.status===422);
-  assert.equal(q.length,1);assert.match(q[0][0],/last_date=\$4::date-1/);
+function cutClient({history, daily=[], snapshot=[], margin=6, plant="Prueba", config=[],version=true}) {
+  const queries=[];
+  return {queries,async query(sql,params) {
+    queries.push({sql,params});
+    assert.match(sql,/^(WITH|SELECT)/); // Reconstructing a cut must not run the cache writer.
+    if(sql.includes("FROM igf.versions"))return {rows:version?[{id:4}]:[]};
+    if(sql.includes("FROM igf.compromiso_lines"))return {rows:[{empresa:plant,venta_ton:100,margen_kg:margin}]};
+    if(sql.includes("FROM arr.dicf_config"))return {rows:config};
+    if(sql.includes("FROM arr.dicf_cliente_mes"))return {rows:snapshot};
+    if(sql.includes("monthly AS"))return {rows:history};
+    if(sql.includes("AS day,cliente_norm"))return {rows:daily};
+    throw Error("Consulta inesperada");
+  }};
+}
+
+for(const [catalog,alias] of [["Puebla","GT Puebla"],["Tehuacán","Tehuacan"],["Acapulco","Acapulco"],
+  ["Querétaro","GTM Queretaro"],["San Luis","GTM San Luis"],["Morelos","Morelos"]]) {
+  test("same-plant cached and reconstructed references agree across consecutive cuts: "+catalog,async()=>{
+    const plant={canon:catalog,nombre:alias,provinciaPlantCode:"Otra planta"};
+    for(const cutoff of ["2026-11-05","2026-11-06"]){
+      const through=cutoff.endsWith("05")?"2026-11-04":"2026-11-05";
+      const kg=cutoff.endsWith("05")?10:11;
+      const monthly=[{...real,account:"Cuenta A",kg,cost:kg,last_sale:through,last_discount:through},
+        {...real,account:"Cuenta B (CONTADO)",month:"2026-09-01",kg:50,cost:100,last_sale:"2026-09-03"}];
+      const daily=[{day:"2026-11-04",cliente_norm:"Cuenta A",kg:10,amount:-10}];
+      if(kg===11)daily.push({day:through,cliente_norm:"Cuenta A",kg:1,amount:-1});
+      const inputs={history:monthly,daily,plant:alias};
+      const read=cutClient(inputs), a=await loadSource(read,plant,2026,11,cutoff);
+      assert.equal(a.origin,"DICF calculado al corte");assert.equal(a.through,through);
+      const buyer=a.rows.find(r=>r.name==="Cuenta A");
+      assert.equal(buyer.real,kg);assert.ok(buyer.base>kg);assert.equal(buyer.continuity,1);
+      for(const {sql,params} of read.queries){
+        if(sql.includes("FROM arr.")){
+          assert.ok(params[0].includes(alias.toUpperCase()));
+          assert.ok(!params[0].includes("OTRA PLANTA"));
+        }
+        if(sql.includes("FROM daily"))assert.equal(params[2],cutoff);
+        if(sql.includes("FROM igf.versions"))assert.equal(params[2],through);
+      }
+      const cached=cutClient({...inputs,snapshot:[{...f,cliente_norm:"Cuenta A",kg_mes_real:kg,kg_mes_forecast:buyer.base}]});
+      const b=await loadSource(cached,plant,2026,11,cutoff);
+      assert.equal(b.origin,"DICF guardado");assert.deepEqual(b.rows,a.rows);
+      assert.equal(b.revision,a.revision);assert.ok(!cached.queries.some(q=>q.sql.includes("AS day,cliente_norm")));
+    }
+  });
+}
+
+test("incomplete inputs, conflicting aliases and later versions are not a zero-valued plan",async()=>{
+  const inputs={history:[{...real,last_sale:"2026-11-03"}]};
+  for(const [fixture,reason] of [
+    [{...inputs,version:false},/margen IGF/],
+    [inputs,/captura de ventas/],
+    [{history:[{...real,conflict:true}]},/incompatibles/],
+    [{...inputs,config:[{window_days:10},{window_days:30}]},/configuraciones/],
+  ])await assert.rejects(loadSource(cutClient(fixture),{canon:"Prueba"},2026,11,"2026-11-05"),e=>e.status===422 && reason.test(e.message));
+});
+test("a first-of-month plan starts with zero booked and can project from the prior month",async()=>{
+  const input={history:[{account:"Cuenta",month:"2026-10-01",kg:7,cost:0,last_sale:"2026-10-31"}],
+    daily:[{day:"2026-10-31",cliente_norm:"Cuenta",kg:7,amount:null}],plant:"Prueba"};
+  const p=await loadSource(cutClient(input),{canon:"Prueba"},2026,11,"2026-11-01");
+  assert.equal(p.rows[0].real,0);assert.ok(p.rows[0].base>0);assert.equal(p.rows[0].continuity,null);
+  input.daily[0].amount=0;
+  assert.equal((await loadSource(cutClient(input),{canon:"Prueba"},2026,11,"2026-11-01")).rows[0].continuity,0);
+});
+test("a stale or duplicated snapshot is reconstructed without summing duplicated buyers",async()=>{
+  const input={plant:"Prueba",history:[{...real,last_sale:"2026-11-04"}],daily:[{day:"2026-11-04",cliente_norm:"Cliente A",kg:4,amount:-4}]};
+  for(const snapshot of [[{...f,margen_mes_kg:99}],[f,f],[{...f,kg_mes_real:12}]]){
+    const s=await loadSource(cutClient({...input,snapshot}),{canon:"Prueba"},2026,11,"2026-11-05");
+    assert.equal(s.origin,"DICF calculado al corte");assert.equal(s.rows.length,1);assert.equal(s.rows[0].real,4);
+  }
 });
 test("xlsx follows the on-screen order, unit conversion, account and category totals and IGF",async()=>{
   const s=source(),b=s.rows.find(r=>r.name==="Cliente B");

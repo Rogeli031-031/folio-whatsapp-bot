@@ -6,7 +6,7 @@ import {evaluatePlan,readPlanEdits} from "@/lib/igf-plan-al-cierre";
 type Anchor={q:number;d:number;a:number;fixed:number;financials?:unknown;hg_kg?:number;hg_pct?:number;hg_price_kg?:number;version_as_of?:boolean};
 type Change={rate:number|null;goal:number;selected:boolean};
 type PlanRow=Change & {id:string;name:string;real:number;actual:number|null;base:number;continuity:number|null;minimum:number|null;gain:number|null;downside:number|null;reference:string|null;valid:boolean};
-type Source={margin:number;rows:PlanRow[];revision:string};
+type Source={margin:number;rows:PlanRow[];revision:string;origin?:string;through?:string};
 type Data={source:Source;edits:Record<string,Change>;version?:number;anchor?:Anchor;comments?:string};
 type Props={year:number;month:number;plant:string;cutoff:string;mode:string;token:string;id?:string;anchor:Anchor|null;onSaved:(row:any)=>void};
 const show=(v:number|null|undefined,digits=2)=>v==null||!Number.isFinite(v)?"—":v.toLocaleString("es-MX",{maximumFractionDigits:digits});
@@ -90,6 +90,7 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
       </div>
       {imported&&<p role="status" className="text-emerald-300">{imported}</p>}
       <p>Margen DICF {show(data.source.margin,4)} $/kg · {plan.count} compradores seleccionados. El descuento F aplica desde {cutoff} al cierre. La meta G incluye lo ya vendido.</p>
+      {data.source.origin&&<p className="text-xs text-slate-300">{data.source.origin} · ventas y descuentos hasta {data.source.through}</p>}
       <p className="font-semibold text-cyan-200">Cambio comercial de la cartera: {amount(plan.portfolio)} · Selección: {amount(scenario?.commercial)} · Resultado IGF base: {amount(scenario?.baseResult)} · Resultado IGF del plan: {amount(scenario?.result)}</p>
       {scenario&&<p>Venta IGF {show(scenario.kg/1000,3)} t · Descuento {show(scenario.rate,4)} $/kg · Cambio de resultado IGF {amount(scenario.result-scenario.baseResult)} (incluye margen IGF y HG).</p>}
       {plan.pending>0&&<p className="text-amber-300">{plan.pending} filas pendientes de datos. Corrige o desmarca las filas pendientes para guardar.</p>}

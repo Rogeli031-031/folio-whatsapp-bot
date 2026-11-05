@@ -38,7 +38,7 @@ function evaluatePlan(source, changes, anchor) {
 // Accept the reviewed workbook or an export of this screen. Only F, G and
 // the inclusion flag are imported. The source of all actuals stays the dashboard.
 function readPlanEdits(sheets,source,context) {
-  const normalize=v=>String(v??"").trim().normalize("NFD").replace(/\p{M}/gu,"").toLowerCase();
+  const normalize=v=>String(v??"").normalize("NFD").replace(/\p{M}/gu,"").replace(/[-–—]/g," ").replace(/\s+/g," ").trim().toLowerCase();
   const rows=sheets["Plan al cierre"]??[], header=rows.findIndex(r=>r[0]==="Comprador");
   if(header<0||!String(rows[header][5]).startsWith("Nuevo descuento")||!String(rows[header][6]).startsWith("Meta de cierre"))
     throw Error("Elige un Excel con la hoja Plan al cierre y las columnas F y G.");
