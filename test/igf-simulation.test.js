@@ -171,3 +171,11 @@ test("proposal comments and category snapshots survive validation; totals and we
  assert.ok(proposals.parseProposal({...input,volume_ton:1001}).error);assert.ok(proposals.parseProposal({...input,discount_kg:3.5}).error);
  assert.ok(!proposals.parseProposal(valid).error);
 });
+
+test("financial comparison snapshots keep registered values/nulls and reject invalid numeric breakdowns",()=>{
+ const financials={margen_kg:6.2,operativos_mxn:2000000,corporativos_mxn:500000,gasto_mxn:2500000,impuestos_mxn:300000,token:"discard"};
+ const p=proposals.parseProposal({...valid,basis:{...valid.basis,financials}});assert.equal(p.basis.financials.operativos_mxn,2000000);assert.equal(p.basis.financials.token,undefined);
+ assert.equal(proposals.parseProposal({...valid,basis:{...valid.basis,financials:{...financials,margen_kg:null}}}).basis.financials.margen_kg,null);
+ for(const v of [null,[],{...financials,operativos_mxn:-1},{...financials,margen_kg:"6.2"},{...financials,impuestos_mxn:NaN}])assert.ok(proposals.parseProposal({...valid,basis:{...valid.basis,financials:v}}).error);
+ assert.equal(proposals.parseProposal(valid).basis.financials,undefined);
+});

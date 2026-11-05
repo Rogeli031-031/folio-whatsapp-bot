@@ -9,21 +9,21 @@ function harness(fetcher){
  const hooks={...React,useMemo:fn=>fn(),useEffect(fn){effects.push(fn);},useState(initial){const i=index++;if(!(i in state))state[i]=initial;return [state[i],v=>{state[i]=typeof v==="function"?v(state[i]):v;}];},useRef(initial){const i=index++;if(!(i in state))state[i]={current:initial};return state[i];}};
  const code=ts.transpileModule(text,{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
  const module={exports:{}};
- new Function("require","module","exports","fetch",code+"\nmodule.exports.Surface=Surface;module.exports.WeekControls=WeekControls;")((name)=>{
+ new Function("require","module","exports","fetch",code+"\nmodule.exports.Surface=Surface;module.exports.WeekControls=WeekControls;module.exports.FullComparison=FullComparison;")((name)=>{
   if(name==="react")return hooks;
   if(name==="react/jsx-runtime")return require("../frontend-dashboard/node_modules/react/jsx-runtime");
   if(name==="@/lib/api")return {getApiUrl:x=>x};
   if(name==="@/lib/igf-simulation")return require("../frontend-dashboard/lib/igf-simulation");
   throw new Error(name);
  },module,module.exports,fetcher);
- return {async load(){effects[0]();effects[1]();await new Promise(resolve=>setImmediate(resolve));},render(props){index=0;return module.exports.Surface(props);},renderModal(props){index=0;return module.exports.default(props);},renderWeeks(props){return module.exports.WeekControls(props);}};
+ return {async load(){effects[0]();effects[1]();await new Promise(resolve=>setImmediate(resolve));},render(props){index=0;return module.exports.Surface(props);},renderModal(props){index=0;return module.exports.default(props);},renderWeeks(props){return module.exports.WeekControls(props);},renderComparison(props){return module.exports.FullComparison(props);}};
 }
 function elements(node){if(!node||typeof node!=="object")return [];if(Array.isArray(node))return node.flatMap(elements);return [node,...elements(node.props?.children)];}
 const model={q:1400,d:3.6,a:6.525225303866561,fixed:3850193.5114285713};
 test("3D renders weekly/current/proposal markers, touch rotation and cancel without changing financial inputs",()=>{
  const h=harness(),props={model,q:1400,d:3.6,points:[{key:"week",label:"Semana 44",state:"real",q:1000,d:3,z:-100000,color:"purple"},{key:"current",label:"Tendencia actual",q:1400,d:3.6,z:245122,color:"yellow"}]};
  let tree=h.render(props),html=renderToStaticMarkup(tree);assert.match(html,/Semana 44/);assert.match(html,/Tendencia actual/);assert.match(html,/Equilibrio:/);assert.doesNotMatch(html,/NaN|Infinity/);
- elements(tree).find(e=>e.type==="button"&&e.props["aria-pressed"]===false).props.onClick();tree=h.render(props);
+ assert.equal(elements(tree).find(e=>e.type==="button"&&e.props.children==="Vista 3D").props["aria-pressed"],true);
  const svg=elements(tree).find(e=>e.type==="svg");assert.equal(svg.props.style.touchAction,"none");
  const target={setPointerCapture(){},hasPointerCapture(){return true;},releasePointerCapture(){}};
  const event=(x,y)=>({pointerId:1,button:0,clientX:x,clientY:y,currentTarget:target,preventDefault(){}});
@@ -37,7 +37,7 @@ test("partial financial data shows an explicit explanation rather than a fiction
  const html=renderToStaticMarkup(tree);assert.match(html,/Faltan venta/);assert.match(html,/HG faltante/);assert.doesNotMatch(html,/<svg/);assert.match(html,/Categorías del mes/);
 });
 
-test("middle-button drag zooms up/in, down/out, clamps, cancels and resets without rotating",()=>{
+test("middle-button drag zooms up/in, down/out, clamps and cancels without changing financial inputs",()=>{
  const h=harness(),props={model,q:1400,d:3.6,points:[]};
  const width=tree=>{const xs=elements(tree).filter(e=>e.type==="polygon").flatMap(p=>p.props.points.split(" ").map(pair=>Number(pair.split(",")[0])));return Math.max(...xs)-Math.min(...xs);};
  let tree=h.render(props),base=width(tree);const svg=()=>elements(h.render(props)).find(e=>e.type==="svg");
@@ -48,8 +48,8 @@ test("middle-button drag zooms up/in, down/out, clamps, cancels and resets witho
  view.props.onPointerMove(event(10000));const min=width(h.render(props));view.props.onPointerMove(event(20000));assert.equal(width(h.render(props)),min);
  view.props.onPointerMove(event(-10000));const max=width(h.render(props));view.props.onPointerMove(event(-20000));assert.equal(width(h.render(props)),max);
  view.props.onPointerCancel();view.props.onPointerMove(event(200));assert.equal(width(h.render(props)),max);
- elements(h.render(props)).find(e=>e.type==="button"&&e.props.children==="Vista inicial").props.onClick();assert.equal(width(h.render(props)),base);
- assert.doesNotMatch(renderToStaticMarkup(h.render(props)),/type="range"|Acercar gráfica|Alejar gráfica/);assert.equal(props.q,1400);assert.equal(props.d,3.6);
+ assert.equal(width(harness().render(props)),base);
+ assert.doesNotMatch(renderToStaticMarkup(h.render(props)),/Vista inicial|Girar gráfica|Terminar giro|Zoom de gráfica|Acercar gráfica|Alejar gráfica/);assert.equal(props.q,1400);assert.equal(props.d,3.6);
 });
 
 test("week checkboxes toggle individual weeks, all/none and disable incomplete points",()=>{
@@ -177,4 +177,24 @@ test("deletion requires confirmation, preserves points on cancel/failure, then r
  field(tree,"Eliminar punto #1").props.onClick();tree=h.renderModal(props);button(tree,"Eliminar definitivamente").props.onClick();await new Promise(resolve=>setImmediate(resolve));tree=h.renderModal(props);assert.match(renderToStaticMarkup(tree),/No se pudo eliminar/);assert.ok(field(tree,"Eliminar punto #1"));
  fail=false;button(tree,"Eliminar definitivamente").props.onClick();await new Promise(resolve=>setImmediate(resolve));tree=h.renderModal(props);assert.equal(deletes.length,2);const path=new URL(deletes[1],"http://test");assert.equal(path.searchParams.get("id"),"1");assert.equal(path.searchParams.get("plant_code"),"Puebla");assert.equal(path.searchParams.get("year"),"2026");assert.equal(path.searchParams.get("month"),"11");assert.ok(!field(tree,"Eliminar punto #1"));assert.ok(field(tree,"Eliminar punto #2"));
  const surface=elements(tree).find(e=>e.props?.points&&e.props?.model).props;assert.deepEqual(surface.points.map(p=>p.key),["current","proposal-2"]);assert.equal(surface.q,800);assert.equal(surface.d,3);
+});
+
+test("3D starts rotating and compares independent surfaces/equilibria; top view hides height without altering scenarios",()=>{
+ const layers=[{key:"actual",label:"Actual",color:"cyan",model},{key:"p7",label:"Punto #7",color:"magenta",model:{...model,a:model.a+1,fixed:model.fixed+100000,q:1500,d:3}}];
+ const props={model,q:model.q,d:model.d,points:[],layers},h=harness();let tree=h.render(props);
+ const nodes=(type,key)=>elements(tree).filter(e=>e.props?.[type]===key);
+ assert.ok(nodes("data-surface","actual").length>0);assert.ok(nodes("data-surface","p7").length>0);assert.equal(nodes("data-equilibrium","actual").length,1);assert.equal(nodes("data-equilibrium","p7").length,1);
+ const curves=elements(tree).filter(e=>e.type==="polyline"&&e.props.strokeWidth==="3"&&e.props.children?.type==="title");assert.notEqual(curves[0].props.points,curves[1].props.points);
+ elements(tree).find(e=>e.props?.["aria-label"]==="Mostrar superficie Punto #7").props.onChange({target:{checked:false}});tree=h.render(props);assert.equal(nodes("data-surface","p7").length,0);assert.equal(nodes("data-equilibrium","p7").length,0);
+ elements(tree).find(e=>e.props?.["aria-label"]==="Mostrar superficie Punto #7").props.onChange({target:{checked:true}});tree=h.render(props);elements(tree).find(e=>e.type==="button"&&e.props.children==="Vista superior").props.onClick();tree=h.render(props);
+ assert.equal(elements(tree).find(e=>e.type==="svg").props.style.touchAction,"auto");assert.equal(elements(tree).filter(e=>e.props?.["data-surface"]).length,0);assert.equal(elements(tree).filter(e=>e.props?.["data-equilibrium"]).length,2);assert.ok(!elements(tree).find(e=>e.props?.["data-sim-axis"]==="resultado"));assert.doesNotMatch(renderToStaticMarkup(tree),/NaN|Infinity|Vista inicial/);
+ elements(tree).find(e=>e.type==="button"&&e.props.children==="Vista 3D").props.onClick();tree=h.render(props);assert.equal(elements(tree).find(e=>e.type==="svg").props.style.touchAction,"none");assert.equal(layers[1].model.fixed,model.fixed+100000);
+});
+
+test("full comparison keeps every variable and original fixed basis, leaving legacy breakdowns unknown",()=>{
+ const current={label:"Actual",model:{q:1000,d:3,a:7,fixed:3000000},hg:5,price:10,financials:{margen_kg:6,operativos_mxn:2000000,corporativos_mxn:500000,gasto_mxn:2500000,impuestos_mxn:500000},cutoff:"2026-11-04",mode:"igf_diario",comments:"Actual"};
+ const proposal={label:"Punto #7",model:{q:1200,d:4,a:8,fixed:3600000},hg:8,price:12,cutoff:"2026-11-02",mode:"forecast",comments:"Otro volumen y gastos"};
+ const html=renderToStaticMarkup(harness().renderComparison({records:[current,proposal]}));
+ for(const label of ["Gastos operativos","Gastos corporativos","Margen bruto","Impuestos mensuales","HG generado","Valoración HG","Resultado final","Venta de equilibrio","Descuento de equilibrio","Otro volumen y gastos"])assert.match(html,new RegExp(label));
+ assert.match(html,/No registrado/);assert.match(html,/3,600,000/);assert.match(html,/96,000/);assert.match(html,/1,200/);assert.match(html,/Δ/);assert.doesNotMatch(html,/NaN|Infinity/);
 });
