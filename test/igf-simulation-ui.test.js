@@ -14,6 +14,7 @@ function harness(fetcher){
   if(name==="react/jsx-runtime")return require("../frontend-dashboard/node_modules/react/jsx-runtime");
   if(name==="@/lib/api")return {getApiUrl:x=>x};
   if(name==="@/lib/igf-simulation")return require("../frontend-dashboard/lib/igf-simulation");
+  if(name==="./IgfPlanAlCierre")return {__esModule:true,default:()=>null};
   throw new Error(name);
  },module,module.exports,fetcher);
  return {async load(){effects[0]();effects[1]();await new Promise(resolve=>setImmediate(resolve));},render(props){index=0;return module.exports.Surface(props);},renderModal(props){index=0;return module.exports.default(props);},renderWeeks(props){return module.exports.WeekControls(props);},renderComparison(props){return module.exports.FullComparison(props);}};
@@ -35,6 +36,16 @@ test("3D renders weekly/current/proposal markers, touch rotation and cancel with
 test("partial financial data shows an explicit explanation rather than a fictional 3D scenario",()=>{
  const h=harness();const tree=h.renderModal({row:{empresa:"GT Puebla",plant_code:"Puebla",ventaTon:100,comDesc:-2,resultadoFinalImporte:null},token:"test",year:2026,month:11,cutoff:"2026-11-02",mode:"igf_diario",versionAsOf:true,onClose(){}});
  const html=renderToStaticMarkup(tree);assert.match(html,/Faltan venta/);assert.match(html,/HG faltante/);assert.doesNotMatch(html,/<svg/);assert.match(html,/Categorías del mes/);
+});
+
+test("Plan al cierre opens with the selected plant, date, source and the same financial surface",()=>{
+ const h=harness();
+ const props={row:{empresa:"Planta de prueba",ventaTon:1,comDesc:-1,resultadoFinalImporte:5000,operativos:1500,corporativos:500,impuestos:0,margen:6},token:"fixture",year:2026,month:11,cutoff:"2026-11-05",mode:"forecast",versionAsOf:true,onClose(){}};
+ const button=elements(h.renderModal(props)).find(e=>e.type==="button"&&e.props.children==="Plan al cierre");
+ assert.ok(button);button.props.onClick();
+ const editor=elements(h.renderModal(props)).find(e=>e.props?.onSaved && e.props?.anchor);
+ assert.equal(editor.props.plant,props.row.empresa);assert.equal(editor.props.cutoff,props.cutoff);
+ assert.equal(editor.props.mode,"forecast");assert.equal(editor.props.anchor.a,8);assert.equal(editor.props.anchor.fixed,2000);
 });
 
 test("middle-button drag zooms up/in, down/out, clamps and cancels without changing financial inputs",()=>{

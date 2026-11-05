@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import IgfPlanAlCierre from "./IgfPlanAlCierre";
 import { getApiUrl, type IgfForecastMiniRow } from "@/lib/api";
 import { axisTicks, closestEquilibrium, historyPeriods, mergeWeekColumns, modelFromRow, modelWithHg, hgPercentContext, hgCostFromPercent, profit, visibleWeekPoints, weeklyPoints } from "@/lib/igf-simulation";
 
@@ -7,7 +8,7 @@ type Model={q:number;d:number;a:number;fixed:number};
 type Layer={key:string;label:string;color:string;model:Model};
 type Financials={margen_kg:number|null;operativos_mxn:number|null;corporativos_mxn:number|null;gasto_mxn:number|null;impuestos_mxn:number|null};
 type Point={key:string;label:string;q:number;d:number;z:number;color:string;state?:string;comments?:string};
-type Saved={id:string;name:string;volume_ton:number|string;discount_kg:number|string;basis:{a:number;fixed:number;cutoff:string;mode:string;version_as_of:boolean;hg_kg?:number;hg_pct?:number;hg_price_kg?:number;financials?:Financials;comments?:string;category_lines?:CategoryLine[]};created_at:string};
+type Saved={id:string;name:string;volume_ton:number|string;discount_kg:number|string;basis:{a:number;fixed:number;cutoff:string;mode:string;version_as_of:boolean;hg_kg?:number;hg_pct?:number;hg_price_kg?:number;financials?:Financials;comments?:string;category_lines?:CategoryLine[];closing_plan?:boolean};created_at:string};
 type CategoryLine={category:string;subcategory:string;kg:number;discount_amount:number|null;discount_kg:number|null;missing_discount_kg:number};
 const num=(v:number|null|undefined,d=2)=>v==null||!Number.isFinite(v)?"—":v.toLocaleString("es-MX",{maximumFractionDigits:d});
 const money=(v:number|null|undefined)=>v==null?"—":`$${num(v,0)}`;
@@ -139,8 +140,9 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
   setEdits(lines);setQ(kg/1000);if(lines.every(c=>c.discount_kg!=null)&&kg>0)setD(lines.reduce((sum,c)=>sum+(c.discount_amount||0),0)/kg);
  }
  function choose(p:Saved){setEditingId(null);setComparisonIds(ids=>ids.includes(p.id)?ids:[...ids,p.id]);setSelected(p);setQ(Number(p.volume_ton));setD(Number(p.discount_kg));setHg(savedHg(p));setEdits(p.basis.category_lines??null);setComments(p.basis.comments||p.name);setError("");setPanel(null);}
- function edit(p:Saved){choose(p);setEditingId(p.id);setPanel("categories");}
- const [panel,setPanel]=useState<"weeks"|"categories"|"proposals"|"comparison"|null>(null);
+ function edit(p:Saved){choose(p);if(p.basis.closing_plan){setPlanPoint(p);setPanel("plan");return;}setEditingId(p.id);setPanel("categories");}
+ const [planPoint,setPlanPoint]=useState<Saved|null>(null);
+ const [panel,setPanel]=useState<"weeks"|"categories"|"proposals"|"comparison"|"plan"|null>(null);
  const [detail,setDetail]=useState<{week:any;field:string}|null>(null),[detailData,setDetailData]=useState<any>(null),[detailError,setDetailError]=useState("");
  const saveLock=useRef(false);
  const plant=row.plant_code||row.empresa;
@@ -218,6 +220,7 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
      <button type="button" onClick={()=>setPanel("categories")} className="rounded bg-slate-700 px-3 py-2">Categorías del mes</button>
      <button type="button" onClick={()=>setPanel("proposals")} className="rounded bg-emerald-800 px-3 py-2">Puntos guardados ({saved.length})</button>
      <button type="button" onClick={()=>setPanel("comparison")} className="rounded bg-indigo-800 px-3 py-2">Comparación completa</button>
+     <button type="button" onClick={()=>{setPlanPoint(null);setPanel("plan");}} className="rounded bg-cyan-800 px-3 py-2">Plan al cierre</button>
      {weeksLoading&&<span role="status">Cargando semanas…</span>}
     </div>
     <div className="mb-3 overflow-x-auto rounded border border-slate-700"><table className="w-full text-right text-xs"><caption className="p-2 text-left text-slate-400">Base mensual de la superficie · {month}/{year} · Margen bruto del IGF; contribución efectiva antes del descuento: {num(baseModel?.a,4)} $/kg (incluye HG y ajustes del resultado seleccionado).</caption><thead><tr>{["Venta (t)","Margen ($/kg)","Descuento ($/kg)","HG (% venta)","Operativos ($)","Corporativos ($)","Gasto ($)","Resultado ($)"].map(h=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody><tr className="bg-slate-800"><td className="p-2"><button type="button" className="text-cyan-300 underline" onClick={()=>setPanel("categories")}>{num(row.ventaTon)}</button></td><td>{num(row.margen,4)}</td><td><button type="button" className="text-cyan-300 underline" onClick={()=>setPanel("categories")}>{num(baseModel?.d,4)}</button></td><td>{num(baseHg,4)}</td><td>{money(row.operativos)}</td><td>{money(row.corporativos)}</td><td>{money(row.gasto)}</td><td>{money(row.resultadoFinalImporte)}</td></tr></tbody></table></div>
@@ -229,7 +232,12 @@ export default function IgfSimulationModal({row,token,year,month,cutoff,versionA
     </>:<p className="mb-4 rounded border border-amber-700 p-3 text-amber-200">Faltan venta, comisión, impuestos, gastos o resultado final para calcular la superficie. Completa los datos de esta planta; no se sustituye HG faltante por cero. Puedes consultar sus semanas y propuestas guardadas.</p>}
     {loading&&<p role="status" className="text-sm text-slate-400">Cargando propuestas y categorías…</p>}
     {weekError&&<p role="alert" className="text-amber-200">Semanas: {weekError}</p>}
-    {panel&&<Popup title={panel==="comparison"?"Comparación completa de escenarios":panel==="weeks"?"Semanas · selección y resumen financiero":panel==="categories"?"Venta y descuentos por categoría y subcategoría · mes seleccionado":"Puntos y propuestas"} onClose={()=>setPanel(null)}>
+    {panel&&<Popup title={panel==="plan"?"Plan al cierre":panel==="comparison"?"Comparación completa de escenarios":panel==="weeks"?"Semanas · selección y resumen financiero":panel==="categories"?"Venta y descuentos por categoría y subcategoría · mes seleccionado":"Puntos y propuestas"} onClose={()=>setPanel(null)}>
+     {panel==="plan"&&<IgfPlanAlCierre key={planPoint?.id??"new"} year={year} month={month} plant={plant} token={token}
+       cutoff={planPoint?.basis.cutoff??cutoff} mode={planPoint?.basis.mode??mode} id={planPoint?.id}
+       anchor={baseModel?{...baseModel,version_as_of:versionAsOf,financials:baseFinancials,...(hgContext.cost!=null?{hg_kg:hgContext.cost}:{}),
+         ...(baseHg!=null&&hgContext.price!=null?{hg_pct:baseHg/100,hg_price_kg:hgContext.price}:{})}:null}
+       onSaved={p=>{setSaved(rows=>[p,...rows.filter(x=>x.id!==p.id)].slice(0,200));choose(p);}}/>}
      {panel==="comparison"&&<FullComparison records={comparisonData}/>}
      {panel==="weeks"&&<>
      <label className="flex flex-wrap items-center gap-2 text-xs">Historial de semanas
