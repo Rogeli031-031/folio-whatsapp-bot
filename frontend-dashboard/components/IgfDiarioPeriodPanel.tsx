@@ -12,18 +12,24 @@ export function IgfTimeframeControl({value,onChange}:{value:Timeframe;onChange:(
 }
 type Column={key:string;label:string;fecha_desde:string;fecha_hasta:string;estado:string;complete:boolean;metrics:IgfDiarioSemanalMetrics & Record<string,number|null>;coverage:IgfDiarioSemanalCoverageMap;forecast_sources?:{empresa:string;version_id:number;version_number:number;fields:string[]}[]};
 const MONTHS=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+function firstWeekStart(year:number,month:number){const date=new Date(Date.UTC(year,month-1,1));date.setUTCDate(date.getUTCDate()-date.getUTCDay());return date.toISOString().slice(0,10);}
+function shiftWeekStart(anchor:string,days:number){const date=new Date(`${anchor}T00:00:00Z`);date.setUTCDate(date.getUTCDate()+days);return date.toISOString().slice(0,10);}
 export default function IgfDiarioPeriodPanel({token,year,month,plantCode,uploadDay,versionAsOfCorte,mode,refreshKey=0}:{
  token:string;year:number;month:number;plantCode?:string;uploadDay?:string|null;versionAsOfCorte?:boolean;mode:"weeks"|"months";refreshKey?:number;
 }){
  const [first,setFirst]=useState(Math.max(1,month-3));
+ const [weekStart,setWeekStart]=useState<string|null>(null);
+ const initialWeekStart=firstWeekStart(year,month),currentWeekStart=weekStart??initialWeekStart;
  const [source,setSource]=useState<"igf_diario"|"forecast">("igf_diario");
  const selectedSource=mode==="months"?source:"igf_diario";
  const [columns,setColumns]=useState<Column[]>([]),[loading,setLoading]=useState(false),[error,setError]=useState<string|null>(null);
  useEffect(()=>setFirst(Math.max(1,month-3)),[year,month]);
+ useEffect(()=>setWeekStart(null),[year,month,plantCode,uploadDay]);
  useEffect(()=>{
   const controller=new AbortController();setLoading(true);setError(null);setColumns([]);
   const params=new URLSearchParams({year:String(year),month:String(month),view:"periods",period_mode:mode,first_month:String(Math.min(first,month))});
   params.set("source",selectedSource);
+  if(mode==="weeks"&&weekStart)params.set("period_week_start",weekStart);
   if(plantCode)params.set("plant_code",plantCode);else params.set("todas","1");
   if(uploadDay){params.set("upload_day",uploadDay);if(versionAsOfCorte)params.set("version_as_of_corte","1");}
   fetch(getApiUrl(`/api/dashboard/igf-diario-semanal?${params}`),{headers:{Authorization:`Bearer ${token}`},signal:controller.signal})
@@ -32,7 +38,7 @@ export default function IgfDiarioPeriodPanel({token,year,month,plantCode,uploadD
    .catch(e=>{if(!controller.signal.aborted)setError(e.message);})
    .finally(()=>{if(!controller.signal.aborted)setLoading(false);});
   return()=>controller.abort();
- },[token,year,month,plantCode,uploadDay,versionAsOfCorte,mode,first,refreshKey,selectedSource]);
+ },[token,year,month,plantCode,uploadDay,versionAsOfCorte,mode,first,refreshKey,selectedSource,weekStart]);
  const forecastRows = columns.some(c=>c.forecast_sources?.length) ? [
   {key:"gasto_operativo_forecast_kg",label:"Gasto operativo · IGF Forecast",unit:"per_kg" as const,separatorBefore:true},
   {key:"bancos_planta_forecast_kg",label:"Bancos Planta · IGF Forecast",unit:"per_kg" as const},
@@ -42,8 +48,9 @@ export default function IgfDiarioPeriodPanel({token,year,month,plantCode,uploadD
  const rows: {key:string;label:string;unit:"kg"|"mxn"|"per_kg";highlight?:boolean;strongest?:boolean;separatorBefore?:boolean}[]=selectedSource==="forecast"?[...WEEKLY_ROWS.filter(r=>forecastKeys.includes(r.key)),...forecastRows]:WEEKLY_ROWS;
  return <div className="mt-3">
   <div className="mb-3 flex flex-wrap items-center gap-3 text-sm text-slate-300">
+   {mode==="weeks"&&<><button type="button" disabled={loading} onClick={()=>setWeekStart(shiftWeekStart(currentWeekStart,-7))} className="rounded bg-slate-700 px-3 py-2 text-white disabled:opacity-40">◀ Semana anterior</button><button type="button" disabled={loading||currentWeekStart>=initialWeekStart} onClick={()=>{const next=shiftWeekStart(currentWeekStart,7);setWeekStart(next>=initialWeekStart?null:next);}} className="rounded bg-slate-700 px-3 py-2 text-white disabled:opacity-40">Semana siguiente ▶</button>{weekStart&&<button type="button" disabled={loading} onClick={()=>setWeekStart(null)} className="text-cyan-300 underline">Volver al mes seleccionado</button>}</>}
    {mode==="months"?<label>Fuente del resultado <select aria-label="Fuente del resultado" value={source} onChange={e=>setSource(e.target.value as "igf_diario"|"forecast")} className="ml-2 rounded border border-slate-600 bg-slate-800 px-3 py-2 text-white"><option value="igf_diario">IGF Diario acumulado</option><option value="forecast">IGF Forecast</option></select></label>:<span>Fuente: IGF Diario acumulado</span>}
-   {mode==="months"?<label>Mes inicial <select aria-label="Mes inicial" value={Math.min(first,month)} onChange={e=>setFirst(Number(e.target.value))} className="ml-2 rounded bg-slate-700 px-3 py-2 text-white">{MONTHS.slice(0,month).map((name,i)=><option key={name} value={i+1}>{name} {year}</option>)}</select> · Hasta {MONTHS[month-1]} {year}</label>:<span>Semanas completas de domingo a sábado · {MONTHS[month-1]} {year}</span>}
+   {mode==="months"?<label>Mes inicial <select aria-label="Mes inicial" value={Math.min(first,month)} onChange={e=>setFirst(Number(e.target.value))} className="ml-2 rounded bg-slate-700 px-3 py-2 text-white">{MONTHS.slice(0,month).map((name,i)=><option key={name} value={i+1}>{name} {year}</option>)}</select> · Hasta {MONTHS[month-1]} {year}</label>:<span>Semanas completas de domingo a sábado · {columns.length?`${fmtFecha(columns[0].fecha_desde)}–${fmtFecha(columns[columns.length-1].fecha_hasta)}`:`${MONTHS[month-1]} ${year}`}</span>}
    <span>Importes sumados; valores por kilo ponderados. Corte: {uploadDay?fmtFecha(uploadDay):"sin corte"}.</span>
   </div>
   {loading&&<p role="status" className="text-slate-400">Cargando periodos…</p>}
