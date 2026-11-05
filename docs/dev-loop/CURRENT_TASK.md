@@ -1,6 +1,6 @@
 # Propuesta de CURRENT_TASK. La persona responsable registra su decisión en la rama de trabajo.
 task_id: "IMPL-IGF-SIMULADOR-PLAN-AL-CIERRE"
-status: AUTHORIZED
+status: IN_PROGRESS
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-11-05T16:34:03-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis rogelio Zaragoza Alvarez 2026-11-05"
