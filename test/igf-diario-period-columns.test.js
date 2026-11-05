@@ -11,6 +11,15 @@ test("columnas: semanas domingo-sábado sin duplicar días, meses exactos y lím
  assert.equal(weekly.periodWindows(2027,1,"weeks")[0].fecha_desde,"2026-12-27");
  for(const args of [[2026,13,"weeks"],[2026,10,"bad"],[2026,10,"months",11],[2026,10,"months",0]])assert.throws(()=>weekly.periodWindows(...args),e=>e.status===400);
 });
+
+test("weekly columns slide backward across months/years, preserve window size and reject invalid/future starts",()=>{
+ const original=weekly.periodWindows(2026,11,"weeks");
+ const prior=weekly.periodWindows(2026,11,"weeks",undefined,"2026-10-25");assert.equal(prior.length,original.length);assert.deepEqual(prior.map(c=>c.label),["Semana 44","Semana 45","Semana 46","Semana 47","Semana 48"]);assert.equal(prior.at(-1).fecha_hasta,"2026-11-28");
+ const older=weekly.periodWindows(2026,11,"weeks",undefined,"2026-10-18");assert.equal(older[0].label,"Semana 43");assert.equal(older.at(-1).fecha_hasta,"2026-11-21");
+ const crossYear=weekly.periodWindows(2027,1,"weeks",undefined,"2026-12-20");assert.equal(crossYear[0].fecha_desde,"2026-12-20");assert.equal(crossYear.length,weekly.periodWindows(2027,1,"weeks").length);
+ for(const start of ["2026-10-26","2026-11-08","2026-02-30","bad",""])assert.throws(()=>weekly.periodWindows(2026,11,"weeks",undefined,start),e=>e.status===400);
+ assert.throws(()=>weekly.periodWindows(2026,11,"months",8,"2026-10-25"),e=>e.status===400);
+});
 test("periodos reutilizan cálculos de semana, ponderan por venta y respetan meses/cobertura",async t=>{
  const calls=[];
  t.mock.method(grafica,"loadCdMonthIndex",async()=>({rows:[]}));
@@ -39,6 +48,8 @@ test("periodos reutilizan cálculos de semana, ponderan por venta y respetan mes
  const weeks=await weekly.loadPeriodColumns(client,{...opts,periodMode:"weeks"});
  const original=await weekly.loadWeeklyPlant(client,{...opts,weekAnchor:"2026-10-04"});
  assert.deepEqual(weeks.columns[1].metrics,original.metrics);
+ const shifted=await weekly.loadPeriodColumns(client,{...opts,source:"igf_diario",periodMode:"weeks",periodWeekStart:"2026-09-20"});
+ const history=await weekly.loadWeeklyPlant(client,{...opts,weekAnchor:"2026-09-27"});assert.deepEqual(shifted.columns[1].metrics,history.metrics);assert.equal(shifted.columns.length,weeks.columns.length);assert.equal(shifted.columns[0].fecha_desde,"2026-09-20");
  const all=await weekly.loadPeriodColumns(client,{...opts,plants:[opts.plant,{...opts.plant,plantaId:2}]});
  assert.equal(all.columns[1].metrics.venta_kg,18200);assert.equal(all.columns[1].metrics.precio_kg,october.metrics.precio_kg);
  assert.equal(all.columns[1].coverage.com_desc_kg.kg_covered,17600);
