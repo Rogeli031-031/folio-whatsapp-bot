@@ -1,5 +1,5 @@
 task_id: "FIX-IGF-DIARIO-COMDESC-NO-DISCOUNTS-ZERO-078-R3"
-status: DONE_PENDING_REVIEW
+status: CLOSED
 authorized_by: "HUMAN_APPROVER"
 approver_name: "Luis rogelio Zaragoza alvarez"
 authorized_at: "2026-10-28T13:26:18.9896096-06:00"
