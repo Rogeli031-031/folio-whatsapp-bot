@@ -340,6 +340,27 @@ test("la nueva R desplaza HG, resultado, comentario, ventas y carry", () => {
   assert.equal(ws.getCell(5, 24).value, null);
 });
 
+test("Excel y vista semanal usan el mismo gasto del lunes festivo de Acapulco", () => {
+  const year = 2026, month = 11, fecha = "2026-11-16";
+  const amounts = {
+    gasto_corporativo: 250, inversiones: 0, impuestos_federales: 0,
+    presupuesto_nomina_gastos: 500, presupuesto_imss_sua: 0, extraordinarios: 0, provisiones_planta: 0,
+  };
+  const overrides = { gasto_corporativo: { [fecha]: 17.35 } };
+  const schedules = require("../lib/igf-diario-weekly-plant").buildConceptSchedules(
+    igf.monthExpenseDays(year, month).days, amounts, overrides);
+  const ws = fillPlant(year, month, {
+    sheetLabel: "Acapulco", humanName: "Acapulco", distribucionOverrides: overrides,
+    desglose: desglose.publicRow({ plant_code: "Acapulco", year, month, ...amounts }, year, month),
+  });
+  const row = rowByDate(ws, year, month, 16);
+  assert.equal(schedules.gasto_corporativo[fecha], 17.35);
+  assert.equal(schedules.presupuesto_nomina_gastos[fecha], 20);
+  assert.ok(formulaOf(ws.getCell(row, 10)).includes(`17.35/B${row}`));
+  assert.ok(formulaOf(ws.getCell(row, 17)).includes(`20.00/B${row}`));
+  assert.equal(ws.getCell(rowByDate(ws, year, month, 15), 10).value, 0);
+});
+
 test("inhabil escribe 0 en los 7 componentes y hábil divide monto/habiles/B", () => {
   const cal = igf.monthBusinessDays(2026, 10);
   const habil = cal.days.find((day) => !day.inhabil);
