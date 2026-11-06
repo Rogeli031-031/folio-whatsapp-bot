@@ -1,29 +1,29 @@
-# Categorías y compradores seleccionados en la descarga del plan
-task_id: "FIX-IGF-PLAN-CATEGORIAS-SELECCION"
+# Plan al cierre · Fuente de descuento
+task_id: "IMPL-IGF-PLAN-BASE-DESCUENTO"
 status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-11-06T13:41:03-06:00"
-human_authorization: "Sí, autorizo la corrección"
-authorization_channel: "Respuesta explícita en el chat de IA en Tomza sobre la base de Categorías y los compradores marcados."
-base_sha: "e482faacdda08c56756bde4cb0a006ab02249fa8"
-branch: "fix/igf-plan-categorias-seleccion"
-objective: "Exportar en Categorías la base de ventas y descuentos que usa el tablero y debajo el plan con los compradores escogidos y sus totales en las seis plantas."
+authorized_at: "2026-11-06T14:16:41-06:00"
+human_authorization: "Sí, autorizo el selector"
+authorization_channel: "Chat IA en Tomza; autorización para registrar esta ficha."
+base_sha: "88b3a9a78b0e3e836d26057a665dbfa0e5b7397b"
+branch: "feat/igf-plan-base-descuento"
+objective: "Comparar y elegir el descuento base ARR o IGF Diario con idéntica venta y propuestas, conciliando utilidad del plan, punto en la gráfica y Excel."
 in_scope:
-  - "lib/igf-simulation-routes.js, lib/igf-plan-al-cierre*.js y ayudantes compartidos del resumen ARR."
-  - "Pruebas de categorías, exportación y reapertura del plan; ficha y reporte de la tarea."
+  - "Servicio, cálculo, exportación e importación de Plan al cierre y sus consumidores directos en el simulador."
+  - "Reutilizar la referencia ARR y el cálculo de descuento IGF Diario del corte, con pruebas específicas y reporte."
 out_of_scope:
-  - "Reescribir DICF/ARR, cambiar el resultado IGF, modificar datos o selecciones de producción."
+  - "Modificar las series oficiales de ARR, IGF, DICF, proyecciones, clientes, descuentos registrados, permisos o puntos productivos."
 contracts_in_force:
   - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
   - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
   - "docs/dev-loop/LOOP_PROTOCOL.md"
 allowed_actions:
-  - "Implementar en rama, validar con el Excel y datos sintéticos, subir la rama y abrir una solicitud de integración."
+  - "Implementar y probar con datos sintéticos o en lectura. Subir la rama y abrir la solicitud para revisión."
 forbidden_actions:
-  - "Fusionar a main, atribuir descuentos desconocidos a cuentas sin evidencia o divulgar datos reales de clientes en el repositorio."
+  - "Escribir en producción, fingir tasas faltantes o fusionar esta rama sin instrucción humana."
 acceptance:
-  - "Base ARR idéntica al tablero para la planta, mes, corte y volumen base. Tratar explícitamente ceros, ausencia de datos y subtotales ponderados por kg."
-  - "Debajo de la base, identificar solo a los compradores seleccionados, meta y venta adicional, descuentos y variación comercial con totales. Diferenciar cartera, selección e IGF y evitar duplicar el cierre de referencia."
-  - "Exportar también puntos anteriores; conservar edición, reimportación, HG, las hojas de cartera y el control de acceso."
+  - "Usar los mismos kg base y los mismos kg de plan para ambos cálculos; respetar cambios netos por comprador, HG y gastos."
+  - "Identificar fuente y resultado al comparar, guardar y reabrir; paridad con gráfica y Excel; compatibilidad con puntos y libros previos."
+  - "Verificar el ejemplo #18 y las seis plantas, descuentos cero, faltantes e intentos de usar referencias obsoletas."
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/FIX-IGF-PLAN-CATEGORIAS-SELECCION.md"
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-PLAN-BASE-DESCUENTO.md"

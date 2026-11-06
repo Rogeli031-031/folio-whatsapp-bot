@@ -1,13 +1,15 @@
 "use client";
 import {useEffect,useMemo,useRef,useState} from "react";
 import {getApiUrl} from "@/lib/api";
-import {baseHgPercent,evaluatePlan,readPlanEdits,readPlanHg,HG_PERCENT_LABEL} from "@/lib/igf-plan-al-cierre";
+import {baseHgPercent,evaluatePlan,readPlanEdits,readPlanHg,readDiscountSource,DISCOUNT_LABELS,HG_PERCENT_LABEL} from "@/lib/igf-plan-al-cierre";
 
 type Anchor={q:number;d:number;a:number;fixed:number;financials?:unknown;hg_kg?:number;hg_pct?:number;hg_price_kg?:number;version_as_of?:boolean};
 type Change={rate:number|null;goal:number;selected:boolean};
 type PlanRow=Change & {id:string;name:string;real:number;actual:number|null;base:number;continuity:number|null;minimum:number|null;gain:number|null;downside:number|null;reference:string|null;valid:boolean};
 type Source={margin:number;rows:PlanRow[];revision:string;origin?:string;through?:string};
-type Data={source:Source;edits:Record<string,Change>;version?:number;anchor?:Anchor;comments?:string;hg_percent?:number|null};
+type DiscountSource=keyof typeof DISCOUNT_LABELS;
+type Data={source:Source;edits:Record<string,Change>;version?:number;anchor?:Anchor;comments?:string;hg_percent?:number|null;
+  discount_source:DiscountSource;discount_rates?:Partial<Record<DiscountSource,number|null>>;discount_revision?:string};
 type Props={year:number;month:number;plant:string;cutoff:string;mode:string;token:string;id?:string;anchor:Anchor|null;onSaved:(row:any)=>void};
 const show=(v:number|null|undefined,digits=2)=>v==null||!Number.isFinite(v)?"—":v.toLocaleString("es-MX",{maximumFractionDigits:digits});
 const amount=(v:number|null|undefined)=>v==null?"—":"$"+show(v,0);
@@ -30,6 +32,8 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
   const [comments,setComments]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const [imported,setImported]=useState("");
   const [hgText,setHgText]=useState<string|null>(null);
+  const [discountSource,setDiscountSource]=useState<DiscountSource>("igf_diario");
+  const baseTon=anchor?.q,originalDiscount=anchor?.d;
   const lock=useRef(false),requestId=useRef("");
   const path=getApiUrl("/api/dashboard/igf-simulation-plan");
   const context=useMemo(()=>({plant_code:plant,year,month,cutoff,mode,id}),[plant,year,month,cutoff,mode,id]);
@@ -40,18 +44,19 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
     setData(null);setError("");setEdits({});setComments("");setHgText(null);setImported("");
     void (async()=>{
       try {
-        const res=await fetch(path,{method:"POST",headers,signal:controller.signal,body:JSON.stringify({...context,action:"open"}),cache:"no-store"});
+        const res=await fetch(path,{method:"POST",headers,signal:controller.signal,body:JSON.stringify({...context,action:"open",compare_discounts:true,
+          anchor:baseTon!=null?{q:baseTon,d:originalDiscount}:null}),cache:"no-store"});
         const body=await res.json();if(!res.ok)throw Error(body.error);
-        if(!controller.signal.aborted){setData(body);setEdits(body.edits);setComments(body.comments??"");}
+        if(!controller.signal.aborted){setData(body);setDiscountSource(body.discount_source??mode);setEdits(body.edits);setComments(body.comments??"");}
       }catch(e){if(!controller.signal.aborted)setError((e as Error).message);}
     })();
     return ()=>controller.abort();
-  },[context,headers,path]);
+  },[context,headers,path,baseTon,originalDiscount,mode]);
   const basis=data?.anchor??anchor;
   const baseHg=baseHgPercent(basis);
   const hgPercent=hgText===null ? data?.hg_percent??null : hgText.trim()==="" ? NaN : Number(hgText);
   const displayedHg=data?.hg_percent??baseHg;
-  const plan=useMemo(()=>data&&basis?evaluatePlan(data.source,edits,basis,hgPercent):null,[data,basis,edits,hgPercent]);
+  const plan=useMemo(()=>data&&basis?evaluatePlan(data.source,edits,{...basis,mode},hgPercent,discountSource,data.discount_rates):null,[data,basis,edits,mode,hgPercent,discountSource]);
   const scenario=plan?.scenario;
   function change(row:PlanRow,update:Partial<Change>) {
     setEdits(all=>({...all,[row.id]:{...(all[row.id]??{rate:row.rate,goal:row.goal,selected:row.selected}),...update}}));
@@ -66,13 +71,15 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
       const sheets=Object.fromEntries(book.SheetNames.filter(n=>n==="Plan al cierre"||n==="IGF"||n.startsWith("IGF ")).map(n=>[n,
         XLSX.utils.sheet_to_json(book.Sheets[n],{header:1,blankrows:false,raw:true})]));
       const next=readPlanEdits(sheets,data.source,{plant,cutoff,mode});
+      const importedSource=readDiscountSource(sheets,mode) as DiscountSource;
+      if(data.discount_rates?.[importedSource]==null)throw Error("El descuento base del Excel no está disponible en este corte.");
       const importedHg=readPlanHg(sheets);
       if(importedHg!=null&&basis){
         const check=evaluatePlan(data.source,next,basis,importedHg);
         if(check.hgError)throw Error(check.hgError);
         setHgText(String(importedHg));
       }
-      setEdits(next);setImported(importedHg==null?"Se cargaron los compradores y las metas de "+file.name+".":"Se cargaron los compradores, las metas y el HG de "+file.name+".");
+      setDiscountSource(importedSource);setEdits(next);setImported("Se cargaron los compradores, las metas y la base de descuento de "+file.name+".");
     }catch(e){setError((e as Error).message);}finally{lock.current=false;setBusy(false);}
   }
   async function submit(action:"excel"|"save"){
@@ -80,7 +87,7 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
     lock.current=true;setBusy(true);setError("");
     try{
       const res=await fetch(path,{method:"POST",headers,body:JSON.stringify({...context,action,edits,anchor:basis,hg_percent:hgPercent,comments,
-        revision:data.source.revision,version:data.version,request_id:requestId.current})});
+        discount_source:discountSource,discount_revision:data.discount_revision,revision:data.source.revision,version:data.version,request_id:requestId.current})});
       if(!res.ok)throw Error((await res.json()).error);
       if(action==="save"){onSaved((await res.json()).row);return;}
       const url=URL.createObjectURL(await res.blob()),a=document.createElement("a");a.href=url;a.download="Plan-al-cierre-"+plant+"-"+cutoff+".xlsx";
@@ -94,10 +101,25 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
     {data&&plan&&<>
       <div className="flex flex-wrap items-center gap-2">
         <label className="cursor-pointer rounded border border-slate-500 px-3 py-2">Usar plan de Excel<input className="sr-only" type="file" accept=".xlsx" disabled={busy} onChange={e=>{const file=e.target.files?.[0];e.target.value="";void importReviewed(file);}}/></label>
-        <button disabled={busy||!scenario} onClick={()=>void submit("excel")} className="rounded bg-sky-800 px-3 py-2 disabled:opacity-40">Descargar Excel</button>
-        <button disabled={busy||!scenario||(plan.count===0&&!scenario.hgChanged)} onClick={()=>void submit("save")} className="rounded bg-emerald-800 px-3 py-2 disabled:opacity-40">{id?"Guardar cambios del punto #"+id:"Agregar punto Plan"}</button>
+        <button disabled={busy||!scenario||!data.discount_revision} onClick={()=>void submit("excel")} className="rounded bg-sky-800 px-3 py-2 disabled:opacity-40">Descargar Excel</button>
+        <button disabled={busy||!scenario||!data.discount_revision||(!id&&plan.count===0&&!scenario.hgChanged&&discountSource===mode)} onClick={()=>void submit("save")} className="rounded bg-emerald-800 px-3 py-2 disabled:opacity-40">{id?"Guardar cambios del punto #"+id:"Agregar punto Plan"}</button>
         <label>Comentario <input className="rounded bg-slate-800 px-2 py-1" maxLength={2000} value={comments} onChange={e=>setComments(e.target.value)}/></label>
       </div>
+      <fieldset className="rounded border border-slate-600 p-3">
+        <legend className="px-1 font-semibold">Descuento base del plan</legend>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(DISCOUNT_LABELS) as DiscountSource[]).filter(k=>k!=="forecast"||mode==="forecast").map(k=>{
+            const rate=data.discount_rates?.[k];
+            return <label key={k} className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2">
+              <input type="radio" name="plan-descuento-base" aria-label={DISCOUNT_LABELS[k]} checked={discountSource===k}
+                disabled={busy||rate==null} onChange={()=>setDiscountSource(k)}/>
+              <span>{DISCOUNT_LABELS[k]} · {rate==null?"Sin tasa al corte":show(rate,4)+" $/kg"}
+                {plan.comparisons[k]&&<strong className="block">Utilidad {amount(plan.comparisons[k].result)}</strong>}</span>
+            </label>;
+          })}
+        </div>
+        <p className="mt-2 text-xs text-slate-300">Venta base común {show(basis!.q*1000,2)} kg · Venta con propuestas {show(scenario?.kg,2)} kg</p>
+      </fieldset>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <label>{HG_PERCENT_LABEL} <input type="number" step="any" min="-100" max="100" disabled={busy||baseHg==null}
           value={hgText??(displayedHg==null?"":String(Number(displayedHg.toFixed(6))))}
@@ -112,7 +134,7 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
       {imported&&<p role="status" className="text-emerald-300">{imported}</p>}
       <p>Margen DICF {show(data.source.margin,4)} $/kg · {plan.count} compradores seleccionados. El descuento F aplica desde {cutoff} al cierre. La meta G incluye lo ya vendido.</p>
       {data.source.origin&&<p className="text-xs text-slate-300">{data.source.origin} · ventas y descuentos hasta {data.source.through}</p>}
-      <p className="font-semibold text-cyan-200">Cambio comercial de la cartera: {amount(plan.portfolio)} · Selección: {amount(scenario?.commercial)} · Resultado IGF base: {amount(scenario?.baseResult)} · Resultado IGF del plan: {amount(scenario?.result)}</p>
+      <p className="font-semibold text-cyan-200">Cambio comercial de la cartera: {amount(plan.portfolio)} · Selección: {amount(scenario?.commercial)} · Resultado base ({DISCOUNT_LABELS[discountSource]}): {amount(scenario?.baseResult)} · Resultado IGF del plan: {amount(scenario?.result)}</p>
       {scenario&&<p>Venta IGF {show(scenario.kg/1000,3)} t · Descuento {show(scenario.rate,4)} $/kg · Cambio de resultado IGF {amount(scenario.result-scenario.baseResult)} (incluye margen IGF y HG).</p>}
       {plan.pending>0&&<p className="text-amber-300">{plan.pending} filas pendientes de datos. Corrige o desmarca las filas pendientes para guardar.</p>}
       <div className="overflow-x-auto"><table className="w-full text-right text-xs"><thead><tr>{fields.map(h=><th key={h} scope="col" className="p-2">{h}</th>)}</tr></thead>

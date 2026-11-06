@@ -3,7 +3,7 @@ const {test}=require("node:test");
 const assert=require("node:assert/strict");
 const ExcelJS=require("exceljs");
 const {buildSource,loadSource,calculate,handle}=require("../lib/igf-plan-al-cierre");
-const {evaluateRow,readPlanEdits,readPlanHg,HG_PERCENT_LABEL}=require("../frontend-dashboard/lib/igf-plan-al-cierre");
+const {evaluateRow,readPlanEdits,readPlanHg,readDiscountSource,HG_PERCENT_LABEL}=require("../frontend-dashboard/lib/igf-plan-al-cierre");
 const {workbook}=require("../lib/igf-plan-al-cierre-excel");
 const register=require("../lib/igf-simulation-routes");
 
@@ -106,6 +106,77 @@ test("a legacy plan point can change HG repeatedly, export and reopen on the ori
   }
   assert.equal(readPlanHg({}),null);
   assert.throws(()=>readPlanHg({IGF:[[HG_PERCENT_LABEL,.02,2]]}),/porcentaje/);
+});
+
+test("the discount source changes only the base cost, regardless of buyer deltas and edited HG",()=>{
+  const s=source(),b=s.rows.find(r=>r.name==="Cliente B");
+  const basis={...anchor,hg_pct:.02,hg_price_kg:10,hg_kg:-.2},edits={[b.id]:{goal:50,rate:2,selected:true}};
+  const rates={igf_diario:1,arr:1.25};
+  const plan=calculate(s,edits,basis,8,"arr",rates);
+  const daily=plan.comparisons.igf_diario,arr=plan.scenario;
+  assert.equal(arr.baseKg,daily.baseKg);assert.equal(arr.kg,daily.kg);assert.equal(arr.kg,1050);
+  assert.equal(arr.commercial,daily.commercial);assert.equal(arr.hgKg,daily.hgKg);
+  assert.equal(daily.result-arr.result,250);assert.equal(arr.cost-daily.cost,250);
+  assert.equal(arr.baseCost,1250);assert.equal(arr.cost,1350);
+  assert.equal(calculate(s,edits,basis,null,"arr",{arr:0}).scenario.baseCost,0);
+  assert.throws(()=>calculate(s,edits,basis,null,"arr",{arr:null}));
+  assert.equal(readDiscountSource({},"igf_diario"),"igf_diario");
+  assert.throws(()=>readDiscountSource({IGF:[["Fuente de descuento base","otra"]]},"igf_diario"));
+});
+
+test("a historical Forecast point uses the daily weighted discount when IGF Diario is selected",async(t)=>{
+  const mode="forecast",cutoff="2026-11-06",plant={plantaId:2,canon:"Puebla"};
+  const existing={cutoff,mode,source:source(),anchor:{...anchor,d:7}};
+  const client={query:async sql=>({rows:sql.startsWith("SELECT id,basis")?[{basis:{closing_plan:existing}}]:[]})};
+  const forecast=require("../lib/dashboard-arr-forecast");
+  const byDay=values=>new Map([["Puebla",new Map([["2026-11-01",values[0]],["2026-11-02",values[1]]])]]);
+  t.mock.method(forecast,"buildPronosticoProjectionContext",async(_client,year,month,date)=>{
+    assert.deepEqual([year,month,date],[2026,11,cutoff]);
+    return {ctx:{ventaMapByPlant:byDay([1,3]),descMapByPlant:byDay([-1,-3]),corteYmdStr:cutoff,isCorteEnMes:true}};
+  });
+  const opened=await handle(client,plant,{year:2026,month:11},{action:"open",mode,cutoff,id:"2",compare_discounts:true},
+    async()=>({rows:[{categoria:"Casa",kgProy:1000,descKg:1.25}]}));
+  assert.equal(opened.discount_source,"forecast");
+  assert.deepEqual(opened.discount_rates,{igf_diario:2.5,arr:1.25,forecast:7});
+});
+
+test("ARR cutoff reference is verified and frozen; the saved point and both Excel comparisons agree",async()=>{
+  const s={...source(),revision:"cut"},b=s.rows.find(r=>r.name==="Cliente B");
+  const edits={[b.id]:{goal:50,rate:2,selected:true}};
+  const req={id:"8",mode:"igf_diario",cutoff:"2026-11-06",compare_discounts:true,revision:s.revision,
+    edits,request_id:"00000000-0000-4000-8000-000000000008"};
+  let saved={id:"8",name:"Plan",basis:{closing_plan:{...req,source:s,anchor,version:1}}};
+  const client={async query(sql,args){
+    if(sql.startsWith("SELECT id,basis"))return {rows:[saved]};
+    if(sql.startsWith("UPDATE arr.igf_simulation_proposals")){
+      saved={...saved,basis:JSON.parse(args[6]),volume_ton:args[4],discount_kg:args[5]};return {rows:[saved]};
+    }
+    if(sql.includes("cliente_contactos"))return {rows:[{available:false}]};
+    if(/^(BEGIN|ROLLBACK|COMMIT|CREATE)/.test(sql))return {rows:[]};
+    throw Error(sql);
+  }};
+  let rate=1.25;
+  const call=(action,extra={})=>handle(client,{plantaId:2,canon:"Puebla"},{year:2026,month:11},{...req,action,...extra},
+    async()=>({rows:[{categoria:"Casa",kgProy:1000,descKg:rate}]}));
+  const first=await call("open");assert.equal(first.discount_source,"igf_diario");
+  const update={version:1,discount_source:"arr",discount_revision:first.discount_revision};
+  rate=2;await assert.rejects(call("save",update),e=>e.status===409);
+  rate=null;const incomplete=await call("open");assert.equal(incomplete.discount_rates.arr,null);
+  await assert.rejects(call("save",{...update,discount_revision:incomplete.discount_revision}),e=>e.status===422);
+  rate=1.25;await call("save",update);
+  rate=9;const again=await call("open");assert.equal(again.discount_rates.arr,1.25);assert.equal(again.discount_source,"arr");
+  assert.equal(again.anchor.d,anchor.d);
+  const result=calculate(s,edits,anchor,null,"arr",again.discount_rates);
+  const graph=require("../frontend-dashboard/lib/igf-simulation").profit(saved.basis,saved.volume_ton,saved.discount_kg);
+  assert.ok(Math.abs(graph-result.scenario.result)<1e-7);
+  const {bytes}=await call("excel",{...update,version:2});
+  const w=new ExcelJS.Workbook();await w.xlsx.load(bytes);
+  const igf=w.getWorksheet("IGF").getSheetValues().filter(Boolean).map(r=>r.slice(1));
+  assert.equal(readDiscountSource({IGF:igf},"igf_diario"),"arr");
+  assert.equal(igf.find(r=>r[0]==="Resultado final ($)")[2],result.scenario.result);
+  const cmp=w.getWorksheet("Comparación de descuentos").getSheetValues().filter(Boolean).slice(1);
+  assert.deepEqual(cmp.map(r=>[r[2],r[4]]),[[1000,1050],[1000,1050]]);
+  assert.ok(Math.abs(cmp.find(r=>r[1]==="ARR")[7]-graph)<1e-7);
 });
 function cutClient({history, daily=[], snapshot=[], margin=6, plant="Prueba", config=[],version=true}) {
   const queries=[];
