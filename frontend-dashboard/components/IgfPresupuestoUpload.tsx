@@ -52,7 +52,7 @@ export default function IgfPresupuestoUpload({ token, plants, initialPlant, year
     {open && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4">
       <section role="dialog" aria-modal="true" aria-labelledby="presupuesto-upload-title" className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-lg border border-slate-600 bg-slate-900 p-5 text-slate-100">
         <h3 id="presupuesto-upload-title" className="text-xl font-semibold">Subir Presupuesto</h3>
-        <p className="mt-2 text-sm text-slate-300">Importa los siete conceptos de operativos y corporativos de la hoja DatosCorpo. Solo se reemplazarán los días de la ventana; se conservarán los importes de los demás días y se actualizarán los totales mensuales. La distribución del mes quedará fijada por día para conservar estos importes.</p>
+        <p className="mt-2 text-sm text-slate-300">Importa los siete conceptos de gastos operativos y corporativos de la hoja DatosCorpo. De lunes a sábado se acepta el importe del Excel, incluso en festivos. Los domingos, los siete conceptos deben estar en cero. Se reemplazan los días seleccionados y se actualiza el total mensual.</p>
         <p className="mt-2 text-sm text-amber-200">Comprueba que el archivo corresponde a la planta elegida. Los importes se redondean a centavos. Las fórmulas deben estar recalculadas y guardadas en Excel.</p>
         <div className="my-4 grid gap-3 sm:grid-cols-2">
           <label className="text-sm">Planta<select value={plant} disabled={busy} onChange={e => { setPlant(e.target.value); setFile(null); invalidate(); }} className={inputClass}>

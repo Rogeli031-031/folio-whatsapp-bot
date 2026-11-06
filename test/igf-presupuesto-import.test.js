@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const XLSX = require("xlsx");
 const importer = require("../lib/igf-presupuesto-import");
 const distribution = require("../lib/igf-diario-gastos-distribucion");
-const { monthBusinessDays } = require("../lib/igf-diario-puebla");
+const { monthBusinessDays, monthExpenseDays } = require("../lib/igf-diario-puebla");
 const KEYS = importer.FIELDS.map(([key]) => key);
 
 function workbook(rows, labels) {
@@ -30,7 +30,7 @@ function db() {
     calls.push({ sql, params });
     if (sql === "BEGIN") { snapshot = structuredClone(state); return { rows: [] }; }
     if (sql === "ROLLBACK") { Object.assign(state, snapshot); return { rows: [] }; }
-    if (/SELECT \* FROM arr.igf_diario_gastos_desglose/.test(sql)) return { rows: state.row ? [structuredClone(state.row)] : [] };
+    if (sql.startsWith("SELECT") && sql.includes("FROM arr.igf_diario_gastos_desglose")) return { rows: state.row ? [structuredClone(state.row)] : [] };
     if (/SELECT concepto, fecha, importe/.test(sql)) return { rows: structuredClone(state.fixed).sort((a,b) => a.concepto.localeCompare(b.concepto) || a.fecha.localeCompare(b.fecha)) };
     if (/^INSERT/.test(sql)) {
       if (this.failWrite && /distribucion_manual/.test(sql)) throw new Error("simulated write failure");
@@ -99,6 +99,56 @@ test("mes completo inicializa los siete conceptos y reimportar no acumula", asyn
   assert.equal(client.state.fixed.length,27*7);
 });
 
+test("noviembre: las seis plantas guardan el festivo y mantienen los domingos en cero", async () => {
+  const from = "2026-11-01", to = "2026-11-30";
+  const closedDays = [1, 8, 15, 22, 29];
+  const excelRows = Array.from({ length: 30 }, (_, i) => {
+    const day = i + 1;
+    const date = `2026-11-${String(day).padStart(2, "0")}`;
+    return [dateNumber(date), ...KEYS.map(() => closedDays.includes(day) ? 0 : day + 0.11)];
+  });
+  const rows = importer.parseWorkbook(workbook(excelRows), from, to);
+  for (const plantCode of ["Acapulco", "Puebla", "Tehuacan", "Queretaro", "San Luis", "Morelos"]) {
+    const client = db();
+    const request = { plantCode, from, to, rows };
+    const { fingerprint } = await importer.buildPlan(client, request);
+    const saved = await importer.savePlan(client, request, fingerprint, "test");
+    assert.equal(saved.plant_code, plantCode);
+    assert.equal(client.state.fixed.length, 25 * KEYS.length);
+    for (const concepto of KEYS) {
+      const schedule = await distribution.getSchedule(client, { plantCode, year: 2026, month: 11, concepto });
+      assert.equal(schedule.ok, true);
+      assert.deepEqual(schedule.days.filter(d => !d.editable).map(d => Number(d.fecha.slice(-2))), closedDays);
+      assert.equal(schedule.days[13].importe_asignado, 14.11); // sábado
+      assert.equal(schedule.days[14].importe_asignado, 0);     // domingo
+      assert.equal(schedule.days[15].importe_asignado, 16.11); // lunes festivo
+      assert.equal(schedule.monthly_amount, 392.75);
+    }
+  }
+});
+
+test("un presupuesto fijado bajo el calendario anterior conserva los importes fuera de la ventana", async () => {
+  const client = db();
+  const oldDays = monthBusinessDays(2026, 11).days.filter(d => !d.inhabil);
+  client.state.row = Object.fromEntries(KEYS.map(k => [k, oldDays.length * 10]));
+  client.state.fixed = oldDays.flatMap(d => KEYS.map(concepto => ({ concepto, fecha: d.fecha, importe: 10 })));
+  const from = "2026-11-16";
+  const rows = importer.parseWorkbook(workbook([[dateNumber(from), 11.75, 0, 0, 0, 0, 0, 0]]), from, from);
+  const request = { from, to: from, plantCode: "Acapulco", rows };
+  const { fingerprint } = await importer.buildPlan(client, request);
+  await importer.savePlan(client, request, fingerprint, "test");
+  assert.equal(client.state.row.gasto_corporativo, 251.75);
+  assert.equal(client.state.row.inversiones, 240);
+  for (const d of client.state.fixed.filter(d => d.fecha !== from)) assert.equal(d.importe, 10);
+});
+
+test("la regla incluye otros meses y respeta el calendario de los formatos anteriores", () => {
+  const christmas = monthExpenseDays(2026, 12, ["2026-12-24"]).days;
+  assert.equal(christmas[23].inhabil, false);
+  assert.equal(christmas[24].inhabil, false);
+  assert.deepEqual(monthExpenseDays(2026, 9), monthBusinessDays(2026, 9));
+});
+
 test("vista previa caducada y fallos de escritura hacen rollback sin cambios parciales", async () => {
   const client=db(); const request=spec(); const plan=await importer.buildPlan(client,request);
   client.state.row.gasto_corporativo=271;
@@ -114,7 +164,7 @@ test("no inventa presupuesto parcial sin base ni acepta importes en días inháb
   const client=db(); client.state.row=null;
   await assert.rejects(()=>importer.buildPlan(client,spec("2026-10-01","2026-10-03")), /distribución mensual válida/);
   const request=spec(); request.rows.get("2026-10-04").gasto_corporativo=100;
-  await assert.rejects(()=>importer.buildPlan(client,request), /inhábil/);
+  await assert.rejects(()=>importer.buildPlan(client,request), /domingo 2026-10-04.*Gasto corporativo.*cero/);
 });
 
 test("valida rango y archivo antes de acceder a datos", () => {
