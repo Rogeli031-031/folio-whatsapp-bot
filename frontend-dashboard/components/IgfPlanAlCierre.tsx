@@ -1,13 +1,13 @@
 "use client";
 import {useEffect,useMemo,useRef,useState} from "react";
 import {getApiUrl} from "@/lib/api";
-import {evaluatePlan,readPlanEdits} from "@/lib/igf-plan-al-cierre";
+import {baseHgPercent,evaluatePlan,readPlanEdits,readPlanHg,HG_PERCENT_LABEL} from "@/lib/igf-plan-al-cierre";
 
 type Anchor={q:number;d:number;a:number;fixed:number;financials?:unknown;hg_kg?:number;hg_pct?:number;hg_price_kg?:number;version_as_of?:boolean};
 type Change={rate:number|null;goal:number;selected:boolean};
 type PlanRow=Change & {id:string;name:string;real:number;actual:number|null;base:number;continuity:number|null;minimum:number|null;gain:number|null;downside:number|null;reference:string|null;valid:boolean};
 type Source={margin:number;rows:PlanRow[];revision:string;origin?:string;through?:string};
-type Data={source:Source;edits:Record<string,Change>;version?:number;anchor?:Anchor;comments?:string};
+type Data={source:Source;edits:Record<string,Change>;version?:number;anchor?:Anchor;comments?:string;hg_percent?:number|null};
 type Props={year:number;month:number;plant:string;cutoff:string;mode:string;token:string;id?:string;anchor:Anchor|null;onSaved:(row:any)=>void};
 const show=(v:number|null|undefined,digits=2)=>v==null||!Number.isFinite(v)?"—":v.toLocaleString("es-MX",{maximumFractionDigits:digits});
 const amount=(v:number|null|undefined)=>v==null?"—":"$"+show(v,0);
@@ -29,6 +29,7 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
   const [data,setData]=useState<Data|null>(null),[edits,setEdits]=useState<Record<string,Change>>({});
   const [comments,setComments]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false);
   const [imported,setImported]=useState("");
+  const [hgText,setHgText]=useState<string|null>(null);
   const lock=useRef(false),requestId=useRef("");
   const path=getApiUrl("/api/dashboard/igf-simulation-plan");
   const context=useMemo(()=>({plant_code:plant,year,month,cutoff,mode,id}),[plant,year,month,cutoff,mode,id]);
@@ -36,7 +37,7 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
   useEffect(()=>{
     const controller=new AbortController();
     requestId.current=crypto.randomUUID();
-    setData(null);setError("");setEdits({});setComments("");
+    setData(null);setError("");setEdits({});setComments("");setHgText(null);setImported("");
     void (async()=>{
       try {
         const res=await fetch(path,{method:"POST",headers,signal:controller.signal,body:JSON.stringify({...context,action:"open"}),cache:"no-store"});
@@ -47,7 +48,10 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
     return ()=>controller.abort();
   },[context,headers,path]);
   const basis=data?.anchor??anchor;
-  const plan=useMemo(()=>data&&basis?evaluatePlan(data.source,edits,basis):null,[data,basis,edits]);
+  const baseHg=baseHgPercent(basis);
+  const hgPercent=hgText===null ? data?.hg_percent??null : hgText.trim()==="" ? NaN : Number(hgText);
+  const displayedHg=data?.hg_percent??baseHg;
+  const plan=useMemo(()=>data&&basis?evaluatePlan(data.source,edits,basis,hgPercent):null,[data,basis,edits,hgPercent]);
   const scenario=plan?.scenario;
   function change(row:PlanRow,update:Partial<Change>) {
     setEdits(all=>({...all,[row.id]:{...(all[row.id]??{rate:row.rate,goal:row.goal,selected:row.selected}),...update}}));
@@ -62,14 +66,20 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
       const sheets=Object.fromEntries(book.SheetNames.filter(n=>n==="Plan al cierre"||n==="IGF"||n.startsWith("IGF ")).map(n=>[n,
         XLSX.utils.sheet_to_json(book.Sheets[n],{header:1,blankrows:false,raw:true})]));
       const next=readPlanEdits(sheets,data.source,{plant,cutoff,mode});
-      setEdits(next);setImported("Se cargaron las metas, los descuentos y la selección de "+file.name+".");
+      const importedHg=readPlanHg(sheets);
+      if(importedHg!=null&&basis){
+        const check=evaluatePlan(data.source,next,basis,importedHg);
+        if(check.hgError)throw Error(check.hgError);
+        setHgText(String(importedHg));
+      }
+      setEdits(next);setImported(importedHg==null?"Se cargaron los compradores y las metas de "+file.name+".":"Se cargaron los compradores, las metas y el HG de "+file.name+".");
     }catch(e){setError((e as Error).message);}finally{lock.current=false;setBusy(false);}
   }
   async function submit(action:"excel"|"save"){
     if(!data||!basis||!scenario||lock.current)return;
     lock.current=true;setBusy(true);setError("");
     try{
-      const res=await fetch(path,{method:"POST",headers,body:JSON.stringify({...context,action,edits,anchor:basis,comments,
+      const res=await fetch(path,{method:"POST",headers,body:JSON.stringify({...context,action,edits,anchor:basis,hg_percent:hgPercent,comments,
         revision:data.source.revision,version:data.version,request_id:requestId.current})});
       if(!res.ok)throw Error((await res.json()).error);
       if(action==="save"){onSaved((await res.json()).row);return;}
@@ -85,9 +95,20 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
       <div className="flex flex-wrap items-center gap-2">
         <label className="cursor-pointer rounded border border-slate-500 px-3 py-2">Usar plan de Excel<input className="sr-only" type="file" accept=".xlsx" disabled={busy} onChange={e=>{const file=e.target.files?.[0];e.target.value="";void importReviewed(file);}}/></label>
         <button disabled={busy||!scenario} onClick={()=>void submit("excel")} className="rounded bg-sky-800 px-3 py-2 disabled:opacity-40">Descargar Excel</button>
-        <button disabled={busy||!scenario||plan.count===0} onClick={()=>void submit("save")} className="rounded bg-emerald-800 px-3 py-2 disabled:opacity-40">{id?"Guardar cambios del punto #"+id:"Agregar punto Plan"}</button>
+        <button disabled={busy||!scenario||(plan.count===0&&!scenario.hgChanged)} onClick={()=>void submit("save")} className="rounded bg-emerald-800 px-3 py-2 disabled:opacity-40">{id?"Guardar cambios del punto #"+id:"Agregar punto Plan"}</button>
         <label>Comentario <input className="rounded bg-slate-800 px-2 py-1" maxLength={2000} value={comments} onChange={e=>setComments(e.target.value)}/></label>
       </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <label>{HG_PERCENT_LABEL} <input type="number" step="any" min="-100" max="100" disabled={busy||baseHg==null}
+          value={hgText??(displayedHg==null?"":String(Number(displayedHg.toFixed(6))))}
+          onChange={e=>setHgText(e.target.value)} aria-invalid={Boolean(plan.hgError)}
+          className="w-24 rounded border border-amber-600 bg-slate-950 p-1 text-right disabled:opacity-50"/></label>
+        {baseHg!=null ? <span className="text-slate-300">HG al corte {show(baseHg,4)} %</span>
+          : <span className="text-amber-300">Este corte requiere HG base y valoración por kilo para editar el porcentaje.</span>}
+        {scenario?.hgKg!=null&&<span>HG del plan {show(scenario.hgKg,2)} kg · {amount(scenario.hgAmount)} MXN</span>}
+        {scenario?.hgChanged&&<span>Efecto de editar HG {amount(scenario.hgEffect)} MXN</span>}
+      </div>
+      {plan.hgError&&<p role="alert" className="text-amber-300">{plan.hgError}</p>}
       {imported&&<p role="status" className="text-emerald-300">{imported}</p>}
       <p>Margen DICF {show(data.source.margin,4)} $/kg · {plan.count} compradores seleccionados. El descuento F aplica desde {cutoff} al cierre. La meta G incluye lo ya vendido.</p>
       {data.source.origin&&<p className="text-xs text-slate-300">{data.source.origin} · ventas y descuentos hasta {data.source.through}</p>}

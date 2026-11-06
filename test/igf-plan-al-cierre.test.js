@@ -3,7 +3,7 @@ const {test}=require("node:test");
 const assert=require("node:assert/strict");
 const ExcelJS=require("exceljs");
 const {buildSource,loadSource,calculate,handle}=require("../lib/igf-plan-al-cierre");
-const {evaluateRow,readPlanEdits}=require("../frontend-dashboard/lib/igf-plan-al-cierre");
+const {evaluateRow,readPlanEdits,readPlanHg,HG_PERCENT_LABEL}=require("../frontend-dashboard/lib/igf-plan-al-cierre");
 const {workbook}=require("../lib/igf-plan-al-cierre-excel");
 const register=require("../lib/igf-simulation-routes");
 
@@ -41,6 +41,71 @@ test("verified consolidation preserves cash/credit account detail and missing di
   assert.equal(merged.accounts.length,2);assert.equal(merged.future,"Cliente A (CONTADO)");assert.equal(merged.real,8);
   assert.equal(merged.actual,null);assert.equal(merged.continuity,null);
   assert.equal(evaluateRow(merged,null,6).gain,null);
+});
+
+test("HG changes the IGF on all planned kg and leaves the base and buyer gains intact",()=>{
+  const s=source(), basis={...anchor,hg_pct:.02,hg_price_kg:10,hg_kg:-.2};
+  const buyer=s.rows.find(r=>r.name==="Cliente B");
+  const edits={[buyer.id]:{goal:50,rate:2,selected:true}};
+  const original=calculate(s,edits,basis);
+  for(const pct of [0,-3,2,7.5]){
+    const plan=calculate(s,edits,basis,pct);
+    const effect=1050*(pct-2)/100*10;
+    assert.deepEqual(plan.rows,original.rows);
+    assert.equal(plan.scenario.baseResult,original.scenario.baseResult);
+    assert.equal(plan.scenario.commercial,original.scenario.commercial);
+    assert.ok(Math.abs(plan.scenario.result-original.scenario.result-effect)<1e-7);
+    assert.equal(plan.scenario.hgKg,1050*pct/100);
+    assert.ok(Math.abs(plan.scenario.hgAmount-plan.scenario.hgKg*10)<1e-7);
+  }
+  for(const invalid of [-101,101,NaN,"5"])assert.throws(()=>calculate(s,edits,basis,invalid),/HG/);
+  assert.throws(()=>calculate(s,edits,anchor,0),/valoración/);
+  assert.equal(calculate(s,edits,anchor).scenario.hgKg,null);
+});
+
+test("a legacy plan point can change HG repeatedly, export and reopen on the original cut",async()=>{
+  const s={...source(),revision:"original"}, basis={...anchor,hg_pct:.02,hg_price_kg:10,hg_kg:-.2};
+  const b=s.rows.find(r=>r.name==="Cliente B"),edits={[b.id]:{goal:50,rate:2,selected:true}};
+  const request={cutoff:"2026-11-06",mode:"igf_diario",id:"17",revision:s.revision,edits,request_id:"00000000-0000-4000-8000-000000000017"};
+  let point={id:"17",name:"Plan al cierre",basis:{closing_plan:{...request,version:1,source:s,anchor:basis}}};
+  const client={async query(sql,args){
+    if(sql.startsWith("SELECT id,basis"))return {rows:[point]};
+    if(sql.startsWith("UPDATE arr.igf_simulation_proposals")){
+      assert.equal(args[0],17);
+      point={...point,basis:JSON.parse(args[6])};return {rows:[point]};
+    }
+    if(sql.includes("cliente_contactos"))return {rows:[{available:false}]};
+    if(/^(BEGIN|ROLLBACK|COMMIT|CREATE)/.test(sql))return {rows:[]};
+    throw Error(sql);
+  }};
+  const run=(action,more={})=>handle(client,{plantaId:1,canon:"Puebla"},{year:2026,month:11},{...request,action,...more});
+  assert.equal((await run("open")).hg_percent,null);
+  for(const [index,pct] of [8,0,-1.5].entries()){
+    const {version}=await run("open");
+    const {row}=await run("save",{version,hg_percent:pct});
+    assert.equal(row.id,"17");assert.equal(row.basis.hg_pct,pct/100);
+    const reopened=await run("open");
+    assert.equal(reopened.hg_percent,pct);assert.equal(reopened.anchor.a,basis.a);
+    assert.equal(reopened.anchor.hg_pct,.02);assert.equal(reopened.version,index+2);
+    const {scenario}=calculate(s,edits,basis,pct);
+    const graph=require("../frontend-dashboard/lib/igf-simulation").profit(row.basis,scenario.kg/1000,scenario.rate);
+    assert.ok(Math.abs(graph-scenario.result)<1e-7);
+    const {bytes}=await run("excel",{version:reopened.version});
+    const book=new ExcelJS.Workbook();await book.xlsx.load(bytes);
+    const matrix=name=>book.getWorksheet(name).getSheetValues().filter(Boolean).map(r=>r.slice(1));
+    const sheets={IGF:matrix("IGF"),"Plan al cierre":matrix("Plan al cierre")};
+    assert.equal(readPlanHg(sheets),pct);
+    const restored=readPlanEdits(sheets,s,{plant:"Puebla",cutoff:request.cutoff,mode:request.mode});
+    assert.deepEqual(calculate(s,restored,basis,readPlanHg(sheets)).scenario,scenario);
+    const indicator=name=>sheets.IGF.find(r=>r[0]===name);
+    assert.equal(indicator("Resultado final ($)")[1],scenario.baseResult);
+    assert.equal(indicator("Resultado final ($)")[2],scenario.result);
+    assert.equal(indicator("Aportación HG ($)")[2],scenario.hgAmount);
+    assert.equal(indicator("HG generado / perdido (kg)")[2],scenario.hgKg);
+    await assert.rejects(run("save",{version,hg_percent:9}),e=>e.status===409);
+  }
+  assert.equal(readPlanHg({}),null);
+  assert.throws(()=>readPlanHg({IGF:[[HG_PERCENT_LABEL,.02,2]]}),/porcentaje/);
 });
 function cutClient({history, daily=[], snapshot=[], margin=6, plant="Prueba", config=[],version=true}) {
   const queries=[];

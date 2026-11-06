@@ -1,4 +1,13 @@
 "use strict";
+const {hgCostFromPercent, modelWithHg} = require("./igf-simulation");
+
+const HG_PERCENT_LABEL = "HG (% de la venta)";
+
+function baseHgPercent(anchor) {
+  if (!Number.isFinite(anchor?.hg_pct) || !Number.isFinite(anchor.hg_kg) ||
+      !Number.isFinite(anchor.hg_price_kg) || anchor.hg_price_kg <= 0) return null;
+  return Number((anchor.hg_pct * 100).toPrecision(15));
+}
 
 // All quantities in calculations are kg. The editor converts only the displayed tonnage.
 function evaluateRow(row, change, margin) {
@@ -18,7 +27,8 @@ function evaluateRow(row, change, margin) {
     minimum: valid && rate !== null && margin > rate ? row.real + Math.max(0,(remaining*margin-baseCost)/(margin-rate)) : null};
 }
 
-function evaluatePlan(source, changes, anchor) {
+/** @param {number|null} [hgPercent] HG in percentage points, e.g. 5 for five percent. */
+function evaluatePlan(source, changes, anchor, hgPercent = null) {
   const rows = source.rows.map(row=>evaluateRow(row, changes[row.id], source.margin));
   rows.sort((a,b)=>Number(b.valid)-Number(a.valid) || (b.gain ?? 0)-(a.gain ?? 0) || a.name.localeCompare(b.name,"es") || a.id.localeCompare(b.id));
   const selected=rows.filter(row=>row.selected);
@@ -26,12 +36,24 @@ function evaluatePlan(source, changes, anchor) {
   const sum=(items,key)=>items.reduce((n,row)=>n+row[key],0);
   const kg=anchor.q*1000+sum(selected,"kgDelta");
   const cost=anchor.q*1000*anchor.d+sum(selected,"costDelta");
-  const scenario=valid && kg>0 && Number.isFinite(cost) ? {
-    kg, rate:cost/kg, result:kg*anchor.a-cost-anchor.fixed,
+  const basePercent = baseHgPercent(anchor);
+  const percent = hgPercent ?? basePercent;
+  const hgChanged = hgPercent != null && hgPercent !== basePercent;
+  const hgCost = hgChanged ? hgCostFromPercent(hgPercent, anchor.hg_price_kg) : anchor.hg_kg;
+  const model = hgChanged ? modelWithHg(anchor, anchor.hg_kg, hgCost) : anchor;
+  let hgError = null;
+  if (hgPercent != null && basePercent === null) hgError = "Falta la valoración del HG para este corte.";
+  else if (hgPercent != null && (!Number.isFinite(hgPercent) || Math.abs(hgPercent)>100 ||
+      !Number.isFinite(hgCost) || Math.abs(hgCost)>100 || Math.abs(model.a)>1000))
+    hgError = "Revisa el HG. Debe estar entre −100 % y 100 % y dentro de la valoración permitida.";
+  const scenario=valid && !hgError && kg>0 && Number.isFinite(cost) ? {
+    kg, rate:cost/kg, result:kg*model.a-cost-anchor.fixed, a:model.a,
+    hgChanged, hgPercent:percent, hgCost, hgKg:percent==null?null:kg*percent/100,
+    hgAmount:hgCost==null?null:-kg*hgCost, hgEffect:kg*(model.a-anchor.a),
     cost, kgDelta:kg-anchor.q*1000, commercial:sum(selected,"gain"),
     baseResult:anchor.q*1000*(anchor.a-anchor.d)-anchor.fixed
   } : null;
-  return {rows, scenario, count:selected.length, portfolio:sum(rows.filter(row=>row.valid),"gain"),
+  return {rows, scenario, hgError, count:selected.length, portfolio:sum(rows.filter(row=>row.valid),"gain"),
     pending:rows.filter(row=>!row.valid).length};
 }
 
@@ -70,4 +92,11 @@ function readPlanEdits(sheets,source,context) {
   if(Object.keys(changes).length!==source.rows.length)throw Error("El Excel debe incluir toda la cartera de este corte.");
   return changes;
 }
-module.exports={evaluateRow,evaluatePlan,readPlanEdits};
+// Excel stores formatted percentages as fractions. An older workbook has no HG row.
+function readPlanHg(sheets) {
+  const row = sheets.IGF?.find(r => r[0] === HG_PERCENT_LABEL);
+  if (!row || row[2] == null) return null;
+  if (!Number.isFinite(row[2]) || Math.abs(row[2]) > 1) throw Error("Revisa el porcentaje de HG en la hoja IGF.");
+  return Number((row[2] * 100).toPrecision(15));
+}
+module.exports={evaluateRow,evaluatePlan,readPlanEdits,readPlanHg,baseHgPercent,HG_PERCENT_LABEL};
