@@ -2,6 +2,8 @@
 const {hgCostFromPercent, modelWithHg} = require("./igf-simulation");
 
 const HG_PERCENT_LABEL = "HG (% de la venta)";
+const DISCOUNT_LABELS = {igf_diario:"IGF Diario",arr:"ARR",forecast:"IGF Forecast"};
+const DISCOUNT_SOURCE_ROW = "Fuente de descuento base";
 
 function baseHgPercent(anchor) {
   if (!Number.isFinite(anchor?.hg_pct) || !Number.isFinite(anchor.hg_kg) ||
@@ -27,15 +29,17 @@ function evaluateRow(row, change, margin) {
     minimum: valid && rate !== null && margin > rate ? row.real + Math.max(0,(remaining*margin-baseCost)/(margin-rate)) : null};
 }
 
-/** @param {number|null} [hgPercent] HG in percentage points, e.g. 5 for five percent. */
-function evaluatePlan(source, changes, anchor, hgPercent = null) {
+/** @param {number|null} [hgPercent] */
+function evaluatePlan(source, changes, anchor, hgPercent = null, discountSource = anchor.mode || "igf_diario", rates = {}) {
   const rows = source.rows.map(row=>evaluateRow(row, changes[row.id], source.margin));
   rows.sort((a,b)=>Number(b.valid)-Number(a.valid) || (b.gain ?? 0)-(a.gain ?? 0) || a.name.localeCompare(b.name,"es") || a.id.localeCompare(b.id));
   const selected=rows.filter(row=>row.selected);
   const valid=selected.every(row=>row.valid);
   const sum=(items,key)=>items.reduce((n,row)=>n+row[key],0);
-  const kg=anchor.q*1000+sum(selected,"kgDelta");
-  const cost=anchor.q*1000*anchor.d+sum(selected,"costDelta");
+  const baseKg=anchor.q*1000;
+  const kg=baseKg+sum(selected,"kgDelta");
+  const costDelta=sum(selected,"costDelta");
+  const commercial=sum(selected,"gain");
   const basePercent = baseHgPercent(anchor);
   const percent = hgPercent ?? basePercent;
   const hgChanged = hgPercent != null && hgPercent !== basePercent;
@@ -46,14 +50,22 @@ function evaluatePlan(source, changes, anchor, hgPercent = null) {
   else if (hgPercent != null && (!Number.isFinite(hgPercent) || Math.abs(hgPercent)>100 ||
       !Number.isFinite(hgCost) || Math.abs(hgCost)>100 || Math.abs(model.a)>1000))
     hgError = "Revisa el HG. Debe estar entre −100 % y 100 % y dentro de la valoración permitida.";
-  const scenario=valid && !hgError && kg>0 && Number.isFinite(cost) ? {
-    kg, rate:cost/kg, result:kg*model.a-cost-anchor.fixed, a:model.a,
-    hgChanged, hgPercent:percent, hgCost, hgKg:percent==null?null:kg*percent/100,
-    hgAmount:hgCost==null?null:-kg*hgCost, hgEffect:kg*(model.a-anchor.a),
-    cost, kgDelta:kg-anchor.q*1000, commercial:sum(selected,"gain"),
-    baseResult:anchor.q*1000*(anchor.a-anchor.d)-anchor.fixed
-  } : null;
-  return {rows, scenario, hgError, count:selected.length, portfolio:sum(rows.filter(row=>row.valid),"gain"),
+  function scenarioAt(baseRate) {
+    if (!Number.isFinite(baseRate) || !valid || hgError || !(kg>0)) return null;
+    const baseCost=baseKg*baseRate;
+    const cost=baseCost+costDelta;
+    if (!Number.isFinite(cost)) return null;
+    return {
+      kg, baseKg, baseRate, baseCost, rate:cost/kg, result:kg*model.a-cost-anchor.fixed, a:model.a,
+      hgChanged, hgPercent:percent, hgCost, hgKg:percent==null?null:kg*percent/100,
+      hgAmount:hgCost==null?null:-kg*hgCost, hgEffect:kg*(model.a-anchor.a),
+      cost, kgDelta:kg-baseKg, commercial, baseResult:baseKg*(anchor.a-baseRate)-anchor.fixed
+    };
+  }
+  const referenceRates = {[anchor.mode || "igf_diario"]:anchor.d,...rates};
+  const comparisons = Object.fromEntries(Object.entries(referenceRates).map(([key,rate])=>[key,scenarioAt(rate)]));
+  const scenario = comparisons[discountSource] ?? null;
+  return {rows, scenario, comparisons, discountSource, hgError, count:selected.length, portfolio:sum(rows.filter(row=>row.valid),"gain"),
     pending:rows.filter(row=>!row.valid).length};
 }
 
@@ -99,4 +111,11 @@ function readPlanHg(sheets) {
   if (!Number.isFinite(row[2]) || Math.abs(row[2]) > 1) throw Error("Revisa el porcentaje de HG en la hoja IGF.");
   return Number((row[2] * 100).toPrecision(15));
 }
-module.exports={evaluateRow,evaluatePlan,readPlanEdits,readPlanHg,baseHgPercent,HG_PERCENT_LABEL};
+function readDiscountSource(sheets,originalMode) {
+  const row=sheets.IGF?.find(r=>r[0]===DISCOUNT_SOURCE_ROW);
+  if(!row)return originalMode; // Old exports used the financial source of the point.
+  const key=Object.keys(DISCOUNT_LABELS).find(k=>DISCOUNT_LABELS[k]===row[1]);
+  if(!key)throw Error("La fuente de descuento base del Excel no es válida.");
+  return key;
+}
+module.exports={evaluateRow,evaluatePlan,readPlanEdits,readPlanHg,readDiscountSource,baseHgPercent,HG_PERCENT_LABEL,DISCOUNT_LABELS,DISCOUNT_SOURCE_ROW};

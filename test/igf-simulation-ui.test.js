@@ -14,6 +14,7 @@ function harness(fetcher){
   if(name==="react/jsx-runtime")return require("../frontend-dashboard/node_modules/react/jsx-runtime");
   if(name==="@/lib/api")return {getApiUrl:x=>x};
   if(name==="@/lib/igf-simulation")return require("../frontend-dashboard/lib/igf-simulation");
+  if(name==="@/lib/igf-plan-al-cierre")return require("../frontend-dashboard/lib/igf-plan-al-cierre");
   if(name==="./IgfPlanAlCierre")return {__esModule:true,default:()=>null};
   throw new Error(name);
  },module,module.exports,fetcher);

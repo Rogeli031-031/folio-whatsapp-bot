@@ -1,6 +1,6 @@
 # Plan al cierre · Fuente de descuento
 task_id: "IMPL-IGF-PLAN-BASE-DESCUENTO"
-status: AUTHORIZED
+status: IN_PROGRESS
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-11-06T14:16:41-06:00"
 human_authorization: "Sí, autorizo el selector"
