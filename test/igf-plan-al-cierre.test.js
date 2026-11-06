@@ -290,8 +290,11 @@ test("xlsx follows the on-screen order, unit conversion, account and category to
   assert.deepEqual(selection.filter(r=>r[1]==="Cliente B").map(r=>r[4]),[.05]);
   assert.ok(!selection.some(r=>r[1]==="Cliente A"||r[1]==="Cliente C"));
   assert.equal(selection.at(-1)[8],result.scenario.commercial);
-  const totals=catRows.filter(r=>r[1]==="TOTAL");
-  assert.deepEqual(totals.map(r=>[r[3],r[4]]),[[1,1250],[1.05,1350]]);
+  const subtotals=catRows.filter(r=>r[1]==="Subtotal por clientes");
+  assert.deepEqual(subtotals.map(r=>[r[3],r[4]]),[[1,1250],[1.05,1350]]);
+  assert.deepEqual(catRows.filter(r=>r[1]==="Conciliación con el pronóstico").map(r=>r[4]),[-250,-250]);
+  const totals=[catRows.find(r=>r[1]==="TOTAL SIN PLAN"),catRows.find(r=>r[1]==="TOTAL DEL PLAN")];
+  assert.deepEqual(totals.map(r=>r.slice(3,6)),[[1,1000,1],[1.05,1100,1100/1050]]);
   const igf=w.getWorksheet("IGF");let resultRow;
   igf.eachRow(row=>{if(row.getCell(1).value==="Resultado final ($)")resultRow=row;});
   assert.equal(resultRow.getCell(3).value,result.scenario.result);
@@ -332,16 +335,36 @@ test("ARR reference and closing categories preserve known zero, missing coverage
       {name:"Crédito",category:"Casa",subcategory:"Auto",real:10,base:50,continuity:2},
       {name:"Contado",category:"Casa",subcategory:"Portátil",real:0,base:0,continuity:null},
     ]};
-  const values=(ref,rows)=>writeCategories(new ExcelJS.Workbook(),ref,rows).getSheetValues().filter(Boolean);
+  const values=(ref,rows)=>{
+    const scenario=calculate({margin:6,rows},{},{...anchor,q:.2,d:1.5}).scenario;
+    return writeCategories(new ExcelJS.Workbook(),ref,{rows,scenario}).getSheetValues().filter(Boolean);
+  };
   const rows=values(base,[r]), idx=rows.findIndex(line=>line[1]?.startsWith("Cierre por categoría"));
   const after=rows.slice(idx), detail=after.find(line=>line[1]===r.name);
   assert.deepEqual(rows.find(line=>line[1]==="CASA").slice(2,6),["Auto",.15,200,200/150]);
   assert.deepEqual(after.find(line=>line[2]==="Auto").slice(3,5),[.11,120]);
   assert.deepEqual(after.find(line=>line[2]==="Portátil").slice(3,5),[.06,240]);
   assert.equal(after.find(line=>line[1]==="COMISIONISTA")[6],"Descuento pendiente");
+  assert.equal(after.find(line=>line[1]==="Conciliación con el pronóstico")[4],undefined);
   assert.deepEqual([detail[4],detail[6],detail[7],detail[8]],[.02,240,160,-40]);
   assert.equal(values(base,[]).at(-1)[8],0);
   assert.ok(values({rows:[]},[r]).some(line=>line[1]?.startsWith("Sin base ARR")));
+});
+test("without buyers both Categorías totals match the unchanged IGF including zero and missing category detail",async()=>{
+  const s=source();
+  for(const [rate,groups] of [[3.5720034115,[{category:"CASA",subcategory:"Auto",kg:1000,discount_amount:3716.65}]],[0,[]]]){
+    const base={...anchor,d:rate};
+    const result=calculate(s,{},base);
+    const buf=await workbook({plant:"Prueba",period:{year:2026,month:11},cutoff:"2026-11-06",mode:"igf_diario",
+      anchor:base,source:s,result,categoryBase:{rows:groups},contacts:[]});
+    const book=new ExcelJS.Workbook();await book.xlsx.load(buf);
+    const records=name=>new Map(book.getWorksheet(name).getSheetValues().filter(Boolean).map(r=>[r[1],r]));
+    const cat=records("Categorías"),igf=records("IGF");
+    for(const [label,column] of [["TOTAL SIN PLAN",2],["TOTAL DEL PLAN",3]]){
+      assert.deepEqual(cat.get(label).slice(3,6),["Venta (t)","Descuentos ($)","Descuento medio ($/kg)"].map(k=>igf.get(k)[column]));
+      assert.ok(Math.abs(cat.get(label)[5]-rate)<1e-12);
+    }
+  }
 });
 test("reopening a point resolves its source only under its stored plant/period/id",async()=>{
   const q=[];const client={query:async(sql,args)=>{q.push([sql,args]);return {rows:[]};}};

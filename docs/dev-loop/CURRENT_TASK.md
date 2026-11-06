@@ -1,6 +1,6 @@
 # Plan al cierre · Total del pronóstico en Categorías
 task_id: FIX-IGF-CATEGORIAS-TOTAL-PRONOSTICO
-status: AUTHORIZED
+status: IN_PROGRESS
 authorized_by: HUMAN_APPROVER
 human_authorization: "Sí, corrígelo y publícalo"
 authorization_channel: "Continuación de la corrección autorizada del descuento del tablero. El usuario señala el total de Categorías y aclara que el pronóstico sin plan es la base."
