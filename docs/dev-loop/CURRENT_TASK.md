@@ -1,6 +1,6 @@
 # HG editable en Plan al cierre
 task_id: "IMPL-IGF-PLAN-AL-CIERRE-HG"
-status: DONE_PENDING_REVIEW
+status: CLOSED
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-11-06T13:13:31-06:00"
 human_authorization: "Sí, autorizo el HG editable"
