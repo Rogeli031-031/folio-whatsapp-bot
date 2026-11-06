@@ -9,7 +9,7 @@ type PlanRow=Change & {id:string;name:string;real:number;actual:number|null;base
 type Source={margin:number;rows:PlanRow[];revision:string;origin?:string;through?:string};
 type DiscountSource=keyof typeof DISCOUNT_LABELS;
 type Data={source:Source;edits:Record<string,Change>;version?:number;anchor?:Anchor;comments?:string;hg_percent?:number|null;
-  discount_source:DiscountSource;discount_rates?:Partial<Record<DiscountSource,number|null>>;discount_revision?:string};
+  discount_source:DiscountSource;discount_rates?:Partial<Record<DiscountSource,number|null>>;discount_revision?:string;legacy_weighted?:boolean};
 type Props={year:number;month:number;plant:string;cutoff:string;mode:string;token:string;id?:string;anchor:Anchor|null;onSaved:(row:any)=>void};
 const show=(v:number|null|undefined,digits=2)=>v==null||!Number.isFinite(v)?"—":v.toLocaleString("es-MX",{maximumFractionDigits:digits});
 const amount=(v:number|null|undefined)=>v==null?"—":"$"+show(v,0);
@@ -79,7 +79,7 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
         if(check.hgError)throw Error(check.hgError);
         setHgText(String(importedHg));
       }
-      setDiscountSource(importedSource);setEdits(next);setImported("Se cargaron los compradores, las metas y la base de descuento de "+file.name+".");
+      setDiscountSource(importedSource);setEdits(next);setImported("Se cargaron los compradores y las metas de "+file.name+". Base aplicada: "+DISCOUNT_LABELS[importedSource]+".");
     }catch(e){setError((e as Error).message);}finally{lock.current=false;setBusy(false);}
   }
   async function submit(action:"excel"|"save"){
@@ -107,13 +107,14 @@ export default function IgfPlanAlCierre({year,month,plant,cutoff,mode,token,id,a
       </div>
       <fieldset className="rounded border border-slate-600 p-3">
         <legend className="px-1 font-semibold">Descuento base del plan</legend>
+        {data.legacy_weighted&&<p className="mb-2 text-amber-300">Este punto se guardó con el ponderado por cliente. Aquí se recalcula con el descuento del tablero. Guarda los cambios para actualizar su gráfica.</p>}
         <div className="flex flex-wrap gap-2">
           {(Object.keys(DISCOUNT_LABELS) as DiscountSource[]).filter(k=>k!=="forecast"||mode==="forecast").map(k=>{
             const rate=data.discount_rates?.[k];
             return <label key={k} className="flex items-center gap-2 rounded bg-slate-800 px-3 py-2">
               <input type="radio" name="plan-descuento-base" aria-label={DISCOUNT_LABELS[k]} checked={discountSource===k}
                 disabled={busy||rate==null} onChange={()=>setDiscountSource(k)}/>
-              <span>{DISCOUNT_LABELS[k]} · {rate==null?"Sin tasa al corte":show(rate,4)+" $/kg"}
+              <span>{DISCOUNT_LABELS[k]} · {rate==null?"Sin tasa al corte":show(rate===0?0:-rate,4)+" $/kg"}
                 {plan.comparisons[k]&&<strong className="block">Utilidad {amount(plan.comparisons[k].result)}</strong>}</span>
             </label>;
           })}

@@ -2,7 +2,7 @@
 const {hgCostFromPercent, modelWithHg} = require("./igf-simulation");
 
 const HG_PERCENT_LABEL = "HG (% de la venta)";
-const DISCOUNT_LABELS = {igf_diario:"IGF Diario",arr:"ARR",forecast:"IGF Forecast"};
+const DISCOUNT_LABELS = {igf_diario:"IGF Diario",arr_tablero:"ARR del tablero",forecast:"IGF Forecast"};
 const DISCOUNT_SOURCE_ROW = "Fuente de descuento base";
 
 function baseHgPercent(anchor) {
@@ -114,6 +114,7 @@ function readPlanHg(sheets) {
 function readDiscountSource(sheets,originalMode) {
   const row=sheets.IGF?.find(r=>r[0]===DISCOUNT_SOURCE_ROW);
   if(!row)return originalMode; // Old exports used the financial source of the point.
+  if(row[1]==="ARR")return "arr_tablero"; // Import buyer inputs and recalculate the older workbook with the board rate.
   const key=Object.keys(DISCOUNT_LABELS).find(k=>DISCOUNT_LABELS[k]===row[1]);
   if(!key)throw Error("La fuente de descuento base del Excel no es válida.");
   return key;

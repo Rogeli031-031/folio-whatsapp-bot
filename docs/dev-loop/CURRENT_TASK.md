@@ -1,6 +1,6 @@
 # Plan al cierre · Descuento mensual del tablero ARR
 task_id: FIX-IGF-PLAN-DESCUENTO-TABLERO
-status: AUTHORIZED
+status: IN_PROGRESS
 authorized_by: HUMAN_APPROVER
 human_authorization: "Sí, corrígelo y publícalo"
 authorization_channel: "Chat IA en Tomza, 2026-11-06 (hora de México)"
