@@ -1,6 +1,6 @@
 # Categorías y compradores seleccionados en la descarga del plan
 task_id: "FIX-IGF-PLAN-CATEGORIAS-SELECCION"
-status: AUTHORIZED
+status: IN_PROGRESS
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-11-06T13:41:03-06:00"
 human_authorization: "Sí, autorizo la corrección"
