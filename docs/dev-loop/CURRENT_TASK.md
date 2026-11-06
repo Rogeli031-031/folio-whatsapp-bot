@@ -1,32 +1,17 @@
-# Plan al cierre · Fuente de descuento
-task_id: "IMPL-IGF-PLAN-BASE-DESCUENTO"
-status: CLOSED
-authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-11-06T14:16:41-06:00"
-human_authorization: "Sí, autorizo el selector"
-authorization_channel: "Chat IA en Tomza; autorización para registrar esta ficha."
-base_sha: "88b3a9a78b0e3e836d26057a665dbfa0e5b7397b"
-branch: "feat/igf-plan-base-descuento"
-objective: "Comparar y elegir el descuento base ARR o IGF Diario con idéntica venta y propuestas, conciliando utilidad del plan, punto en la gráfica y Excel."
-in_scope:
-  - "Servicio, cálculo, exportación e importación de Plan al cierre y sus consumidores directos en el simulador."
-  - "Reutilizar la referencia ARR y el cálculo de descuento IGF Diario del corte, con pruebas específicas y reporte."
-out_of_scope:
-  - "Modificar las series oficiales de ARR, IGF, DICF, proyecciones, clientes, descuentos registrados, permisos o puntos productivos."
-contracts_in_force:
-  - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
-  - "docs/dev-loop/LOOP_PROTOCOL.md"
-allowed_actions:
-  - "Implementar y probar con datos sintéticos o en lectura. Subir la rama y abrir la solicitud para revisión."
-forbidden_actions:
-  - "Escribir en producción, fingir tasas faltantes o fusionar esta rama sin instrucción humana."
-acceptance:
-  - "Usar los mismos kg base y los mismos kg de plan para ambos cálculos; respetar cambios netos por comprador, HG y gastos."
-  - "Identificar fuente y resultado al comparar, guardar y reabrir; paridad con gráfica y Excel; compatibilidad con puntos y libros previos."
-  - "Verificar el ejemplo #18 y las seis plantas, descuentos cero, faltantes e intentos de usar referencias obsoletas."
+# Plan al cierre · Descuento mensual del tablero ARR
+task_id: FIX-IGF-PLAN-DESCUENTO-TABLERO
+status: AUTHORIZED
+authorized_by: HUMAN_APPROVER
+human_authorization: "Sí, corrígelo y publícalo"
+authorization_channel: "Chat IA en Tomza, 2026-11-06 (hora de México)"
+branch: fix/igf-plan-descuento-tablero
+base_sha: 38b2cff9e862966adf950fa0ceab033d3b78e12d
+objective: "Usar el descuento mensual del tablero ARR para la simulación, con los kilos y propuestas del IGF al mismo corte."
+in_scope: "Las seis plantas. Pantalla, gráfica, puntos, Excel y compatibilidad de los escenarios anteriores; el ponderado por cliente se identifica en el desglose."
+out_of_scope: "Actualizar datos financieros oficiales o sobrescribir propuestas de usuarios en producción."
+contracts_in_force: "Constitución, índice de arquitectura y protocolo del desarrollo supervisado."
+allowed_actions: "Implementar, probar, publicar la rama, crear PR, integrar con squash tras validar y verificar el despliegue."
+forbidden_actions: "Fijar la tasa del ejemplo, redondear antes de calcular o modificar datos en producción durante las pruebas."
+acceptance: "Paridad con la columna mensual en las seis plantas; un mismo corte y fuente produce igual utilidad en el simulador, la gráfica y el Excel."
+result_report_path: docs/dev-loop/reports/FIX-IGF-PLAN-DESCUENTO-TABLERO.md
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-PLAN-BASE-DESCUENTO.md"
-
-merged_pr: 175
-production_sha: 38b2cff9e862966adf950fa0ceab033d3b78e12d
