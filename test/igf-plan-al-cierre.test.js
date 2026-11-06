@@ -78,7 +78,7 @@ test("a legacy plan point can change HG repeatedly, export and reopen on the ori
     if(/^(BEGIN|ROLLBACK|COMMIT|CREATE)/.test(sql))return {rows:[]};
     throw Error(sql);
   }};
-  const run=(action,more={})=>handle(client,{plantaId:1,canon:"Puebla"},{year:2026,month:11},{...request,action,...more});
+  const run=(action,more={})=>handle(client,{plantaId:1,canon:"Puebla"},{year:2026,month:11},{...request,action,...more},async()=>({rows:[]}));
   assert.equal((await run("open")).hg_percent,null);
   for(const [index,pct] of [8,0,-1.5].entries()){
     const {version}=await run("open");
@@ -182,12 +182,20 @@ test("xlsx follows the on-screen order, unit conversion, account and category to
   const s=source(),b=s.rows.find(r=>r.name==="Cliente B");
   const result=calculate(s,{[b.id]:{goal:50,rate:2,selected:true}},anchor);
   const buf=await workbook({plant:"Prueba",period:{year:2026,month:11},cutoff:"2026-11-05",mode:"igf_diario",anchor,source:s,result,
+    categoryBase:{rows:[{category:"CASA",subcategory:"A",kg:1000,discount_amount:1250}]},
     contacts:[{cliente_nombre_norm:"cliente b",telefono:"0000000000"}]});
   const w=new ExcelJS.Workbook();await w.xlsx.load(buf);
   const p=w.getWorksheet("Plan al cierre");
   assert.equal(p.getCell("A2").value,"Cliente B");assert.equal(p.getCell("G2").value,0.05);
   assert.equal(p.getCell("I2").value,200);assert.equal(p.getCell("L2").value,"0000000000");
-  assert.equal(w.getWorksheet("Categorías").getRow(2).getCell(4).value,110);
+  const catRows=w.getWorksheet("Categorías").getSheetValues().filter(Boolean);
+  assert.deepEqual(catRows.find(r=>r[1]==="CASA").slice(2,6),["A",1,1250,1.25]);
+  const selection=catRows.slice(catRows.findIndex(r=>String(r[1]).startsWith("Plan al cierre ·")));
+  assert.deepEqual(selection.filter(r=>r[1]==="Cliente B").map(r=>r[4]),[.05]);
+  assert.ok(!selection.some(r=>r[1]==="Cliente A"||r[1]==="Cliente C"));
+  assert.equal(selection.at(-1)[8],result.scenario.commercial);
+  const totals=catRows.filter(r=>r[1]==="TOTAL");
+  assert.deepEqual(totals.map(r=>[r[3],r[4]]),[[1,1250],[1.05,1350]]);
   const igf=w.getWorksheet("IGF");let resultRow;
   igf.eachRow(row=>{if(row.getCell(1).value==="Resultado final ($)")resultRow=row;});
   assert.equal(resultRow.getCell(3).value,result.scenario.result);
@@ -209,6 +217,35 @@ test("all plan operations enforce the same plant and financial-role authorizatio
     assert.equal(res.code,403);
   }
   assert.equal(queries,0);
+});
+
+test("ARR reference and closing categories preserve known zero, missing coverage and account transfers",async()=>{
+  const {loadCategoryBase}=require("../lib/igf-simulation-category-base");
+  const {writeCategories}=require("../lib/igf-plan-al-cierre-categorias");
+  const base=await loadCategoryBase({}, {canon:"Alias",provinciaPlantCode:"Catálogo"}, {year:2026,month:11},
+    "2026-11-06",200,async(_client,y,m,plant,opt)=>{
+      assert.deepEqual([y,m,plant,opt.targetKgOverride,opt.salesThrough,opt.fechaHasta],[2026,11,"Catálogo",200,"2026-11-05","2026-11-05"]);
+      return {rows:[
+        {categoria:"Casa",subcategoria:"Auto",kg:2,kgProy:100,descKg:2},
+        {categoria:"Casa",subcategoria:"Auto",kg:1,kgProy:50,descKg:null,hasDiscountRow:false},
+        {categoria:"Comisionista",subcategoria:"Otra",kg:0,kgProy:50,descKg:null},
+      ]};
+    });
+  const r={name:"Un comprador",future:"Contado",real:10,base:50,goal:70,rate:4,selected:true,
+    kgDelta:20,costDelta:160,gain:-40,accounts:[
+      {name:"Crédito",category:"Casa",subcategory:"Auto",real:10,base:50,continuity:2},
+      {name:"Contado",category:"Casa",subcategory:"Portátil",real:0,base:0,continuity:null},
+    ]};
+  const values=(ref,rows)=>writeCategories(new ExcelJS.Workbook(),ref,rows).getSheetValues().filter(Boolean);
+  const rows=values(base,[r]), idx=rows.findIndex(line=>line[1]?.startsWith("Cierre por categoría"));
+  const after=rows.slice(idx), detail=after.find(line=>line[1]===r.name);
+  assert.deepEqual(rows.find(line=>line[1]==="CASA").slice(2,6),["Auto",.15,200,200/150]);
+  assert.deepEqual(after.find(line=>line[2]==="Auto").slice(3,5),[.11,120]);
+  assert.deepEqual(after.find(line=>line[2]==="Portátil").slice(3,5),[.06,240]);
+  assert.equal(after.find(line=>line[1]==="COMISIONISTA")[6],"Descuento pendiente");
+  assert.deepEqual([detail[4],detail[6],detail[7],detail[8]],[.02,240,160,-40]);
+  assert.equal(values(base,[]).at(-1)[8],0);
+  assert.ok(values({rows:[]},[r]).some(line=>line[1]?.startsWith("Sin base ARR")));
 });
 test("reopening a point resolves its source only under its stored plant/period/id",async()=>{
   const q=[];const client={query:async(sql,args)=>{q.push([sql,args]);return {rows:[]};}};
