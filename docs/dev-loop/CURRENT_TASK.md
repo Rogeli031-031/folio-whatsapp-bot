@@ -1,6 +1,6 @@
 # Plan al cierre · Fuente de descuento
 task_id: "IMPL-IGF-PLAN-BASE-DESCUENTO"
-status: DONE_PENDING_REVIEW
+status: CLOSED
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-11-06T14:16:41-06:00"
 human_authorization: "Sí, autorizo el selector"
@@ -27,3 +27,6 @@ acceptance:
   - "Verificar el ejemplo #18 y las seis plantas, descuentos cero, faltantes e intentos de usar referencias obsoletas."
 max_attempts: 1
 result_report_path: "docs/dev-loop/reports/IMPL-IGF-PLAN-BASE-DESCUENTO.md"
+
+merged_pr: 175
+production_sha: 38b2cff9e862966adf950fa0ceab033d3b78e12d
