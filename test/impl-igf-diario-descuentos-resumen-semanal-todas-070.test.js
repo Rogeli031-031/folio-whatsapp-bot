@@ -147,10 +147,10 @@ test("AK queda en la columna 37 y el comentario no se mueve", () => {
   assert.equal(ws.getCell(row, 37).value.richText[1].text, "$0.278/kg");
   assert.equal(ws.getColumn(36).hidden, true);
   assert.equal(ws.getColumn(37).hidden, false);
-  assert.equal(ws.getColumn(38).hidden, true);
+  assert.equal(ws.getColumn(38).hidden, false);
 });
 
-test("octubre inserta DESCUENTOS en AK y corre los auxiliares a AL y AM", () => {
+test("octubre conserva DESCUENTOS en AK y libera AL para el resumen", () => {
   const wb = new ExcelJS.Workbook();
   igf.fillIgfDiarioPuebla(wb, {
     year: 2026,
@@ -174,7 +174,7 @@ test("octubre inserta DESCUENTOS en AK y corre los auxiliares a AL y AM", () => 
   assert.equal(ws.getCell(5, 36).value, "VENTAS");
   assert.equal(ws.getCell(5, 37).value, "DESCUENTOS");
   assert.equal(ws.getColumn(37).hidden, false);
-  assert.equal(ws.getColumn(38).hidden, true);
+  assert.equal(ws.getColumn(38).hidden, false);
   assert.equal(ws.getColumn(39).hidden, true);
   let row = null;
   for (let r = 1; r <= 80; r += 1) {

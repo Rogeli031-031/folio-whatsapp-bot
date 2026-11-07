@@ -1,6 +1,6 @@
 # IGF Diario · Resumen de compras, venta y HG en AL
 task_id: IMPL-IGF-DIARIO-RESUMEN-COMPRAS-HG-AL
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 authorized_by: HUMAN_APPROVER
 authorized_at: 2026-11-07T11:31:40-06:00
 human_authorization: "Sí, implementar y publicar"
