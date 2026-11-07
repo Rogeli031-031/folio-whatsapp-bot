@@ -1,16 +1,19 @@
-# Plan al cierre · Total del pronóstico en Categorías
-task_id: FIX-IGF-CATEGORIAS-TOTAL-PRONOSTICO
-status: DONE_PENDING_REVIEW
+# IGF Diario · Resumen de compras, venta y HG en AL
+task_id: IMPL-IGF-DIARIO-RESUMEN-COMPRAS-HG-AL
+status: AUTHORIZED
 authorized_by: HUMAN_APPROVER
-human_authorization: "Sí, corrígelo y publícalo"
-authorization_channel: "Continuación de la corrección autorizada del descuento del tablero. El usuario señala el total de Categorías y aclara que el pronóstico sin plan es la base."
-base_sha: 90cb1ec63a010b44f60a20f0f83483996c73b43d
-branch: fix/igf-categorias-total-pronostico
-objective: "Conciliar el total base y del plan de la hoja Categorías con el IGF para el mismo corte y selección."
-in_scope: "Exportador de Plan al cierre, pruebas y verificación de la descarga. Identificar la diferencia entre el desglose por compradores y el pronóstico."
-out_of_scope: "Cambios a descuentos de cuentas, al cálculo de rentabilidad, a los datos productivos o a los puntos guardados."
-contracts_in_force: "Constitución, índice de arquitectura y protocolo de desarrollo supervisado."
-allowed_actions: "Implementar, probar, integrar y verificar la publicación de la corrección autorizada."
-acceptance: "Sin propuestas el descuento de cierre es el de la base. Con selección, kilos, importe y tasa de cierre coinciden con la hoja IGF. Preservar los descuentos identificados en cada categoría y mostrar por separado la diferencia."
-result_report_path: docs/dev-loop/reports/FIX-IGF-CATEGORIAS-TOTAL-PRONOSTICO.md
+authorized_at: 2026-11-07T11:31:40-06:00
+human_authorization: "Sí, implementar y publicar"
+authorization_channel: "Respuesta explícita en este chat a registrar la nueva tarea y publicarla para las seis plantas tras probarla. Registro de recepción de la autorización."
+human_percentage_choice: "Venta total — 3.16 %"
+base_sha: 4d684a5f006b0b2cd07af18bffd44746740cfe2c
+branch: feat/igf-diario-resumen-compras-hg
+objective: "Agregar en AL del Excel IGF Diario de cada planta el resumen diario de compras, venta total, saldo compras menos ventas y HG registrado en kg y porcentaje de venta total."
+in_scope: "Exportador IGF Diario de las seis plantas, lectura de columnas de compras por encabezado y fecha, desplazamiento de auxiliares que ocupan AL, pruebas y verificación de descarga."
+out_of_scope: "Cambiar datos productivos, fórmulas financieras existentes, inferir inventario medido, sumar HG al saldo compras menos ventas, modificar contratos o Plan al cierre."
+contracts_in_force: "Constitución, índice de arquitectura y LOOP_PROTOCOL consultados. La autorización expresa del usuario permite registrar su respuesta y ejecutar la publicación."
+allowed_actions: "Registrar autorización, implementar, probar, commit, push de rama, crear PR, Squash and merge y verificar despliegue y Excel."
+forbidden_actions: "Mezclar cambios ajenos, publicar secretos, reemplazar faltantes por cero o atribuir causalidad al HG."
+acceptance: "Tehuacán 06/11/2026 compras 23670 kg, venta 12259.60 kg, saldo 11410.40 kg y HG 388 kg sobre venta total 3.16 %. Preservar ceros explícitos y diferenciar faltantes. Marcar proyecciones. Comprobar seis plantas, fechas, fórmula, auxiliares y archivo exportado."
+result_report_path: docs/dev-loop/reports/IMPL-IGF-DIARIO-RESUMEN-COMPRAS-HG-AL.md
 max_attempts: 1
