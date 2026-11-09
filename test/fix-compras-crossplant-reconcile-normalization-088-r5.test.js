@@ -176,6 +176,73 @@ describe("FIX-COMPRAS-CROSSPLANT-RECONCILE-NORMALIZATION-088-R5", () => {
     assert.ok(unknown.errors.some((e) => e.code === "UNKNOWN_ORIGIN"));
   });
 
+  it("PEMEX TEPEJI usa la columna TEPEJI en las seis plantas", async () => {
+    for (const [a1, plantName] of [
+      ["PUEBLA", "Puebla"], ["TEHUACAN", "Tehuacán"], ["MORELOS", "Morelos"],
+      ["SAN LUIS POTOSI", "San Luis"], ["QUERETARO", "Querétaro"],
+      ["URIBE", "Acapulco"], ["HIDROGAS", "Acapulco"],
+    ]) {
+      const plan = await planOf([{ name: "NOVIEMBRE", a1, rows: [
+        { origin: "PEMEX TUXPAN", kg: 80, fecha: "2026-11-04", importe: 800 },
+        { origin: "PEMEX TEPEJI", kg: 100, fecha: "2026-11-08", importe: 1000 },
+        { origin: " pemex   tepeji ", kg: 120, fecha: "2026-11-08", importe: 1200 },
+      ] }], { plantName, desde: "2026-11-04", hasta: "2026-11-08" });
+      assert.equal(plan.ok, true, a1);
+      assert.equal(plan.excel_rows, 3);
+      assert.equal(plan.kg_excel, 300);
+      assert.equal(plan.importe_excel, 3000);
+      assert.deepEqual(plan.by_provider["TOMZA TEPEJI"], { kg: 220, importe: 2200, rows: 2 });
+      assert.equal(plan.by_provider["PEMEX TEPEJI"], undefined);
+    }
+    const unknown = await planOf([{ name: "OCTUBRE", a1: "PUEBLA", rows: [
+      { origin: "PEMEX TEPEJII", kg: 100, fecha: "2026-10-02", importe: 1000 },
+    ] }], { plantName: "Puebla" });
+    assert.equal(unknown.ok, false);
+    assert.ok(unknown.errors.some((e) => e.code === "UNKNOWN_ORIGIN"));
+  });
+
+  it("PEMEX TEPEJI concilia URIBE sin duplicar proveedor ni tocar facturas, HG o HIDROGAS", async () => {
+    const parsed = await compras.parseComprasExcelBuffer(await workbook([{
+      name: "NOVIEMBRE", a1: "URIBE", rows: [
+        { origin: "PEMEX TEPEJI", kg: 100, fecha: "2026-11-08", importe: 1000 },
+        { origin: "PEMEX TEPEJI", kg: 120, fecha: "2026-11-08", importe: 1200 },
+      ],
+    }]));
+    const mem = new Mem();
+    mem.seq = 100;
+    mem.providers.push({ id: 1, nombre: "TOMZA TEPEJI" });
+    mem.purchases.push(
+      { id: 10, fecha: "2026-11-08", kg: 100, importe: 990, proveedor_id: 1, proveedor_nombre: "TOMZA TEPEJI" },
+      { id: 11, fecha: "2026-11-08", kg: 50, importe: 500, proveedor_id: 1, proveedor_nombre: "TOMZA TEPEJI" }
+    );
+    mem.meta.push({ compra_id: 10, source_company: "URIBE" }, { compra_id: 11, source_company: "HIDROGAS" });
+    mem.docs.push({ compra_id: 10 });
+    mem.hg.push({ id: 1, fecha: "2026-11-08", hg_kilos: 15 });
+    const before = mem.dump();
+    const input = spec(parsed, { plantName: "Acapulco", desde: "2026-11-04", hasta: "2026-11-08", request_id: "pemex-tepeji" });
+    const preview = await compras.runComprasExcelImport(mem, { ...input, mode: "preview" });
+    assert.equal(preview.status, 200);
+    assert.equal(preview.body.reconciled_with_invoice, 1);
+    assert.equal(preview.body.nuevas, 1);
+    assert.equal(preview.body.kg_excel, 220);
+    assert.deepEqual(mem.dump(), before);
+    const commit = await compras.runComprasExcelImport(mem, input);
+    assert.equal(commit.status, 200);
+    assert.equal(mem.purchases.length, 3);
+    assert.deepEqual(mem.providers, before.providers);
+    assert.deepEqual(mem.docs, before.docs);
+    assert.deepEqual(mem.hg, before.hg);
+    assert.deepEqual(mem.purchases.find((p) => p.id === 11), before.purchases.find((p) => p.id === 11));
+    assert.equal(mem.purchases.find((p) => p.id === 10).importe, 990);
+    assert.equal(mem.effective.find((p) => p.compra_id === 10).excel_importe, 1000);
+    assert.equal(mem.meta.find((p) => p.compra_id !== 10 && p.compra_id !== 11).origin_text, "PEMEX TEPEJI");
+    const retry = await compras.runComprasExcelImport(mem, { ...input, request_id: "pemex-tepeji-repeat" });
+    assert.equal(retry.status, 200);
+    assert.equal(mem.purchases.length, 3);
+    assert.deepEqual(mem.docs, before.docs);
+    assert.deepEqual(mem.hg, before.hg);
+  });
+
   it("C A1 SAN LUIS POTOSI resuelve San Luis", async () => {
     const plan = await planOf([{ name: "OCTUBRE", a1: "SAN LUIS POTOSÍ", rows: [{ origin: "PEMEX TUXPAN", kg: 5, fecha: "2026-10-03", importe: 50 }] }], { plantName: "San Luis" });
     assert.equal(plan.ok, true);

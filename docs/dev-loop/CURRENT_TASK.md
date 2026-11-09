@@ -1,19 +1,18 @@
-# IGF Diario · Resumen de compras, venta y HG en AL
-task_id: IMPL-IGF-DIARIO-RESUMEN-COMPRAS-HG-AL
+# Compras · Reconocer PEMEX TEPEJI en la columna existente
+task_id: FIX-COMPRAS-PEMEX-TEPEJI-ALIAS
 status: DONE_PENDING_REVIEW
 authorized_by: HUMAN_APPROVER
-authorized_at: 2026-11-07T11:31:40-06:00
-human_authorization: "Sí, implementar y publicar"
-authorization_channel: "Respuesta explícita en este chat a registrar la nueva tarea y publicarla para las seis plantas tras probarla. Registro de recepción de la autorización."
-human_percentage_choice: "Venta total — 3.16 %"
-base_sha: 4d684a5f006b0b2cd07af18bffd44746740cfe2c
-branch: feat/igf-diario-resumen-compras-hg
-objective: "Agregar en AL del Excel IGF Diario de cada planta el resumen diario de compras, venta total, saldo compras menos ventas y HG registrado en kg y porcentaje de venta total."
-in_scope: "Exportador IGF Diario de las seis plantas, lectura de columnas de compras por encabezado y fecha, desplazamiento de auxiliares que ocupan AL, pruebas y verificación de descarga."
-out_of_scope: "Cambiar datos productivos, fórmulas financieras existentes, inferir inventario medido, sumar HG al saldo compras menos ventas, modificar contratos o Plan al cierre."
-contracts_in_force: "Constitución, índice de arquitectura y LOOP_PROTOCOL consultados. La autorización expresa del usuario permite registrar su respuesta y ejecutar la publicación."
-allowed_actions: "Registrar autorización, implementar, probar, commit, push de rama, crear PR, Squash and merge y verificar despliegue y Excel."
-forbidden_actions: "Mezclar cambios ajenos, publicar secretos, reemplazar faltantes por cero o atribuir causalidad al HG."
-acceptance: "Tehuacán 06/11/2026 compras 23670 kg, venta 12259.60 kg, saldo 11410.40 kg y HG 388 kg sobre venta total 3.16 %. Preservar ceros explícitos y diferenciar faltantes. Marcar proyecciones. Comprobar seis plantas, fechas, fórmula, auxiliares y archivo exportado."
-result_report_path: docs/dev-loop/reports/IMPL-IGF-DIARIO-RESUMEN-COMPRAS-HG-AL.md
+authorized_at: 2026-11-09T14:09:33-06:00
+human_authorization: "Usar la columna actual de TEPEJI"
+authorization_channel: "Respuesta explícita en este chat a la clasificación de las compras PEMEX TEPEJI reportadas. Fecha de registro de recepción."
+base_sha: c98af2c07e433a13c78674322060b9581a544344
+branch: fix/compras-pemex-tepeji-alias
+objective: "Reconocer el origen PEMEX TEPEJI del Excel de compras como el proveedor canónico TOMZA TEPEJI."
+in_scope: "Alias exacto en lib/compras-dashboard.js, pruebas de conciliación y registro de validación."
+out_of_scope: "Cambiar HG, aplicar compras en producción, crear un proveedor distinto, modificar contratos o incorporar otros cambios."
+contracts_in_force: "Constitución, índice de arquitectura y LOOP_PROTOCOL. La decisión del usuario se registra por chat conforme a su preferencia vigente."
+allowed_actions: "Registrar la decisión, implementar, probar, commit, push de rama y preparar PR para revisión."
+forbidden_actions: "Mezclar cambios ajenos, publicar archivos privados, aplicar conciliaciones productivas o integrar/desplegar sin autorización de publicación de esta corrección."
+acceptance: "Reconoce el alias en seis plantas; reutiliza TOMZA TEPEJI; conserva facturas, HG y separación URIBE/HIDROGAS; rechaza nombres desconocidos; prueba el archivo reportado solo en lectura."
+result_report_path: docs/dev-loop/reports/FIX-COMPRAS-PEMEX-TEPEJI-ALIAS.md
 max_attempts: 1
