@@ -11,8 +11,10 @@ objective: "Reconocer el origen PEMEX TEPEJI del Excel de compras como el provee
 in_scope: "Alias exacto en lib/compras-dashboard.js, pruebas de conciliación y registro de validación."
 out_of_scope: "Cambiar HG, aplicar compras en producción, crear un proveedor distinto, modificar contratos o incorporar otros cambios."
 contracts_in_force: "Constitución, índice de arquitectura y LOOP_PROTOCOL. La decisión del usuario se registra por chat conforme a su preferencia vigente."
-allowed_actions: "Registrar la decisión, implementar, probar, commit, push de rama y preparar PR para revisión."
-forbidden_actions: "Mezclar cambios ajenos, publicar archivos privados, aplicar conciliaciones productivas o integrar/desplegar sin autorización de publicación de esta corrección."
+allowed_actions: "Registrar la decisión, implementar, probar, commit, push de rama, crear PR, Squash and merge y verificar despliegue."
+publication_authorization: "adelante a produccion"
+publication_authorization_channel: "Respuesta explícita del usuario en este chat a integrar y publicar la PR #179."
+forbidden_actions: "Mezclar cambios ajenos, publicar archivos privados o aplicar conciliaciones productivas."
 acceptance: "Reconoce el alias en seis plantas; reutiliza TOMZA TEPEJI; conserva facturas, HG y separación URIBE/HIDROGAS; rechaza nombres desconocidos; prueba el archivo reportado solo en lectura."
 result_report_path: docs/dev-loop/reports/FIX-COMPRAS-PEMEX-TEPEJI-ALIAS.md
 max_attempts: 1

@@ -42,3 +42,9 @@ node --test test/fix-compras-crossplant-reconcile-normalization-088-r5.test.js t
 - Desvíos: ninguno. Autorización registrada por chat según la preferencia expresa vigente.
 - secrets_check: no se agregan credenciales, archivos privados ni datos productivos.
 - Publicación pendiente; no se aplicó ninguna conciliación productiva.
+
+## Autorización de publicación · 2026-11-09
+
+El usuario respondió «adelante a produccion» a integrar y publicar la PR #179.
+Se autoriza Squash and merge y verificación del despliegue. El código y las
+pruebas permanecen idénticos a la revisión validada; solo se registra esta decisión.
