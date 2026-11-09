@@ -101,6 +101,13 @@ test("sin fuentes conserva faltantes y la división requiere venta positiva", ()
   assert.match(f, /sin base de venta positiva/);
   assert.doesNotMatch(f, /#REF!|undefined|null/);
   ws.eachRow((row) => {
-    if (typeof row.getCell(1).value === "string" && /SEMANA|TOTAL MES/i.test(row.getCell(1).value)) assert.equal(row.getCell(38).value, null);
+    const label = String(row.getCell(1).value);
+    if (/SEMANA/i.test(label)) {
+      assert.match(row.getCell(38).value.formula, /%HG Semanal/);
+      assert.equal(ws.getCell(row.number, 41).value.formula, '""');
+      assert.equal(ws.getCell(row.number, 42).value.formula, '""');
+      assert.match(ws.getCell(row.number + 1, 38).value.formula, /sin dato/);
+    }
+    if (/TOTAL MES/i.test(label)) assert.equal(row.getCell(38).value, null);
   });
 });

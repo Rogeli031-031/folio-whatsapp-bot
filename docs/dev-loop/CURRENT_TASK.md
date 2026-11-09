@@ -1,20 +1,20 @@
-# Compras · Reconocer PEMEX TEPEJI en la columna existente
-task_id: FIX-COMPRAS-PEMEX-TEPEJI-ALIAS
+# IGF Diario · Resumen semanal de compras, venta y HG en AL
+task_id: IMPL-IGF-DIARIO-AL-RESUMEN-SEMANAL
 status: DONE_PENDING_REVIEW
 authorized_by: HUMAN_APPROVER
-authorized_at: 2026-11-09T14:09:33-06:00
-human_authorization: "Usar la columna actual de TEPEJI"
-authorization_channel: "Respuesta explícita en este chat a la clasificación de las compras PEMEX TEPEJI reportadas. Fecha de registro de recepción."
-base_sha: c98af2c07e433a13c78674322060b9581a544344
-branch: fix/compras-pemex-tepeji-alias
-objective: "Reconocer el origen PEMEX TEPEJI del Excel de compras como el proveedor canónico TOMZA TEPEJI."
-in_scope: "Alias exacto en lib/compras-dashboard.js, pruebas de conciliación y registro de validación."
-out_of_scope: "Cambiar HG, aplicar compras en producción, crear un proveedor distinto, modificar contratos o incorporar otros cambios."
-contracts_in_force: "Constitución, índice de arquitectura y LOOP_PROTOCOL. La decisión del usuario se registra por chat conforme a su preferencia vigente."
-allowed_actions: "Registrar la decisión, implementar, probar, commit, push de rama, crear PR, Squash and merge y verificar despliegue."
-publication_authorization: "adelante a produccion"
-publication_authorization_channel: "Respuesta explícita del usuario en este chat a integrar y publicar la PR #179."
-forbidden_actions: "Mezclar cambios ajenos, publicar archivos privados o aplicar conciliaciones productivas."
-acceptance: "Reconoce el alias en seis plantas; reutiliza TOMZA TEPEJI; conserva facturas, HG y separación URIBE/HIDROGAS; rechaza nombres desconocidos; prueba el archivo reportado solo en lectura."
-result_report_path: docs/dev-loop/reports/FIX-COMPRAS-PEMEX-TEPEJI-ALIAS.md
+authorized_at: 2026-11-09T14:58:02-06:00
+human_authorization: "en la columna AL en el resumen de cada semana, quiero que pongas el % HG generado"
+authorization_channel: "Solicitud directa de este chat, registrada conforme a la preferencia vigente del usuario de autorizar aquí."
+base_sha: b34b222adf8838fe37d1635107d9c3079684f53b
+branch: feat/igf-diario-al-resumen-semanal
+objective: "Mostrar en AL el HG porcentual semanal, HG en kg, compras, mezcla Tuxpan/Tepeji, venta total y diferencia compras menos venta."
+in_scope: "Generador Excel IGF Diario de las seis plantas (ambos formatos), módulo AL, pruebas de regresión y reporte."
+out_of_scope: "Datos productivos, resumen mensual, fórmulas financieras existentes, contratos, importación de compras y cambios ajenos."
+contracts_in_force: "Constitución, índice de arquitectura y LOOP_PROTOCOL, sin modificación."
+allowed_actions: "Registrar solicitud, implementar, probar, commit, push de rama, crear PR, Squash and merge y verificar producción."
+publication_authorization: "lo envias a produccion, aprobado"
+publication_authorization_channel: "Autorización explícita del usuario en este chat para este resumen semanal."
+forbidden_actions: "Mezclar cambios ajenos o publicar archivos privados."
+acceptance: "HG semanal = suma HG kg / suma venta total kg; mezcla de compras ponderada por kg; Tuxpan suma Pemex y Tomza; diferencia negativa roja, positiva verde y cero neutro; fórmulas recalculables, faltantes y proyecciones identificados; resumen diario conservado."
+result_report_path: docs/dev-loop/reports/IMPL-IGF-DIARIO-AL-RESUMEN-SEMANAL.md
 max_attempts: 1
