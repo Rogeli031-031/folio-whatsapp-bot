@@ -21,6 +21,7 @@ import ComoCambioModal from "@/components/ComoCambioModal";
 import DeltaVentaModal from "@/components/DeltaVentaModal";
 import DeltaDescuentoModal from "@/components/DeltaDescuentoModal";
 import DeltaIngresoModal from "@/components/DeltaIngresoModal";
+import DashboardIgfDiario from "@/components/DashboardIgfDiario";
 import PolizaModal from "@/components/PolizaModal";
 import ImprimirGastosModal from "@/components/ImprimirGastosModal";
 import CrearFolioModal from "@/components/CrearFolioModal";
@@ -41,6 +42,7 @@ function DashboardContent() {
   const [showDeltaVentaModal, setShowDeltaVentaModal] = useState(false);
   const [showDeltaDescuentoModal, setShowDeltaDescuentoModal] = useState(false);
   const [showDeltaIngresoModal, setShowDeltaIngresoModal] = useState(false);
+  const [showIgfDiario, setShowIgfDiario] = useState(false);
   const [polizaFolioId, setPolizaFolioId] = useState<number | null>(null);
   const [imprimirGastos, setImprimirGastos] = useState<{ id: number; numeroFolio: string; etapa?: string } | null>(null);
   const [crearFolio, setCrearFolio] = useState<{ planta_id: number; planta_nombre: string } | null>(null);
@@ -134,7 +136,7 @@ function DashboardContent() {
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex items-center justify-between border-b border-slate-700 bg-slate-900/50 px-4 py-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!isGA && (
             <Link
               href="/"
@@ -189,6 +191,11 @@ function DashboardContent() {
               </button>
             </>
           )}
+          <button type="button" onClick={() => setShowIgfDiario(true)}
+            className="flex items-center gap-1.5 rounded border border-slate-600 bg-slate-600 px-2.5 py-1.5 text-sm font-medium text-white hover:bg-slate-500"
+            title="IGF Diario: gráfica y descarga del Excel por planta y fecha de corte">
+            IGF Diario
+          </button>
         </div>
       </div>
       <FiltersBar
@@ -225,6 +232,9 @@ function DashboardContent() {
           plantas={plantas}
           onClose={() => setShowDeltaIngresoModal(false)}
         />
+      )}
+      {showIgfDiario && token && (
+        <DashboardIgfDiario token={token} initialPlantId={selectedPlantaId} onClose={() => setShowIgfDiario(false)} />
       )}
       <main className="flex-1 min-h-0 overflow-auto">
         <ResumenCategoriasMesCargo

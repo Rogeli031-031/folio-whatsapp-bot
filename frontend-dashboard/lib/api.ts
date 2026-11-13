@@ -11,6 +11,17 @@ export function getApiUrl(path: string): string {
   return `/api-backend${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+export type IgfDiarioPlant = { id: number; name: string; code: string };
+
+export async function fetchIgfDiarioPlants(token: string, year: number, month: number): Promise<{ plants: IgfDiarioPlant[]; global_scope: boolean }> {
+  const response = await fetch(getApiUrl(`/api/dashboard/igf-diario-plantas?year=${year}&month=${month}`), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "No se pudieron cargar las plantas de IGF Diario.");
+  return data;
+}
+
 /** Mes calendario siguiente a (year, month), para la hoja "Proy cat/sub mes" en el mismo Excel. */
 function nextCalendarMonth(year: number, month: number): { y: number; m: number } {
   if (month === 12) return { y: year + 1, m: 1 };

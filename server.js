@@ -55,6 +55,7 @@ const igfDiarioMargenManual = require("./lib/igf-diario-margen-manual");
 const igfDiarioDailyInsights = require("./lib/igf-diario-daily-insights");
 const igfDiarioComprasComment = require("./lib/igf-diario-compras-comment");
 const igfDiarioGrafica = require("./lib/igf-diario-grafica");
+const igfDiarioDownloadAccess = require("./lib/igf-diario-download-access");
 const arrAnnualCategoryAnalysis = require("./lib/arr-annual-category-analysis");
 const igfMetaExcel = require("./lib/igf-meta-excel");
 const igfMetahg = require("./lib/igf-metahg");
@@ -15489,7 +15490,8 @@ app.post("/api/arr/refresh-provincia", dashboardAuthMiddleware, async (req, res)
  * (no forman parte del motor que consume Director IA).
  */
 app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
-  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  const gaBlock = igfDiarioDownloadAccess.requestBlock(req.dashboardAuth, req.query, "series");
+  if (gaBlock) return res.status(gaBlock.status).json({ error: gaBlock.error });
   if (dashboardBlockGVForbidden(req, res)) return;
   const provincia = /^(1|true|yes)$/i.test(String(req.query.provincia || "").trim());
   if (provincia) {
@@ -15515,6 +15517,11 @@ app.get("/api/arr/venta-serie", dashboardAuthMiddleware, async (req, res) => {
 
   const client = await pool.connect();
   try {
+    if (igfDiarioDownloadAccess.isGA(req.dashboardAuth)) {
+      const plant = await dashboardArrForecast.resolveForecastExportPlant(client, empresa);
+      const denied = igfDiarioDownloadAccess.plantBlock(req.dashboardAuth, plant);
+      if (denied) return res.status(403).json({ error: denied });
+    }
     const engineResult = await commercialTrendEngine.loadCommercialTrend(client, {
       empresa: provincia ? "Provincia" : empresa,
       range: rangeOk,
@@ -15826,8 +15833,32 @@ app.patch("/api/dashboard/igf-diario-margen-diario", dashboardAuthMiddleware, as
   }
 });
 
+app.get("/api/dashboard/igf-diario-plantas", dashboardAuthMiddleware, async (req, res) => {
+  if (dashboardBlockGVForbidden(req, res)) return;
+  const year = Number(req.query.year);
+  const month = Number(req.query.month);
+  if (!Number.isInteger(year) || year < 2000 || !Number.isInteger(month) || month < 1 || month > 12) {
+    return res.status(400).json({ error: "Selecciona un periodo válido." });
+  }
+  const client = await pool.connect();
+  try {
+    const listed = await dashboardArrForecast.listIgfDiarioProvinciaPlants(client, year, month);
+    const plants = listed.filter((plant) => igfDashboardScope.canAccessPlant(req.dashboardAuth, plant.plantaId));
+    res.json({
+      plants: plants.map((plant) => ({ id: plant.plantaId, name: plant.nombre, code: plant.canon })),
+      global_scope: igfDashboardScope.hasGlobalScope(req.dashboardAuth),
+    });
+  } catch (error) {
+    console.error("[igf-diario-plantas]", error);
+    res.status(500).json({ error: "No se pudieron cargar las plantas de IGF Diario." });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/api/dashboard/igf-diario-grafica", dashboardAuthMiddleware, async (req, res) => {
-  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  const gaBlock = igfDiarioDownloadAccess.requestBlock(req.dashboardAuth, req.query, "graph");
+  if (gaBlock) return res.status(gaBlock.status).json({ error: gaBlock.error });
   if (dashboardBlockGVForbidden(req, res)) return;
   const todasBlock = igfDiarioTodasRequestBlock(req);
   if (todasBlock) return res.status(todasBlock.status).json({ error: todasBlock.error });
@@ -15852,7 +15883,8 @@ app.get("/api/dashboard/igf-diario-grafica", dashboardAuthMiddleware, async (req
       if (!resolvedPlant) {
         return res.status(400).json({ error: "Planta no reconocida para exportar el Excel Forecast." });
       }
-      const deniedPlant = assertPlantaPermitidaDashboard(req, resolvedPlant.plantaId);
+      const deniedPlant = igfDiarioDownloadAccess.plantBlock(req.dashboardAuth, resolvedPlant)
+        || assertPlantaPermitidaDashboard(req, resolvedPlant.plantaId);
       if (deniedPlant) return res.status(403).json({ error: deniedPlant });
       plants = [resolvedPlant];
     } else {
@@ -16062,7 +16094,8 @@ app.get("/api/dashboard/igf-diario-folios-deposito", dashboardAuthMiddleware, as
 });
 
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
-  if (dashboardBlockGAFinancialKpis(req, res)) return;
+  const gaBlock = igfDiarioDownloadAccess.requestBlock(req.dashboardAuth, req.query, "excel");
+  if (gaBlock) return res.status(gaBlock.status).json({ error: gaBlock.error });
   if (dashboardBlockGVForbidden(req, res)) return;
   const todasBlock = igfDiarioTodasRequestBlock(req);
   if (todasBlock) return res.status(todasBlock.status).json({ error: todasBlock.error });
@@ -16123,7 +16156,8 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       if (!resolvedPlant) {
         return res.status(400).json({ error: "Planta no reconocida para exportar el Excel Forecast." });
       }
-      const deniedPlant = assertPlantaPermitidaDashboard(req, resolvedPlant.plantaId);
+      const deniedPlant = igfDiarioDownloadAccess.plantBlock(req.dashboardAuth, resolvedPlant)
+        || assertPlantaPermitidaDashboard(req, resolvedPlant.plantaId);
       if (deniedPlant) return res.status(403).json({ error: deniedPlant });
       individualInsights = await igfDiarioDailyInsights.loadPlantDailyInsights(client, {
         plantaId: resolvedPlant.plantaId,
@@ -16421,7 +16455,9 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       const fechaCorteStr = (uploadDay || proyeccionHasta || "").toString().trim().slice(0, 10);
       const ctxMini = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
       const proySnap = await dashboardArrForecast.computePronosticoProyByPlant(client, year, month, { fechaCorte: fechaCorteStr });
-      await dashboardArrForecast.savePronosticoMiniSnapshot(client, year, month, ctxMini.corteYmdStr, proySnap);
+      if (!igfDiarioDownloadAccess.isGA(req.dashboardAuth)) {
+        await dashboardArrForecast.savePronosticoMiniSnapshot(client, year, month, ctxMini.corteYmdStr, proySnap);
+      }
     } catch (snapErr) {
       console.error("[ARR dashboard-excel] pronostico_mini_snapshot", snapErr);
     }

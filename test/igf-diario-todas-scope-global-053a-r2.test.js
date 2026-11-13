@@ -100,8 +100,8 @@ test("E) GO local recibe 403", () => {
   assert.equal(uiFns.tokenHasGlobalPlantScope(token("GO", { plantas_permitidas: [] })), false);
 });
 
-test("F–G) GA y GV conservan su bloqueo anterior", () => {
-  const ga = handler.indexOf("dashboardBlockGAFinancialKpis");
+test("F–G) GA permite solo descarga individual autorizada; GV conserva su bloqueo", () => {
+  const ga = handler.indexOf("igfDiarioDownloadAccess.requestBlock");
   const gv = handler.indexOf("dashboardBlockGVForbidden");
   const todas = handler.indexOf("igfDiarioTodasRequestBlock(req)");
   assert.ok(ga >= 0 && ga < gv && gv < todas);
