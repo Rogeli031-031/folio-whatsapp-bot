@@ -1,5 +1,5 @@
 task_id: "IMPL-IGF-ACAPULCO-PRODUCTIVIDAD"
-status: AUTHORIZED
+status: IN_PROGRESS
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-11-23T15:57:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-23"
