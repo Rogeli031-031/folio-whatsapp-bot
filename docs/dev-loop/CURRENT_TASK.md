@@ -1,36 +1,28 @@
-task_id: "IMPL-IGF-ACAPULCO-PRODUCTIVIDAD"
-status: DONE_PENDING_REVIEW
-authorized_by: "HUMAN_APPROVER"
-authorized_at: "2026-11-23T15:57:00-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-23"
-
-objective: "Agregar las ocho hojas de productividad aprobadas al inicio del Excel de IGF Diario, solo para Acapulco."
-
+task_id: IMPL-IGF-ACAPULCO-TALLER
+status: DRAFT
+objective: "Integrar al Excel IGF Diario de Acapulco la prueba aprobada de productividad, taller, folios y comentarios de seguimiento."
 in_scope:
-  - "docs/dev-loop/CURRENT_TASK.md: actualizar estado conforme al protocolo"
-  - "lib/dashboard-arr-forecast.js: integrar las hojas en la descarga actual"
-  - "lib/igf-acapulco-productividad*.js: lectura, cálculo y formato"
-  - "test/igf-acapulco-productividad*.test.js: pruebas"
-  - "docs/dev-loop/reports/IMPL-IGF-ACAPULCO-PRODUCTIVIDAD.md: evidencia"
-
+  - docs/dev-loop/CURRENT_TASK.md
+  - lib/dashboard-arr-forecast.js
+  - lib/igf-acapulco-productividad.js
+  - lib/igf-acapulco-productividad-model.js
+  - lib/igf-acapulco-productividad-excel.js
+  - lib/igf-acapulco-productividad-taller.js
+  - test/igf-acapulco-productividad.test.js
+  - test/igf-acapulco-productividad-taller.test.js
 out_of_scope:
-  - "Cambios a otras plantas, hojas existentes, permisos y datos de producción"
-  - "Migraciones, secretos y contratos del proyecto"
-  - "Push a main, merge o despliegue por el implementador"
-
+  - otras plantas, cambios a estaciones, datos de producción, migraciones y adjuntos privados
+  - docs/director-ia/ y push o merge a main
 contracts_in_force:
-  - "docs/dev-loop/LOOP_PROTOCOL.md"
-  - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
-
+  - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
+  - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
 allowed_actions:
-  - "Implementar y probar dentro del alcance"
-  - "Registrar evidencia, guardar en la rama de la tarea y abrir PR para revisión humana"
-
+  - implementar y probar en la rama autorizada; abrir PR para revisión humana
+  - preservar litros, incluir pipas de taller con cero venta y distinguir días sin base evaluable
+  - mostrar folios y comentarios, separando reparaciones actuales de folios ajenos a la falla
 forbidden_actions:
-  - "Alterar la autorización humana ni aprobar gates"
-  - "Hacer merge, desplegar, modificar datos productivos o incorporar secretos"
-
-acceptance: "Solo Acapulco recibe ocho hojas nuevas al inicio. Se conservan las hojas existentes. Las ventas de domingo suman al total, pero el domingo no cuenta para el promedio."
+  - modificar campos de autorización del humano ni aprobar gates
+  - publicar sin fuente de taller verificable ni inferir fechas, depósitos o salidas
+  - merge, auto-merge o despliegue directo por el implementador
 max_attempts: 1
-result_report_path: "docs/dev-loop/reports/IMPL-IGF-ACAPULCO-PRODUCTIVIDAD.md"
+result_report_path: docs/dev-loop/reports/IMPL-IGF-ACAPULCO-TALLER.md
