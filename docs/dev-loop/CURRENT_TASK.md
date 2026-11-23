@@ -1,18 +1,36 @@
-# IGF Diario en dashboard de folios, incluido GA
-task_id: IMPL-DASHBOARD-IGF-DIARIO-GA
+task_id: "IMPL-IGF-ACAPULCO-PRODUCTIVIDAD"
 status: DONE_PENDING_REVIEW
-authorized_by: HUMAN_APPROVER
-authorized_at: 2026-11-13
-human_authorization: "el boton de IGF Diario, quiero que pongas uno igual con el mismo comando en el dashboard de folios, el cual lo podran descargar tambien los GA."
-authorization_channel: "Solicitud directa del usuario en este chat, registrada conforme a su preferencia vigente."
-base_sha: 041e1c1795ffc639397776fd5947c39dde3aecd6
-branch: feat/dashboard-igf-diario-ga
-objective: "Abrir IGF Diario y descargar el mismo Excel desde folios, incluyendo GA con alcance de sus plantas."
-in_scope: "Toolbar del dashboard, selector de planta/corte, reutilizacion de grafica y exportador, acceso GA de lectura acotado, pruebas y reporte."
-out_of_scope: "Cambios financieros, datos productivos, permisos de escritura, contratos y tareas ajenas."
-contracts_in_force: "Constitucion, indice de arquitectura y LOOP_PROTOCOL sin modificacion; solicitud directa del usuario autoriza esta implementacion."
-allowed_actions: "Implementar, probar, registrar evidencia, commit, push de rama y crear PR."
-forbidden_actions: "Exponer plantas ajenas a GA, modificar datos productivos o mezclar cambios ajenos."
-acceptance: "Boton visible para GA y usuarios actuales; planta y corte seleccionables; mismo modal y Excel; GA sin alcance no descarga; planta ajena y exportacion global rechazadas en servidor."
-result_report_path: docs/dev-loop/reports/IMPL-DASHBOARD-IGF-DIARIO-GA.md
+authorized_by: "HUMAN_APPROVER"
+authorized_at: "2026-11-23T15:57:00-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-23"
+
+objective: "Agregar las ocho hojas de productividad aprobadas al inicio del Excel de IGF Diario, solo para Acapulco."
+
+in_scope:
+  - "docs/dev-loop/CURRENT_TASK.md: actualizar estado conforme al protocolo"
+  - "lib/dashboard-arr-forecast.js: integrar las hojas en la descarga actual"
+  - "lib/igf-acapulco-productividad*.js: lectura, cálculo y formato"
+  - "test/igf-acapulco-productividad*.test.js: pruebas"
+  - "docs/dev-loop/reports/IMPL-IGF-ACAPULCO-PRODUCTIVIDAD.md: evidencia"
+
+out_of_scope:
+  - "Cambios a otras plantas, hojas existentes, permisos y datos de producción"
+  - "Migraciones, secretos y contratos del proyecto"
+  - "Push a main, merge o despliegue por el implementador"
+
+contracts_in_force:
+  - "docs/dev-loop/LOOP_PROTOCOL.md"
+  - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
+  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+
+allowed_actions:
+  - "Implementar y probar dentro del alcance"
+  - "Registrar evidencia, guardar en la rama de la tarea y abrir PR para revisión humana"
+
+forbidden_actions:
+  - "Alterar la autorización humana ni aprobar gates"
+  - "Hacer merge, desplegar, modificar datos productivos o incorporar secretos"
+
+acceptance: "Solo Acapulco recibe ocho hojas nuevas al inicio. Se conservan las hojas existentes. Las ventas de domingo suman al total, pero el domingo no cuenta para el promedio."
 max_attempts: 1
+result_report_path: "docs/dev-loop/reports/IMPL-IGF-ACAPULCO-PRODUCTIVIDAD.md"
