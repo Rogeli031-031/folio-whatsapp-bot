@@ -16093,6 +16093,30 @@ app.get("/api/dashboard/igf-diario-folios-deposito", dashboardAuthMiddleware, as
   }
 });
 
+const igfAcapulcoWorkshopUpload = require("./lib/igf-acapulco-taller-upload")
+  .createUpload({ pool, businessDate: getForecastBusinessTodayYmd });
+
+app.get("/api/dashboard/igf-diario-taller/acceso", dashboardAuthMiddleware, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    return res.json({ allowed: await igfAcapulcoWorkshopUpload.canUpload(req.dashboardAuth.actor_id) });
+  } catch {
+    return res.status(503).json({ error: "Carga de taller no disponible." });
+  }
+});
+for (const step of ["preview", "confirm"]) {
+  app.post("/api/dashboard/igf-diario-taller/" + step, dashboardAuthMiddleware, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      return res.json(await igfAcapulcoWorkshopUpload[step](req.dashboardAuth.actor_id, req.body));
+    } catch (e) {
+      const status = [403,409,422].includes(e.status) ? e.status : 503;
+      const errors = {403:"Tu cuenta no tiene acceso a esta carga.",409:"Vuelve a generar la vista previa.",422:"El archivo no corresponde a un reporte diario válido de Acapulco.",503:"La carga de taller no está disponible."};
+      return res.status(status).json({ error: errors[status] });
+    }
+  });
+}
+
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
   const gaBlock = igfDiarioDownloadAccess.requestBlock(req.dashboardAuth, req.query, "excel");
   if (gaBlock) return res.status(gaBlock.status).json({ error: gaBlock.error });
@@ -16449,6 +16473,9 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
         forecastOpts.igfWeeklyTodasSummary = todasWeek.resumen;
         forecastOpts.igfWeeklySummaryMetric = todasMetric;
       }
+    }
+    if (forecastOpts.igfWeeklySummary && String(plantCode || "").toLowerCase() === "acapulco") {
+      forecastOpts.igfAcapulcoShowFolioCandidates = await igfAcapulcoWorkshopUpload.canUpload(req.dashboardAuth.actor_id);
     }
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, forecastOpts);
     try {

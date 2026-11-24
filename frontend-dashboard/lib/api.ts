@@ -4196,3 +4196,15 @@ export async function downloadComprasExcel(
   a.remove();
   URL.revokeObjectURL(href);
 }
+
+export type IgfAcapulcoTallerPreview = { company: "E9" | "E10"; date: string; rowCount: number; excluded: number; units: {eco: string; section: string}[]; confirm: string; };
+export async function requestIgfAcapulcoTaller<T>(token: string, step: "acceso" | "preview" | "confirm", body?: {xlsx: string; confirm?: string}): Promise<T> {
+  const response = await fetch(getApiUrl("/api/dashboard/igf-diario-taller/" + step), {
+    method: body ? "POST" : "GET", cache: "no-store",
+    headers: { Authorization: `Bearer ${token}`, ...(body ? {"Content-Type":"application/json"} : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Carga de taller no disponible.");
+  return data;
+}
