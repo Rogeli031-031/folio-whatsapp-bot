@@ -1,6 +1,6 @@
 # LOOP_PROTOCOL.md — desarrollo supervisado de Director IA
 
-**Versión:** 0.1  
+**Versión:** 0.2  
 **Estado:** VIGENTE  
 **Tipo:** Protocolo de ejecución (no es contrato arquitectónico de Director IA)
 
@@ -29,7 +29,7 @@ Una tarea no autoriza la siguiente.
 |-----|-------|-------|----------|
 | **Autoridad** | Constitución + contratos propietarios + índice + `origin/main` | Definir qué es válido | Ser reinterpretada por un agente |
 | **HUMAN_APPROVER** | Humano | Autorizar tarea (G1), gates G2–G8, merge a `main`, cerrar/rechazar, autorizar la siguiente | Delegar aprobación al agente |
-| **Implementador** | Cursor / agente | Ejecutar una `CURRENT_TASK` en `AUTHORIZED`, o en `IN_PROGRESS` solo si hereda G1 intacto; escribir reporte; STOP | Aprobar gates; fusionar a `main`; redefinir contratos; encadenar tareas; tratar `IN_PROGRESS` como autorización independiente |
+| **Implementador** | Cursor / agente | Ejecutar una tarea bajo G1 vigente por una vía de §§ 4 o 4 bis; escribir reporte; STOP | Aprobar gates; fusionar a `main`; redefinir contratos; encadenar tareas; tratar `IN_PROGRESS` como autorización independiente |
 
 Ningún agente ocupa el rol HUMAN_APPROVER.
 
@@ -41,7 +41,7 @@ Ningún agente ocupa el rol HUMAN_APPROVER.
 |---------|-------------|---------|
 | `AGENTS.md` | Solo con Gate G6 | Reglas siempre visibles del implementador |
 | `docs/dev-loop/LOOP_PROTOCOL.md` | Solo con Gate G6 | Este procedimiento |
-| `docs/dev-loop/CURRENT_TASK.md` | Sí — solo la tarea vigente | Autorización de **esta** ejecución |
+| `docs/dev-loop/CURRENT_TASK.md` | Sí — solo la tarea vigente | Alcance y registro de G1 de **esta** ejecución |
 | `docs/dev-loop/TASK_TEMPLATE.md` | Solo con Gate G6 | Schema para proponer/autorizar |
 | `docs/dev-loop/reports/README.md` | Solo con Gate G6 | Convención de reportes (meta-protocolo) |
 | `docs/dev-loop/reports/<task_id>.md` | Append-only | Auditoría; un archivo por `task_id` |
@@ -68,8 +68,8 @@ IDLE
 |--------|------------------|-------------|
 | `IDLE` | Humano (o bootstrap ya cerrado) | No hay trabajo. Implementador: solo lectura. |
 | `DRAFT` | Solo humano | Propuesta. No ejecutable. |
-| `AUTHORIZED` | Solo humano + `AUTHORIZED_BY_HUMAN` | Única autorización de ejecución. |
-| `IN_PROGRESS` | Implementador, una vez, **solo** desde `AUTHORIZED` | Ejecución en curso. `max_attempts: 1`. **No** es autorización independiente. |
+| `AUTHORIZED` | Solo humano + `AUTHORIZED_BY_HUMAN` | Autoriza la ejecución por la vía Git. |
+| `IN_PROGRESS` | Implementador, una vez, desde `AUTHORIZED` por Git o bajo §4 bis | Ejecución en curso. `max_attempts: 1`. **No** es autorización independiente. |
 | `DONE_PENDING_REVIEW` | Implementador, al terminar con reporte | Fin de implementación. Espera revisión humana. |
 | `STOPPED` | Implementador | Parada por contradicción, ambigüedad o violación de alcance. |
 | `BLOCKED` | Implementador | Falta un gate o un dato que solo el humano puede dar. |
@@ -78,7 +78,7 @@ IDLE
 
 ### `IN_PROGRESS` no es autorización independiente
 
-Una tarea en `IN_PROGRESS` solo es ejecutable si se cumplen **todas** estas condiciones:
+Por la vía Git, una tarea en `IN_PROGRESS` solo es ejecutable si se cumplen **todas** estas condiciones:
 
 - deriva de una transición previa `AUTHORIZED` → `IN_PROGRESS`;
 - `authorized_by` sigue presente;
@@ -95,11 +95,26 @@ Si falta cualquiera de las condiciones: `BLOCKED` + reporte + STOP.
 
 - Cualquier transición hacia `AUTHORIZED`, `CLOSED` o `REJECTED`.
 - `IDLE` → `DRAFT` (el agente puede **proponer** texto con `TASK_TEMPLATE.md`, no cambiar el estado vigente a `DRAFT`/`AUTHORIZED`).
-- Escribir `IN_PROGRESS` sin partir de `AUTHORIZED` con G1 intacto.
+- Escribir `IN_PROGRESS` sin G1 válido por una de las dos vías.
 - Reabrir `CLOSED` / `REJECTED`.
 - Pasar de `DONE_PENDING_REVIEW` a una nueva tarea.
 
 ---
+
+## 4 bis. Gate G1 ordinario por chat privado autenticado
+
+La aprobación es del HUMAN_APPROVER, no del agente. Vía alternativa sólo para un cambio normal y acotado del dashboard. Autoriza implementar y probar fuera de producción, y abrir un PR en una rama no-main. **No** autoriza migraciones, DDL, permisos, credenciales, datos o configuración de producción, despliegues, cambios de arquitectura/contratos ni G2–G8. Esas decisiones mantienen su vía vigente. No hay auto-merge: G4 y merge son exclusivamente humanos.
+
+Antes de escribir, un verificador con acceso autorizado debe comprobar en el origen autenticado que la cuenta emisora corresponde al HUMAN_APPROVER del repositorio (no basta nombre visible) y que aprobó expresamente una sola propuesta con task_id, repositorio, rama, objetivo, rutas, alcance excluido y acciones. Capturas, citas, mensajes reenviados, terceros y afirmaciones ambiguas no cuentan. Si no se puede verificar esta relación, la aprobación exacta o que sigue vigente, usar la vía Git. Una revocación o cambio de alcance detiene la ejecución y requiere nueva aprobación.
+
+En una rama dedicada sin otra tarea activa, el implementador puede registrar el alcance exacto y pasar directamente a IN_PROGRESS una sola vez con el G1 ya verificado, sin que el humano edite CURRENT_TASK. No puede escribir AUTHORIZED ni crear/alterar los campos de autorización humana; en un registro nuevo se omiten. Se admite un DRAFT para ese mismo alcance si su autorización humana no se modifica. IN_PROGRESS sólo conserva continuidad si la evidencia sigue válida y el alcance coincide íntegramente. Registrar en CURRENT_TASK una sección separada `owner_chat_attestation`:
+
+- `method: verified_owner_chat`.
+- `approved_at`: fecha y hora ISO 8601 con zona.
+- `receipt_id`: identificador opaco aleatorio de un registro privado revisable por el HUMAN_APPROVER y sus verificadores autorizados.
+- `scope_sha256`: SHA-256 de la propuesta canónica registrada privadamente al aprobar: JSON UTF-8 compacto, sin BOM, objeto con llaves ordenadas de forma recursiva, arrays en su orden original, con versión y los campos de alcance indicados arriba.
+
+Antes de continuar y al abrir el PR, confrontar alcance y vigencia con el registro privado. Recibo y huella no sustituyen comprobación en el origen. En el PR/reporte incluir sólo evidencia no privada: método, fecha/hora, recibo opaco, huella, alcance y pruebas. Nunca copiar mensajes, vínculos ni IDs privados ni guardar secretos en Git. Si no existe capacidad de verificación y almacenamiento privado autorizado, no habilitar esta vía; esta disposición no instala herramientas ni cambia permisos.
 
 ## 5. Anti-loop
 
@@ -109,7 +124,7 @@ Si falta cualquiera de las condiciones: `BLOCKED` + reporte + STOP.
 - Un `DONE` / `DONE_PENDING_REVIEW` **no** autoriza otra tarea.
 - El campo `next_task_proposed` del reporte es propuesta, no autorización.
 
-Si `CURRENT_TASK.md` no existe, o `status` no es `AUTHORIZED`, o es `IN_PROGRESS` sin las condiciones de G1 heredado: **solo lectura**. Si `IN_PROGRESS` aparece sin esas condiciones: `BLOCKED` + reporte + STOP.
+Sin G1 válido según §§ 4 o 4 bis: **solo lectura**. Si `IN_PROGRESS` aparece sin esas condiciones: `BLOCKED` + reporte + STOP.
 
 ---
 
@@ -145,7 +160,7 @@ Ningún agente aprueba un gate. Ningún agente escribe `APPROVED` ni `AUTHORIZED
 
 | Gate | Qué autoriza solo el humano | Si falta |
 |------|-----------------------------|----------|
-| **G1** Autorizar tarea | `status: AUTHORIZED` + `AUTHORIZED_BY_HUMAN` | No implementar |
+| **G1** Autorizar tarea | Vía Git de §4 o, sólo para dashboard ordinario, aprobación autenticada de §4 bis | No implementar |
 | **G2** Cambio arquitectónico | Editar archivos existentes en `docs/director-ia/` | STOP |
 | **G3** Nuevo contrato | Crear docs de arquitectura (p. ej. `06-CHANNEL-PROJECTION`) | STOP |
 | **G4** Integración | Push o merge a `main` | Prohibido |
@@ -162,8 +177,8 @@ G4 nunca lo ejecuta el agente. El merge a `main` es exclusivamente humano en Git
 
 1. Confirmar rama de trabajo ≠ `main` (salvo lectura de la referencia integrada).
 2. Leer `CURRENT_TASK.md`.
-3. Si no está `AUTHORIZED`: no editar, salvo `IN_PROGRESS` que cumpla G1 heredado (si no cumple: `BLOCKED` + reporte + STOP).
-4. Pasar a `IN_PROGRESS` una sola vez si estaba `AUTHORIZED`, cambiando **solo** `status`. No tocar `authorized_by`, `authorized_at` ni `human_authorization`.
+3. Verificar G1 conforme a §§ 4 o 4 bis; sin G1 vigente no editar.
+4. Pasar a `IN_PROGRESS` una sola vez: por Git, cambiando **solo** `status`; por chat, registrar la atestación conforme a §4 bis. Nunca tocar `authorized_by`, `authorized_at` ni `human_authorization`.
 5. Leer `contracts_in_force`. Obedecerlos. No “mejorarlos”.
 6. Tocar solo `in_scope`.
 7. Ante duda contractual: `STOPPED` o `BLOCKED`, reporte, STOP.
@@ -215,7 +230,7 @@ Capabilities / Planner / Tool Orchestrator no son el pipeline constitucional N1�
 | Campo | Valor |
 |-------|--------|
 | Documento | `docs/dev-loop/LOOP_PROTOCOL.md` |
-| Versión | 0.1 |
+| Versión | 0.2 |
 | Estado | VIGENTE |
 | Aprobación de gates | Exclusiva de HUMAN_APPROVER |
 | Auto-merge / auto-push a main | Prohibidos |
