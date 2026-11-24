@@ -21,14 +21,14 @@ Procedimiento: `docs/dev-loop/LOOP_PROTOCOL.md`.
 
 1. Confirma rama ≠ `main` (salvo lectura).
 2. Lee `CURRENT_TASK.md`.
-3. Si no existe, o `status` no es `AUTHORIZED`, o es `IN_PROGRESS` sin G1 intacto: **solo lectura**. No implementes. `IN_PROGRESS` no es autorización independiente.
+3. Comprueba G1 según LOOP §4 y §4 bis: Git vigente o, sólo para trabajo ordinario del dashboard, aprobación privada autenticada y verificable. Sin una vía válida, **solo lectura**. `IN_PROGRESS` no es autorización independiente.
 4. Ejecuta únicamente `in_scope`. Una tarea. `max_attempts: 1`.
 
 ## STOP obligatorio
 
 - Contradicción o ambigüedad contractual.
 - Pedido que rebase, suavice o “mejore” un contrato sin Gate G2/G3 humano.
-- Falta de `AUTHORIZED_BY_HUMAN` vigente en `CURRENT_TASK.md`.
+- Falta de G1 vigente y verificable por una de las vías permitidas; G2–G8 mantienen las reglas del protocolo.
 
 ## Prohibido
 
