@@ -74,9 +74,21 @@ Sin la línea `human_authorization` exacta, escrita por humano, la tarea no es e
 
 ---
 
+## Alternativa: G1 ordinario por chat autenticado
+
+Sólo si se cumple LOOP §4 bis. No rellenar los campos Git reservados ni escribir AUTHORIZED en nombre del humano. Registrar únicamente la atestación verificada en la rama de la tarea; esta plantilla no es prueba.
+
+```yaml
+owner_chat_attestation:
+  method: verified_owner_chat
+  approved_at: ""
+  receipt_id: ""
+  scope_sha256: ""
+```
+
 ## Tras la ejecución (implementador)
 
-El implementador, una vez, puede pasar `AUTHORIZED` → `IN_PROGRESS`.  
+Por Git, el implementador puede pasar una vez de `AUTHORIZED` a `IN_PROGRESS`. Por chat, seguir la excepción acotada de LOOP §4 bis.  
 En esa transición **solo** puede modificar `status` de `AUTHORIZED` a `IN_PROGRESS`.  
 No puede crear, borrar ni modificar `authorized_by`, `authorized_at` ni `human_authorization`.  
 `IN_PROGRESS` no es autorización independiente: exige G1 heredado intacto.  
