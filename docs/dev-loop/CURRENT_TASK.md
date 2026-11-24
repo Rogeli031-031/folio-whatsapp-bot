@@ -3,9 +3,7 @@ status: AUTHORIZED
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-11-23T17:45:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-23"
-objective: "Integrar al Excel IGF Diario de Acapulco la prueba aprobada de productividad, taller, folios y comentarios de seguimiento."
-in_scope:
-```yaml
+
 objective: "En IGF Diario Acapulco, habilitar la carga manual de los Excel de taller Uribe (E9) e HidroGas (E10) para Luis y Diana, guardar el histórico privado en PostgreSQL y usarlo en el Excel de productividad y folios."
 
 in_scope:
@@ -51,4 +49,3 @@ forbidden_actions:
 
 max_attempts: 1
 result_report_path: docs/dev-loop/reports/IMPL-IGF-ACAPULCO-TALLER.md
-```
