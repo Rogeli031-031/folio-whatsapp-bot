@@ -120,19 +120,25 @@ test('DB aislada y XLSX: folios con alcance, última revisión, dos fallas por e
   assert.equal(wb.getWorksheet('PIPAS RESUMEN').getCell('B1').text,'PUEBLA');
   assert.match(wb.getWorksheet('PIPAS RESUMEN').getCell('B47').text,/Ventas cerradas al 2026-11-03\. Taller hasta 2026-11-04/);
   const p=wb.getWorksheet('PIPAS TIPO C');
-  assert.equal(p.getCell('D5').text,'AT-020');
-  assert.equal(p.getCell('E5').text,'AT-021');
-  assert.equal(p.getCell('G5').text,'TOTAL');
-  assert.equal(p.getCell('D39').result,1000); // Sunday 540 kg contributes to numerator
-  assert.equal(p.getCell('D40').value,2);
-  assert.equal(p.getCell('D41').result,500);
-  assert.equal(p.getCell('D10').value,null); // has workshop evidence but closed sales only thru day 3
-  assert.equal(p.getCell('D10').fill.fgColor.argb,'FFFFD966');
-  assert.equal(p.getCell('E10').fill.fgColor.argb,'FFFFD966');
-  assert.match(p.getCell('D53').text,/Rev\. 2.*Falla A.*Falla B/s);
-  assert.equal(p.getCell('D54').text,'F-202610-10');
-  assert.equal(p.getCell('D49').text,'Sin folio atribuible');
-  assert.equal(p.getCell('D51').text,'');
+  assert.equal(p.getImages().length,1);
+  assert.equal(p.getCell('B2').value,'VENTA DE\nPIPAS PROPIAS');
+  assert.equal(p.getCell('B3').value,'TIPO C  •  NOVIEMBRE 2026');
+  assert.deepEqual(Array.from({length:7},(_,i)=>p.getRow(i+4).hidden),[true,true,true,true,true,true,false]);
+  assert.equal(p.getCell('B10').text,'Litros | Corte 2026-11-03');
+  assert.equal(wb.getWorksheet('PIPAS RESUMEN').getCell('F39').formula,"'PIPAS TIPO C'!G45");
+  assert.equal(p.getCell('D11').text,'AT-020');
+  assert.equal(p.getCell('E11').text,'AT-021');
+  assert.equal(p.getCell('G11').text,'TOTAL');
+  assert.equal(p.getCell('D45').result,1000); // Sunday 540 kg contributes to numerator
+  assert.equal(p.getCell('D46').value,2);
+  assert.equal(p.getCell('D47').result,500);
+  assert.equal(p.getCell('D16').value,null); // has workshop evidence but closed sales only thru day 3
+  assert.equal(p.getCell('D16').fill.fgColor.argb,'FFFFD966');
+  assert.equal(p.getCell('E16').fill.fgColor.argb,'FFFFD966');
+  assert.match(p.getCell('D8').text,/Rev\. 2.*Falla A.*Falla B/s);
+  assert.equal(p.getCell('D9').text,'F-202610-10');
+  assert.equal(p.getCell('D4').text,'Sin folio atribuible');
+  assert.equal(p.getCell('D6').text,'');
   const est=wb.getWorksheet('EST RESUMEN');
   assert.equal(est.getCell('J6').text,'Sin meta');
   assert.equal(est.getCell('H39').result,600);
@@ -142,15 +148,15 @@ test('DB aislada y XLSX: folios con alcance, última revisión, dos fallas por e
   const q=await roundtrip(db,'Queretaro',plantContext('Queretaro',queretaro,4));
   const qDetail=q.getWorksheet('PIPAS TIPO C');
   assert.equal(qDetail.getCell('B1').text,'QUERÉTARO');
-  assert.equal(qDetail.getCell('D39').result,400);
-  assert.equal(qDetail.getCell('D8').fill.fgColor.argb,'FFFFD966'); // sold and was in workshop
-  assert.equal(qDetail.getCell('D54').text,'F-202610-16');
-  assert.match(qDetail.getCell('D53').text,/Solo Querétaro/);
+  assert.equal(qDetail.getCell('D45').result,400);
+  assert.equal(qDetail.getCell('D14').fill.fgColor.argb,'FFFFD966'); // sold and was in workshop
+  assert.equal(qDetail.getCell('D9').text,'F-202610-16');
+  assert.match(qDetail.getCell('D8').text,/Solo Querétaro/);
   assert.equal(q.getWorksheet('EST RESUMEN').getCell('H39').result,100);
 
   for(const actor of [5,6]){
    const blocked=await roundtrip(db,'Puebla',plantContext('Puebla',puebla,actor));
-   assert.equal(blocked.getWorksheet('PIPAS TIPO C').getCell('D54').text,'');
+   assert.equal(blocked.getWorksheet('PIPAS TIPO C').getCell('D9').text,'');
   }
  }finally{await db.close();}
 });

@@ -79,3 +79,33 @@ test('existing exporter uses only the plant IGF branch and inserts before serial
  a(financial>=0 && financial<hook && hook<serialize);
  a.match(exportFn.slice(hook,serialize),/uploadDay: fechaCorte/);
 });
+
+test('inserts six hidden folio rows without shifting titles, logos or visible styles',async()=>{
+ const base=wb(),withFolios=wb(),db={query:async()=>audit()};
+ await appendAcapulcoIgfProductivity(base,db,s);
+ await appendAcapulcoIgfProductivity(withFolios,db,{...s,readVerifiedWorkshop:async()=>({
+  plant:'Acapulco',reports:[{entity:'E9',date:'2026-11-03',sha256:'a'.repeat(64),units:[
+   {eco:'AT-004',kind:'Pipa',folioCandidates:['F-202610-84']},
+  ]}]
+ })});
+ const original=await roundtrip(base), actual=await roundtrip(withFolios);
+ const before=original.getWorksheet('PIPAS TIPO A'), after=actual.getWorksheet('PIPAS TIPO A');
+ for(const [ref,value] of [['B1','ACAPULCO'],['B2','VENTA DE\nPIPAS PROPIAS'],['B3','TIPO A  •  NOVIEMBRE 2026']]){
+  a.equal(after.getCell(ref).value,value);
+  a.deepEqual(after.getCell(ref).style,before.getCell(ref).style);
+ }
+ a.deepEqual(after.getImages().map(i=>[i.range.tl.nativeRow,i.range.br.nativeRow]),before.getImages().map(i=>[i.range.tl.nativeRow,i.range.br.nativeRow]));
+ a.deepEqual(Array.from({length:7},(_,i)=>after.getRow(i+4).hidden),[true,true,true,true,true,true,false]);
+ a.equal(after.getCell('D9').text,'F-202610-84');
+ a.equal(after.getCell('D4').text,'Sin folio atribuible');
+ a.equal(after.getCell('B10').value,before.getCell('B4').value);
+ a.equal(after.getCell('D11').value,before.getCell('D5').value);
+ a.deepEqual(after.getCell('D13').style,before.getCell('D7').style);
+ a.equal(after.getCell('D15').fill.fgColor.argb,'FFFFD966');
+ a.equal(after.getCell('D45').formula,'SUM(D13:D34)');
+ a.equal(after.getCell('D45').result,before.getCell('D39').result);
+ const summary=actual.getWorksheet('PIPAS RESUMEN');
+ a.equal(summary.getCell('D7').formula,"'PIPAS TIPO A'!F13");
+ a.equal(summary.getCell('D39').formula,"'PIPAS TIPO A'!F45");
+ a.equal(summary.getCell('H39').result,original.getWorksheet('PIPAS RESUMEN').getCell('H39').result);
+});
