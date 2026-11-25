@@ -4251,3 +4251,26 @@ export async function requestIgfQueretaroTaller<T>(
   if(!response.ok)throw new Error(data.error||"Carga de taller de Querétaro no disponible.");
   return data;
 }
+
+export type IgfTehuacanTallerPreview = {
+  sourceDate: string | null;
+  latestEntry: string | null;
+  rowCount: number;
+  unitCount: number;
+  warnings: { row: number | null; unit: string | null; code: string }[];
+  records: { sourceRow: number; unit: string; kind: string; section: string; fault: string | null; repairCost: number | null; exitAsReported: string | null }[];
+  confirm: string;
+};
+export async function requestIgfTehuacanTaller<T>(
+  token: string, step: "acceso" | "preview" | "confirm",
+  body?: {xlsx: string; confirm?: string; reportDate?: string; dateConfirmed?: boolean}
+): Promise<T> {
+  const response = await fetch(getApiUrl("/api/dashboard/igf-diario-taller-tehuacan/" + step), {
+    method: body ? "POST" : "GET", cache: "no-store",
+    headers: { Authorization: `Bearer ${token}`, ...(body ? {"Content-Type":"application/json"} : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Carga de taller de Tehuacán no disponible.");
+  return data;
+}
