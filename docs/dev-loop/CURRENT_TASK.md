@@ -1,31 +1,35 @@
-task_id: IGF-TALLER-XLSX-VALORES
+task_id: G6-APROBACION-DIRECTA-DASHBOARD
 status: DONE_PENDING_REVIEW
-objective: "Aceptar los Excel originales de Uribe e HidroGas leyendo los resultados guardados de las fórmulas en campos permitidos, sin ejecutarlas ni relajar la validación de empresa, fecha o unidad."
-repository: Rogeli031-031/folio-whatsapp-bot
-branch: fix/igf-taller-xlsx-valores
+authorized_by: "HUMAN_APPROVER"
+authorized_at: "2026-11-23T18:05:00-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-23"
+
+objective: "Permitir que Luis autorice por chat privado autenticado el trabajo normal del dashboard sin editar CURRENT_TASK para cada cambio."
 
 in_scope:
-  - "lib/igf-acapulco-taller-xlsx.js"
-  - "test/igf-acapulco-taller-xlsx.test.js"
-  - "docs/dev-loop/CURRENT_TASK.md"
-  - "docs/dev-loop/reports/IGF-TALLER-XLSX-VALORES.md"
+  - docs/dev-loop/CURRENT_TASK.md
+  - AGENTS.md
+  - docs/dev-loop/LOOP_PROTOCOL.md
+  - docs/dev-loop/TASK_TEMPLATE.md
+  - docs/dev-loop/reports/README.md
+
 out_of_scope:
-  - "Cambios a la base, permisos, contratos o despliegue"
-  - "Escrituras o merge a main"
-  - "Subir el Excel real o sus datos a GitHub"
+  - "Código de la aplicación, contratos Director IA, base de datos, permisos, credenciales y producción."
+  - "La tarea de Taller permanece en su rama y no se ejecuta con esta autorización."
+
 contracts_in_force:
-  - "docs/director-ia/DIRECTOR_IA_CONSTITUTION.md"
-  - "docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md"
+  - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
+  - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
+
 allowed_actions:
-  - "Implementar"
-  - "Probar fuera de producción (incluye prueba local del Excel real)"
-  - "Abrir un PR (commit y push solo a la rama indicada)"
+  - "G6: cambiar los documentos del protocolo para aceptar aprobación explícita y verificable de Luis por chat privado para cambios normales y acotados del dashboard."
+  - "Registrar en el PR el alcance autorizado, la fecha, la referencia de aprobación y las pruebas, sin guardar conversaciones privadas."
+  - "Editar solo en la rama de trabajo y abrir un PR para revisión y merge humano."
+
 forbidden_actions:
-  - "No autoaprobar gates, no exponer datos y no tocar rutas fuera de alcance."
+  - "Modificar la autorización humana, ampliar el alcance por cuenta del agente o autorizar tareas siguientes."
+  - "Autorizar migraciones, cambios de permisos, escrituras en producción o cambios de arquitectura por aprobación genérica."
+  - "Push o merge a main, auto-merge, despliegue directo o publicación de chats privados."
+
 max_attempts: 1
-result_report_path: docs/dev-loop/reports/IGF-TALLER-XLSX-VALORES.md
-owner_chat_attestation:
-  method: verified_owner_chat
-  approved_at: "2026-11-25T02:06:06.295253+00:00"
-  receipt_id: "0dbd40a3-bebe-4432-95f8-db12f0102d0f"
-  scope_sha256: "e7f3f8d9cc94d2259f2214965ce1d0cb790d220b206852136c87ccfe837d66b9"
+result_report_path: docs/dev-loop/reports/G6-APROBACION-DIRECTA-DASHBOARD.md
