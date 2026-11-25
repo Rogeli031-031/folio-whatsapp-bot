@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchIgfDiarioPlants, getDashboardExcelDownloadUrl, type IgfDiarioPlant } from "@/lib/api";
+import IgfDiarioTallerUpload from "@/components/IgfDiarioTallerUpload";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
 
 function todayInMexico() {
@@ -82,6 +83,7 @@ export default function DashboardIgfDiario({
             className="min-w-0 rounded border border-slate-600 bg-slate-800 px-3 py-2" />
         </label>
       </div>
+      {plantCode === "Acapulco" && <IgfDiarioTallerUpload token={token} />}
       <label className="my-4 flex items-center gap-2 text-sm">
         <input type="checkbox" checked={versionAsOfCorte} onChange={(e) => setVersionAsOfCorte(e.target.checked)} />
         Versión ≤ corte
