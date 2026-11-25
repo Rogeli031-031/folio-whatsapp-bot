@@ -33,7 +33,7 @@ Procedimiento: `docs/dev-loop/LOOP_PROTOCOL.md`.
 ## Prohibido
 
 - Autoaprobar gates (G1–G8). Escribir `AUTHORIZED_BY_HUMAN` o `APPROVED`.
-- Auto-merge. Push o merge a `main`.
+- Auto-merge y push directo a `main`. Solo Mía puede ejecutar el merge asistido de un PR ordinario del Dashboard si Luis autoriza ese PR y su commit exacto según LOOP §4 ter. El meta-protocolo y los demás casos conservan el merge humano.
 - Encadenar tareas. Abrir la siguiente al terminar. Watchers. `/loop`. “Seguir hasta que pase”.
 - Modificar `docs/director-ia/` sin Gate G2/G3 humano en la tarea vigente.
 - Guardar secretos, tokens o credenciales.
