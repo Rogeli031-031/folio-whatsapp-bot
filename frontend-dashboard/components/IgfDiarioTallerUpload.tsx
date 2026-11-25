@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { requestIgfAcapulcoTaller, type IgfAcapulcoTallerPreview } from "@/lib/api";
 
-export default function IgfDiarioTallerUpload({ token }: { token: string }) {
+export default function IgfDiarioTallerUpload({ token, compact = false }: { token: string; compact?: boolean }) {
   const [allowed, setAllowed] = useState(false), [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
   const [state,setState] = useState<{xlsx: string; data: IgfAcapulcoTallerPreview} | null>(null);
   const [message,setMessage] = useState("");
@@ -18,11 +18,13 @@ export default function IgfDiarioTallerUpload({ token }: { token: string }) {
     try { await fn(); } catch (e) { setMessage(e instanceof Error ? e.message : "No se pudo completar."); }
     finally { setBusy(false); }
   };
-  return <section className="my-4 rounded border border-slate-600 p-3">
-    <button type="button" disabled={busy} onClick={() => {setOpen(!open);setState(null);setMessage("");}}>Reporte diario de taller</button>
-    {open && <div className="mt-2 grid gap-2">
+  return <section className={compact ? "contents" : "my-4 rounded border border-slate-600 p-3"}>
+    <button type="button" disabled={busy} aria-expanded={open}
+      className={compact ? "inline-flex items-center rounded bg-sky-700 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-600 disabled:opacity-50" : undefined}
+      onClick={() => {setOpen(!open);setState(null);setMessage("");}}>Reporte diario de taller</button>
+    {open && <div className={compact ? "grid min-w-0 basis-full gap-2 rounded border border-slate-600 p-3" : "mt-2 grid gap-2"}>
       <label>Selecciona un XLSX de Uribe o HidroGas
-      <input className="block" disabled={busy} type="file" accept=".xlsx" onChange={ev => {
+      <input className={compact ? "block w-full min-w-0" : "block"} disabled={busy} type="file" accept=".xlsx" onChange={ev => {
         const f=ev.currentTarget.files?.[0]; ev.currentTarget.value="";
         if (!f) return; setState(null);
         void attempt(async () => {
