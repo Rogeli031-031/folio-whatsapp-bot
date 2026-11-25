@@ -47,8 +47,8 @@ test('eight sheets first, Sunday volume included but not a divisor, real XLSX ro
  a.equal(z.worksheets[8].getCell('A1').font.bold,true);
  const p=z.getWorksheet('PIPAS RESUMEN');
  a.equal(p.getCell('B1').value,'ACAPULCO');a.equal(p.getCell('B1').font.name,'Lato');
- a.equal(p.getCell('H7').result,3000);a.equal(p.getCell('H39').result,36000);
- a.equal(p.getCell('H41').result,2000);a.equal(p.getCell('H29').value,null);
+ a.equal(p.getCell('H7').result,3100);a.equal(p.getCell('H39').result,36100);
+ a.equal(p.getCell('H41').result,2006);a.equal(p.getCell('H29').value,null);
  const e=z.getWorksheet('EST RESUMEN');
  a.equal(e.getCell('H39').result,3500);a.equal(e.getCell('H41').result,3500/18);
  a.equal(e.getCell('H42').result,16620);a.equal(e.getCell('H43').result,415500);
@@ -108,4 +108,26 @@ test('inserts six hidden folio rows without shifting titles, logos or visible st
  a.equal(summary.getCell('D7').formula,"'PIPAS TIPO A'!F13");
  a.equal(summary.getCell('D39').formula,"'PIPAS TIPO A'!F45");
  a.equal(summary.getCell('H39').result,original.getWorksheet('PIPAS RESUMEN').getCell('H39').result);
+});
+
+
+test('AT-039 suma Casa y Comisionista-Carburación una vez y conserva ventas Casa de estaciones',async()=>{
+ const w=wb();
+ await appendAcapulcoIgfProductivity(w,{query:async(sql,params)=>{
+  a.deepEqual(params,['Acapulco','2026-11-01','2026-11-24']);
+  a.match(sql,/canal IN \('Casa','Comisionista'\) AND estado_pdv='unidad_candidata'/);
+  return audit({observed_days:24,rows:[
+   row(13145.76,'2026-11-01','Autotanque','AT-039','AT-039','unidad_candidata','Casa'),
+   row(75026.52,'2026-11-02','Carburación','AT-039','AT-039','unidad_candidata','Comisionista'),
+   row(540,'2026-11-02','Carburación','COLOSIO',null,'texto_sin_resolver','Casa'),
+   row(5400,'2026-11-02','Carburación','COLOSIO',null,'texto_sin_resolver','Comisionista'),
+   row(5400,'2026-11-02','Autotanque','AT-039','AT-039','texto_sin_resolver','Comisionista'),
+   row(5400,'2026-11-25','Carburación','AT-039','AT-039','unidad_candidata','Comisionista')
+  ]});
+ }},{...s,uploadDay:'2026-11-25',now:new Date('2026-11-25T20:00:00Z')});
+ const z=await roundtrip(w);
+ const p=z.getWorksheet('PIPAS RESUMEN');
+ a(Math.abs(p.getCell('H39').result-88172.28/0.54)<1e-8);
+ a.equal(p.getCell('H41').result,8164);
+ a.equal(z.getWorksheet('EST RESUMEN').getCell('H39').result,1000);
 });
