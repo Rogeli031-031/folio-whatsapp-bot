@@ -16165,6 +16165,30 @@ for (const step of ["preview", "confirm"]) {
   });
 }
 
+const igfTehuacanWorkshopUpload = require("./lib/igf-tehuacan-taller-upload")
+  .createUpload({ pool, businessDate: getForecastBusinessTodayYmd });
+
+app.get("/api/dashboard/igf-diario-taller-tehuacan/acceso", dashboardAuthMiddleware, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    return res.json({ allowed: await igfTehuacanWorkshopUpload.canUpload(req.dashboardAuth.actor_id) });
+  } catch {
+    return res.status(503).json({ error: "Carga de taller de Tehuacán no disponible." });
+  }
+});
+for (const step of ["preview", "confirm"]) {
+  app.post("/api/dashboard/igf-diario-taller-tehuacan/" + step, dashboardAuthMiddleware, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      return res.json(await igfTehuacanWorkshopUpload[step](req.dashboardAuth.actor_id, req.body));
+    } catch (e) {
+      const status = [403,409,422].includes(e.status) ? e.status : 503;
+      const errors = {403:"Tu cuenta no tiene acceso a la carga de Tehuacán.",409:"Vuelve a generar la vista previa.",422:"El archivo no corresponde al formato de taller de Tehuacán.",503:"La carga de taller de Tehuacán no está disponible."};
+      return res.status(status).json({ error: e.code === "CONFIRM_REPORT_DATE" ? "Confirma una fecha de reporte válida que no sea futura." : e.code === "REPORT_BEFORE_LAST_ENTRY" ? "La fecha del corte es anterior al último ingreso reportado. Verifica la fecha real." : errors[status] });
+    }
+  });
+}
+
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
   const gaBlock = igfDiarioDownloadAccess.requestBlock(req.dashboardAuth, req.query, "excel");
   if (gaBlock) return res.status(gaBlock.status).json({ error: gaBlock.error });

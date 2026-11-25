@@ -32,7 +32,7 @@ import {
   zonaFromPlantRows,
 } from "@/lib/igf-october-mini";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
-import IgfDiarioTallerUpload, { IgfPueblaTallerUpload, IgfQueretaroTallerUpload } from "@/components/IgfDiarioTallerUpload";
+import IgfDiarioTallerUpload, { IgfPueblaTallerUpload, IgfQueretaroTallerUpload, IgfTehuacanTallerUpload } from "@/components/IgfDiarioTallerUpload";
 import IgfSimulationModal from "@/components/IgfSimulationModal";
 import IgfPresupuestoUpload from "@/components/IgfPresupuestoUpload";
 import IgfDiarioWeeklyPlantPanel from "@/components/IgfDiarioWeeklyPlantPanel";
@@ -2015,6 +2015,9 @@ export function IgfForecastContent() {
                   )}
                   {token && igfTableMode === "igf_diario" && presupuestoGendKey(plantaFilter) === "queretaro" && (
                     <IgfQueretaroTallerUpload key={token} token={token} />
+                  )}
+                  {token && igfTableMode === "igf_diario" && presupuestoGendKey(plantaFilter) === "tehuacan" && (
+                    <IgfTehuacanTallerUpload key={token} token={token} />
                   )}
                   {forecastExcelMsg && (
                     <span className="text-xs text-amber-300" role="status">
