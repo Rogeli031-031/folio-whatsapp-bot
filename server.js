@@ -16216,8 +16216,9 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     useMtdRuleOfThree: false,
     useMtdAcumulado: true,
   };
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     let plantCode = null;
     let resolvedPlant = null;
     let comprasPayload = null;
@@ -16522,10 +16523,23 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
         forecastOpts.igfWeeklySummaryMetric = todasMetric;
       }
     }
-    if (forecastOpts.igfWeeklySummary && String(plantCode || "").toLowerCase() === "acapulco") {
-      forecastOpts.igfAcapulcoShowFolioCandidates = await igfAcapulcoWorkshopUpload.canUpload(req.dashboardAuth.actor_id);
+    const acapulcoExport = String(plantCode || "").toLowerCase() === "acapulco";
+    if (forecastOpts.igfWeeklySummary && acapulcoExport) {
+      // La autorización usa la misma conexión que ya tiene esta descarga.
+      forecastOpts.igfAcapulcoShowFolioCandidates =
+        await igfAcapulcoWorkshopUpload.canUploadWithClient(client, req.dashboardAuth.actor_id);
     }
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, forecastOpts);
+    const filename = resolvedPlant
+      ? `Dashboard_ARR_Forecast_${String(resolvedPlant.canon || "planta").replace(/[^A-Za-z0-9]+/g, "")}_${year}_${month}.xlsx`
+      : `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
+    const sendExcel = () => {
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(buf);
+    };
+    // El snapshot se conserva, pero no bloquea una descarga de Acapulco ya generada.
+    if (acapulcoExport) sendExcel();
     try {
       const fechaCorteStr = (uploadDay || proyeccionHasta || "").toString().trim().slice(0, 10);
       const ctxMini = await dashboardArrForecast.buildPronosticoVentaDescMaps(client, year, month, fechaCorteStr);
@@ -16536,17 +16550,16 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
     } catch (snapErr) {
       console.error("[ARR dashboard-excel] pronostico_mini_snapshot", snapErr);
     }
-    const filename = resolvedPlant
-      ? `Dashboard_ARR_Forecast_${String(resolvedPlant.canon || "planta").replace(/[^A-Za-z0-9]+/g, "")}_${year}_${month}.xlsx`
-      : `Dashboard_ARR_Forecast_${year}_${month}.xlsx`;
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(buf);
+    if (!acapulcoExport) sendExcel();
   } catch (e) {
     console.error("[ARR dashboard-excel]", e);
-    res.status(500).json({ error: e.message });
+    if (!res.headersSent) {
+      res.removeHeader("Content-Type");
+      res.removeHeader("Content-Disposition");
+      return res.status(500).json({ error: "No se pudo generar el Excel de IGF. Intenta descargarlo de nuevo." });
+    }
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
