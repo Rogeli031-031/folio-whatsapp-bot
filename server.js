@@ -16529,6 +16529,10 @@ app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) =>
       forecastOpts.igfAcapulcoShowFolioCandidates =
         await igfAcapulcoWorkshopUpload.canUploadWithClient(client, req.dashboardAuth.actor_id);
     }
+    if (forecastOpts.igfWeeklySummary && resolvedPlant?.clave) {
+      forecastOpts.igfLocalProductivityContext = require("./lib/igf-diario-taller-excel")
+        .plantContext(plantCode, resolvedPlant, req.dashboardAuth.actor_id);
+    }
     const buf = await dashboardArrForecast.generarDashboardArrForecast(client, year, month, plantCode, forecastOpts);
     const filename = resolvedPlant
       ? `Dashboard_ARR_Forecast_${String(resolvedPlant.canon || "planta").replace(/[^A-Za-z0-9]+/g, "")}_${year}_${month}.xlsx`
