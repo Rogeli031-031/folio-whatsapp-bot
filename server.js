@@ -16141,6 +16141,30 @@ for (const step of ["preview", "confirm"]) {
   });
 }
 
+const igfQueretaroWorkshopUpload = require("./lib/igf-queretaro-taller-upload")
+  .createUpload({ pool, businessDate: getForecastBusinessTodayYmd });
+
+app.get("/api/dashboard/igf-diario-taller-queretaro/acceso", dashboardAuthMiddleware, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    return res.json({ allowed: await igfQueretaroWorkshopUpload.canUpload(req.dashboardAuth.actor_id) });
+  } catch {
+    return res.status(503).json({ error: "Carga de taller de Querétaro no disponible." });
+  }
+});
+for (const step of ["preview", "confirm"]) {
+  app.post("/api/dashboard/igf-diario-taller-queretaro/" + step, dashboardAuthMiddleware, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      return res.json(await igfQueretaroWorkshopUpload[step](req.dashboardAuth.actor_id, req.body));
+    } catch (e) {
+      const status = [403,409,422].includes(e.status) ? e.status : 503;
+      const errors = {403:"Tu cuenta no tiene acceso a la carga de Querétaro.",409:"Vuelve a generar la vista previa.",422:"Verifica el formato de taller de Querétaro y que los cortes no tengan fechas futuras.",503:"La carga de taller de Querétaro no está disponible."};
+      return res.status(status).json({ error: e.code === "CONFIRM_REPORT_PERIOD" ? "Confirma el mes y año del historial." : errors[status] });
+    }
+  });
+}
+
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
   const gaBlock = igfDiarioDownloadAccess.requestBlock(req.dashboardAuth, req.query, "excel");
   if (gaBlock) return res.status(gaBlock.status).json({ error: gaBlock.error });

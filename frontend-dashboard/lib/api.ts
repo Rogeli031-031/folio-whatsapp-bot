@@ -4231,3 +4231,23 @@ export async function requestIgfPueblaTaller<T>(
   if (!response.ok) throw new Error(data.error || "Carga de taller de Puebla no disponible.");
   return data;
 }
+
+export type IgfQueretaroTallerPreview = {
+  period: string;
+  rowCount: number;
+  cuts: {date:string; rowCount:number; unitCount:number; warnings:{sourceRow:number; unit:string; code:string}[]}[];
+  confirm: string;
+};
+export async function requestIgfQueretaroTaller<T>(
+  token:string, step:"acceso"|"preview"|"confirm",
+  body?:{xlsx:string; period:string; confirm?:string; periodConfirmed?:boolean}
+):Promise<T> {
+  const response=await fetch(getApiUrl("/api/dashboard/igf-diario-taller-queretaro/"+step),{
+    method:body?"POST":"GET",cache:"no-store",
+    headers:{Authorization:`Bearer ${token}`,...(body?{"Content-Type":"application/json"}:{})},
+    ...(body?{body:JSON.stringify(body)}:{})
+  });
+  const data=await response.json();
+  if(!response.ok)throw new Error(data.error||"Carga de taller de Querétaro no disponible.");
+  return data;
+}

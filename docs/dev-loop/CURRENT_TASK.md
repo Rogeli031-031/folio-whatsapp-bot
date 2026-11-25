@@ -1,5 +1,5 @@
 task_id: IGF-TALLER-QUERETARO-CARGA
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 authorized_by: HUMAN_APPROVER
 authorized_at: "2026-11-24T23:25:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-24"
