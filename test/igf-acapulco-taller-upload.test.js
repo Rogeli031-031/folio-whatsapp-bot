@@ -74,3 +74,28 @@ test('folio candidates compare canonical single AT/T within same company, period
   assert.deepEqual((await readReport(...args)).reports[0].units[0],{eco:'AT-020',kind:'Pipa'});
  }finally{await db.close();}
 });
+
+test('confirmation binds one selected cut and writes the date verified in preview',async()=>{
+ const writes=[];
+ const client={release(){},async query(q,params=[]){
+  if(q.includes('FOR SHARE'))return {rows:[{}]};
+  if(q.includes('AND sha256='))return {rows:[]};
+  if(q.includes('INSERT INTO arr.igf_taller_reporte_revision')){writes.push(params);return {rows:[{id:1,revision:1}]};}
+  if(q.includes('INSERT INTO arr.igf_taller_reporte_unidad'))return {rowCount:JSON.parse(params[1]).length};
+  return {rows:[]};
+ }};
+ const pool={query:async()=>({rows:[{}]}),connect:async()=>client};
+ const dates=['2026-11-26','2026-11-25','2026-11-24'];
+ const h=createUpload({pool,businessDate:()=> '2026-11-25',parse:async(_bytes,_excel,reportDate)=>({
+  verifiedLayout:'E9-v1',date:reportDate??dates[1],availableDates:dates,
+  records:[{eco:'AT-101',section:'Mayor'}]
+ })});
+ const input={xlsx:Buffer.from('test').toString('base64')};
+ const cut=await h.preview(101,{...input,reportDate:dates[2]});
+ assert.deepEqual(cut.availableDates,dates.slice(1));
+ await assert.rejects(h.confirm(101,{...input,reportDate:dates[1],confirm:cut.confirm}),{code:'PREVIEW_CHANGED'});
+ assert.equal(writes.length,0);
+ await h.confirm(101,{...input,confirm:cut.confirm,reportDate:dates[2]});
+ assert.equal(writes.length,1);
+ assert.deepEqual(writes[0].slice(0,3),['Acapulco','E9',dates[2]]);
+});

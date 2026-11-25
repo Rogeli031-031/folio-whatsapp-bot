@@ -40,10 +40,23 @@ export default function IgfDiarioTallerUpload({ token, compact = false }: { toke
         });
       }} /></label>
       {state && <div>
+        {(state.data.availableDates?.length ?? 0) > 1 && <label>Fecha del reporte
+          <select className="ml-2 rounded bg-slate-800 p-1 text-white" value={state.data.date} disabled={busy} onChange={ev=>{
+            const reportDate=ev.currentTarget.value, xlsx=state.xlsx;
+            setState(null);
+            void attempt(async ()=>{
+              const data=await requestIgfAcapulcoTaller<IgfAcapulcoTallerPreview>(token,"preview",{xlsx,reportDate});
+              setState({xlsx,data});
+            });
+          }}>
+            {state.data.availableDates?.map(date=><option key={date} value={date}>{date}</option>)}
+          </select>
+        </label>}
         <p>Empresa {state.data.company}, fecha {state.data.date}. {state.data.rowCount} pipas; {state.data.excluded} unidades de otro tipo excluidas.</p>
         <ul className="max-h-24 overflow-auto">{state.data.units.map(u=><li key={u.eco}>{u.eco} ({u.section})</li>)}</ul>
+        <p>Solo se guarda la fecha mostrada. Si ya existe un archivo distinto para esa fecha, se guarda como una nueva revisión.</p>
         <button type="button" disabled={busy} onClick={()=>void attempt(async ()=>{
-          const r=await requestIgfAcapulcoTaller<{revision:number;duplicate:boolean}>(token,"confirm",{xlsx:state.xlsx,confirm:state.data.confirm});
+          const r=await requestIgfAcapulcoTaller<{revision:number;duplicate:boolean}>(token,"confirm",{xlsx:state.xlsx,confirm:state.data.confirm,reportDate:state.data.date});
           setState(null);
           setMessage(r.duplicate ? "Este archivo ya está guardado." : "Reporte guardado. Revisión "+r.revision+".");
         })}>Confirmar y guardar</button>
