@@ -92,3 +92,44 @@ test('upload preview accepts untouched bytes with cached formulas and does not w
   }
   assert.equal(writes, 0);
 });
+
+async function datedFixture(e10, tweak=()=>{}) {
+  return fixture(e10, (s,p,w)=>{
+    const dateCell=e10?'I5':'I4';
+    s.name='25 Noviembre 26 ';
+    s.getCell(dateCell).value='FECHA: 25 NOVIEMBRE 2026';
+    for (const day of [24,26]) {
+      const tab=w.addWorksheet(`${day} de NOVIEMBRE de 2026`);
+      s.eachRow(row=>row.eachCell((cell,col)=>{
+        if(!cell.isMerged||cell.master===cell)tab.getCell(row.number,col).value=cell.type===ExcelJS.ValueType.Formula?cell.result:cell.value;
+      }));
+      tab.getCell(dateCell).value=`FECHA: ${day} NOVIEMBRE 2026`;
+      tab.getCell('J14').value=day;
+    }
+    tweak(s,p,w);
+  });
+}
+
+test('finds dated cuts, defaults to newest and reads only the requested cut in both company layouts',async()=>{
+  for(const e10 of [false,true]){
+    const file=await datedFixture(e10);
+    const newest=await parseWorkbook(file), historical=await parseWorkbook(file,undefined,'2026-11-24');
+    assert.equal(newest.date,'2026-11-26');
+    assert.deepEqual(newest.availableDates,['2026-11-26','2026-11-25','2026-11-24']);
+    assert.equal(historical.date,'2026-11-24');
+    assert.equal(historical.records[0].repairCost,24);
+    assert.equal(historical.verifiedLayout,e10?'E10-v1':'E9-v1');
+    await assert.rejects(parseWorkbook(file,undefined,'2026-11-23'),{code:'REPORT_DATE_INVALID'});
+  }
+});
+
+test('rejects mismatch with date header, duplicate dates and mixed companies',async()=>{
+  const cases=[
+    [w=>{w.getWorksheet('24 de NOVIEMBRE de 2026').getCell('I4').value='FECHA: 25 NOVIEMBRE 2026'},'REPORT_DATE_INVALID'],
+    [w=>{w.addWorksheet('25 DE NOVIEMBRE 2026')},'WORKBOOK_LAYOUT'],
+    [w=>{const s=w.getWorksheet('24 de NOVIEMBRE de 2026');s.getCell('B4').value=null;s.getCell('B5').value='EMPRESA: HIDROGAS ACAPULCO'},'COMPANY_NOT_VERIFIED'],
+  ];
+  for(const [tweak,code] of cases){
+    await assert.rejects(parseWorkbook(await datedFixture(false,(_s,_p,w)=>tweak(w))),{code});
+  }
+});

@@ -4197,8 +4197,8 @@ export async function downloadComprasExcel(
   URL.revokeObjectURL(href);
 }
 
-export type IgfAcapulcoTallerPreview = { company: "E9" | "E10"; date: string; rowCount: number; excluded: number; units: {eco: string; section: string}[]; confirm: string; };
-export async function requestIgfAcapulcoTaller<T>(token: string, step: "acceso" | "preview" | "confirm", body?: {xlsx: string; confirm?: string}): Promise<T> {
+export type IgfAcapulcoTallerPreview = { company: "E9" | "E10"; date: string; availableDates?: string[]; rowCount: number; excluded: number; units: {eco: string; section: string}[]; confirm: string; };
+export async function requestIgfAcapulcoTaller<T>(token: string, step: "acceso" | "preview" | "confirm", body?: {xlsx: string; confirm?: string; reportDate?: string}): Promise<T> {
   const response = await fetch(getApiUrl("/api/dashboard/igf-diario-taller/" + step), {
     method: body ? "POST" : "GET", cache: "no-store",
     headers: { Authorization: `Bearer ${token}`, ...(body ? {"Content-Type":"application/json"} : {}) },
