@@ -1,5 +1,5 @@
 task_id: G6-MERGE-DASHBOARD-POR-CHAT
-status: AUTHORIZED
+status: IN_PROGRESS
 authorized_by: HUMAN_APPROVER
 authorized_at: "2026-11-24T22:26:26-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-24"
