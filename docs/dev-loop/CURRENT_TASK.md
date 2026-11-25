@@ -1,4 +1,8 @@
 task_id: IGF-TALLER-PUEBLA-CARGA
+status: AUTHORIZED
+authorized_by: HUMAN_APPROVER
+authorized_at: "2026-11-24T23:25:00-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-24"
 objective: "Habilitar Reporte diario de taller en IGF Forecast > IGF Diario acumulado > Puebla, con vista previa del Excel original y guardado en un historial exclusivo de Puebla."
 in_scope:
   - docs/dev-loop/CURRENT_TASK.md
