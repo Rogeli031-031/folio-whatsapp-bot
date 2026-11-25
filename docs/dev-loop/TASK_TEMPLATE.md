@@ -76,7 +76,7 @@ Sin la línea `human_authorization` exacta, escrita por humano, la tarea no es e
 
 ## Alternativa: G1 ordinario por chat autenticado
 
-Sólo si se cumple LOOP §4 bis. No rellenar los campos Git reservados ni escribir AUTHORIZED en nombre del humano. Registrar únicamente la atestación verificada en la rama de la tarea; esta plantilla no es prueba.
+Sólo si se cumple LOOP §4 bis. No rellenar los campos Git reservados ni escribir AUTHORIZED en nombre del humano. No editar `CURRENT_TASK.md`. Registrar la atestación verificada en el reporte de la rama y referenciarla en el PR; esta plantilla no es prueba.
 
 ```yaml
 owner_chat_attestation:
@@ -86,13 +86,17 @@ owner_chat_attestation:
   scope_sha256: ""
 ```
 
+## Integración de un PR ordinario del Dashboard
+
+G1 no autoriza la integración. Mía sólo puede ejecutar el merge con G4 separado para el PR y SHA exactos y el resto de las condiciones de LOOP §4 ter. Fuera de esa excepción, el merge sigue reservado al humano. No hay push directo a main ni auto-merge.
+
 ## Tras la ejecución (implementador)
 
 Por Git, el implementador puede pasar una vez de `AUTHORIZED` a `IN_PROGRESS`. Por chat, seguir la excepción acotada de LOOP §4 bis.  
 En esa transición **solo** puede modificar `status` de `AUTHORIZED` a `IN_PROGRESS`.  
 No puede crear, borrar ni modificar `authorized_by`, `authorized_at` ni `human_authorization`.  
 `IN_PROGRESS` no es autorización independiente: exige G1 heredado intacto.  
-Al terminar, deja uno de: `DONE_PENDING_REVIEW` | `STOPPED` | `BLOCKED`.  
+Al terminar, deja uno de: `DONE_PENDING_REVIEW` | `STOPPED` | `BLOCKED`, en `CURRENT_TASK.md` para la vía Git o en el registro de la tarea para la vía chat.  
 Escribe el reporte en `result_report_path`.  
 No cierra la tarea (`CLOSED` / `REJECTED` son humanos).  
 No autoriza la siguiente.
