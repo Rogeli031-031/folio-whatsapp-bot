@@ -4208,3 +4208,26 @@ export async function requestIgfAcapulcoTaller<T>(token: string, step: "acceso" 
   if (!response.ok) throw new Error(data.error || "Carga de taller no disponible.");
   return data;
 }
+
+export type IgfPueblaTallerPreview = {
+  sourceDate: string | null;
+  tabDate: string | null;
+  rowCount: number;
+  unitCount: number;
+  warnings: { row: number | null; unit: string | null; code: string }[];
+  records: { sourceRow: number; unit: string; kind: string; section: string; fault: string | null; repairCost: number | null }[];
+  confirm: string;
+};
+export async function requestIgfPueblaTaller<T>(
+  token: string, step: "acceso" | "preview" | "confirm",
+  body?: {xlsx: string; confirm?: string; reportDate?: string; dateConfirmed?: boolean}
+): Promise<T> {
+  const response = await fetch(getApiUrl("/api/dashboard/igf-diario-taller-puebla/" + step), {
+    method: body ? "POST" : "GET", cache: "no-store",
+    headers: { Authorization: `Bearer ${token}`, ...(body ? {"Content-Type":"application/json"} : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Carga de taller de Puebla no disponible.");
+  return data;
+}

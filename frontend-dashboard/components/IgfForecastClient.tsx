@@ -32,7 +32,7 @@ import {
   zonaFromPlantRows,
 } from "@/lib/igf-october-mini";
 import IgfDiarioGraficaModal from "@/components/IgfDiarioGraficaModal";
-import IgfDiarioTallerUpload from "@/components/IgfDiarioTallerUpload";
+import IgfDiarioTallerUpload, { IgfPueblaTallerUpload } from "@/components/IgfDiarioTallerUpload";
 import IgfSimulationModal from "@/components/IgfSimulationModal";
 import IgfPresupuestoUpload from "@/components/IgfPresupuestoUpload";
 import IgfDiarioWeeklyPlantPanel from "@/components/IgfDiarioWeeklyPlantPanel";
@@ -2009,6 +2009,9 @@ export function IgfForecastContent() {
                   )}
                   {token && igfTableMode === "igf_diario" && presupuestoGendKey(plantaFilter) === "acapulco" && (
                     <IgfDiarioTallerUpload token={token} compact />
+                  )}
+                  {token && igfTableMode === "igf_diario" && presupuestoGendKey(plantaFilter) === "puebla" && (
+                    <IgfPueblaTallerUpload key={token} token={token} />
                   )}
                   {forecastExcelMsg && (
                     <span className="text-xs text-amber-300" role="status">

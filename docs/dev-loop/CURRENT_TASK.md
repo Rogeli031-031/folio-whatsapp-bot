@@ -1,25 +1,32 @@
-task_id: G6-MERGE-DASHBOARD-POR-CHAT
+task_id: IGF-TALLER-PUEBLA-CARGA
 status: DONE_PENDING_REVIEW
 authorized_by: HUMAN_APPROVER
-authorized_at: "2026-11-24T22:26:26-06:00"
+authorized_at: "2026-11-24T23:25:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-24"
-objective: "Permitir que Mía integre un PR ordinario del Dashboard solo tras la aprobación explícita de Luis en chat privado para ese PR y ese commit, sin que Luis use PowerShell."
+objective: "Habilitar Reporte diario de taller en IGF Forecast > IGF Diario acumulado > Puebla, con vista previa del Excel original y guardado en un historial exclusivo de Puebla."
 in_scope:
-  - AGENTS.md
-  - docs/dev-loop/LOOP_PROTOCOL.md
-  - docs/dev-loop/TASK_TEMPLATE.md
-  - docs/dev-loop/reports/README.md
   - docs/dev-loop/CURRENT_TASK.md
-  - docs/dev-loop/reports/G6-MERGE-DASHBOARD-POR-CHAT.md
+  - lib/igf-puebla-taller-xlsx.js
+  - lib/igf-puebla-taller-upload.js
+  - frontend-dashboard/components/IgfForecastClient.tsx
+  - frontend-dashboard/components/IgfDiarioTallerUpload.tsx
+  - frontend-dashboard/lib/api.ts
+  - server.js
+  - sql/20261125_igf_taller_diario_puebla.sql
+  - test/igf-puebla-taller-xlsx.test.js
+  - test/igf-puebla-taller-upload.test.js
+  - docs/dev-loop/reports/IGF-TALLER-PUEBLA-CARGA.md
 out_of_scope:
-  - "Código de la aplicación, contratos de Director IA, migraciones, permisos, datos, credenciales, infraestructura y despliegues manuales."
+  - "Acapulco, ventas, compras, HG, folios y exportación de productividad."
+  - "Contratos, protocolo, credenciales y cambios en producción."
 contracts_in_force:
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
 allowed_actions:
-  - "G6: documentar integración asistida con aprobación humana por PR y commit, controles de GitHub vigentes y registro de la aprobación ordinaria sin reemplazar CURRENT_TASK."
-  - "Editar, verificar, guardar y subir solo en g6/merge-dashboard-por-chat; abrir PR para revisión y merge humano."
+  - "Implementar y probar solo en feat/igf-taller-puebla-carga. Preparar y probar la migración fuera de producción, con permisos separados para Puebla sin habilitar cuentas automáticamente. Abrir PR borrador."
+  - "Mostrar fecha a confirmar, 6 registros de 5 unidades con la muestra, ambas reparaciones T-16 y avisos por fechas faltantes o contradictorias. Guardar por revisión, sin duplicar una carga idéntica."
 forbidden_actions:
-  - "Cambiar autorizaciones humanas, desactivar protecciones, habilitar auto-merge, publicar chats privados, o hacer push o merge a main con esta tarea."
+  - "Aplicar la migración, conceder permisos o cargar archivos en producción con esta autorización."
+  - "Modificar autorizaciones humanas, publicar archivos reales o secretos, cambiar main, fusionar o desplegar."
 max_attempts: 1
-result_report_path: docs/dev-loop/reports/G6-MERGE-DASHBOARD-POR-CHAT.md
+result_report_path: docs/dev-loop/reports/IGF-TALLER-PUEBLA-CARGA.md
