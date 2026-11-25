@@ -1,7 +1,7 @@
 task_id: G6-MERGE-DASHBOARD-POR-CHAT
 status: AUTHORIZED
-authorized_by: HUMAN_APPROVER
-authorized_at: "<fecha y hora ISO 8601 con zona>"
+authorized_at: "2026-11-24T22:26:26-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-24"
 human_authorization: "<línea de autorización escrita por Luis>"
 objective: "Permitir que Mía integre un PR ordinario del Dashboard solo tras la aprobación explícita de Luis en chat privado para ese PR y ese commit, sin que Luis use PowerShell."
 in_scope:
