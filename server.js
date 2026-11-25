@@ -16117,6 +16117,30 @@ for (const step of ["preview", "confirm"]) {
   });
 }
 
+const igfPueblaWorkshopUpload = require("./lib/igf-puebla-taller-upload")
+  .createUpload({ pool, businessDate: getForecastBusinessTodayYmd });
+
+app.get("/api/dashboard/igf-diario-taller-puebla/acceso", dashboardAuthMiddleware, async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  try {
+    return res.json({ allowed: await igfPueblaWorkshopUpload.canUpload(req.dashboardAuth.actor_id) });
+  } catch {
+    return res.status(503).json({ error: "Carga de taller de Puebla no disponible." });
+  }
+});
+for (const step of ["preview", "confirm"]) {
+  app.post("/api/dashboard/igf-diario-taller-puebla/" + step, dashboardAuthMiddleware, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    try {
+      return res.json(await igfPueblaWorkshopUpload[step](req.dashboardAuth.actor_id, req.body));
+    } catch (e) {
+      const status = [403,409,422].includes(e.status) ? e.status : 503;
+      const errors = {403:"Tu cuenta no tiene acceso a la carga de Puebla.",409:"Vuelve a generar la vista previa.",422:"El archivo no corresponde al formato de taller de Puebla.",503:"La carga de taller de Puebla no está disponible."};
+      return res.status(status).json({ error: e.code === "CONFIRM_REPORT_DATE" ? "Confirma una fecha de reporte válida que no sea futura." : errors[status] });
+    }
+  });
+}
+
 app.get("/api/arr/dashboard-excel", dashboardAuthMiddleware, async (req, res) => {
   const gaBlock = igfDiarioDownloadAccess.requestBlock(req.dashboardAuth, req.query, "excel");
   if (gaBlock) return res.status(gaBlock.status).json({ error: gaBlock.error });
