@@ -37,3 +37,40 @@ test('preview does not write and binds acting account and original bytes',async(
  await assert.rejects(h.confirm(101,{...other,confirm:ready.confirm}),e=>e.status===409);
  assert.equal(calls,0);
 });
+
+let PGlite;try{({PGlite}=require('@electric-sql/pglite'));}catch(e){if(e.code!=='MODULE_NOT_FOUND')throw e;}
+test('folio candidates compare canonical single AT/T within same company, period and permissions',{skip:!PGlite},async()=>{
+ const {readReport}=require('../lib/igf-acapulco-taller-upload');
+ const db=new PGlite();
+ try{
+  await db.exec(`
+   CREATE SCHEMA arr;
+   CREATE TABLE arr.igf_taller_reporte_revision(id int,company_code text,plant_code text,report_date date,sha256 text,row_count int,revision int);
+   CREATE TABLE arr.igf_taller_reporte_unidad(revision_id int,eco text,observations jsonb);
+   CREATE TABLE public.plantas(id int,clave text);
+   CREATE TABLE public.categorias(id int,clave text);
+   CREATE TABLE public.folios(planta_id int,categoria_id int,categoria text,unidad text,numero_folio text,creado_en timestamptz,solo_zp_ad bool,override_planta bool);
+   INSERT INTO arr.igf_taller_reporte_revision VALUES (1,'E9','Acapulco','2026-11-24',repeat('a',64),1,1);
+   INSERT INTO arr.igf_taller_reporte_unidad VALUES (1,'AT-020','{"eco":"AT-020","kind":"Pipa"}');
+   INSERT INTO public.plantas VALUES (1,'E9'),(2,'E10'),(3,'ACAPULCO');
+   INSERT INTO public.categorias VALUES (1,'taller'),(2,'ventas');
+   INSERT INTO public.folios VALUES
+    (1,1,NULL,'AT-20','F-202611-11','2026-11-20 12:00Z',false,false),
+    (1,1,NULL,' T 020 ','F-202611-12','2026-11-20 12:00Z',false,false),
+    (2,1,NULL,'AT-20','F-202611-13','2026-11-20 12:00Z',false,false),
+    (3,1,NULL,'AT-20','F-202611-14','2026-11-20 12:00Z',false,false),
+    (1,1,NULL,'AT-20/AT-21','F-202611-15','2026-11-20 12:00Z',false,false),
+    (1,1,NULL,'C-020','F-202611-16','2026-11-20 12:00Z',false,false),
+    (1,1,NULL,'20','F-202611-17','2026-11-20 12:00Z',false,false),
+    (1,1,NULL,'AT-20','F-202611-18','2026-11-20 12:00Z',true,false),
+    (1,1,NULL,'AT-020','F-202611-19','2026-11-20 12:00Z',false,true),
+    (1,2,NULL,'AT-020','F-202611-20','2026-11-20 12:00Z',false,false),
+    (1,1,NULL,'AT-20','F-202611-21','2026-11-25 12:00Z',false,false),
+    (1,1,NULL,'AT-20','F-202608-22','2026-08-01 12:00Z',false,false);
+  `);
+  const args=[db,'2026-11-01','2026-11-24'];
+  const permitted=await readReport(...args,{showFolioCandidates:true});
+  assert.deepEqual(permitted.reports[0].units[0],{eco:'AT-020',kind:'Pipa',folioCandidates:['F-202611-11','F-202611-12']});
+  assert.deepEqual((await readReport(...args)).reports[0].units[0],{eco:'AT-020',kind:'Pipa'});
+ }finally{await db.close();}
+});
