@@ -1,32 +1,27 @@
-task_id: IGF-TALLER-TEHUACAN-CARGA
-status: CLOSED
-authorized_by: HUMAN_APPROVER
-authorized_at: "2026-11-24T23:25:00-06:00"
-human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-24"
-objective: "Habilitar la carga del Excel E8 original en IGF Forecast > IGF Diario acumulado > Tehuacán con fecha de corte confirmada e historial exclusivo."
+task_id: IGF-TALLER-ACAPULCO-APP-SERGIO
+status: AUTHORIZED
+authorized_by: "HUMAN_APPROVER"
+authorized_at: "2026-11-26:MM:00-06:00"
+human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez AAAA-MM-DD"
+objective: "Preparar y probar la conexión de la versión actual de la app de Sergio al IGF de Acapulco. Separar las pipas de Gas Uribe de las cilindreras de HidroGas."
 in_scope:
   - docs/dev-loop/CURRENT_TASK.md
-  - lib/igf-tehuacan-taller-xlsx.js
-  - lib/igf-tehuacan-taller-upload.js
-  - frontend-dashboard/components/IgfForecastClient.tsx
-  - frontend-dashboard/components/IgfDiarioTallerUpload.tsx
-  - frontend-dashboard/lib/api.ts
   - server.js
-  - sql/20261125_igf_taller_diario_tehuacan.sql
-  - test/igf-tehuacan-taller-xlsx.test.js
-  - test/igf-tehuacan-taller-upload.test.js
-  - docs/dev-loop/reports/IGF-TALLER-TEHUACAN-CARGA.md
+  - lib/igf-acapulco-taller-app.js
+  - lib/igf-acapulco-taller-upload.js
+  - lib/igf-acapulco-productividad-taller.js
+  - sql/032_igf_acapulco_taller_app.sql
+  - test/igf-acapulco-taller-app.test.js
+  - docs/dev-loop/reports/IGF-TALLER-ACAPULCO-APP-SERGIO.md
 out_of_scope:
-  - "Otras plantas, ventas, compras, HG, folios y exportación."
-  - "Contratos, protocolo, credenciales y producción."
+  - "Otras plantas, datos reales y cambios a la app instalada de Sergio."
 contracts_in_force:
   - docs/director-ia/DIRECTOR_IA_CONSTITUTION.md
   - docs/director-ia/DIRECTOR_IA_ARCHITECTURE_INDEX.md
 allowed_actions:
-  - "Implementar, probar migración y carga en base aislada y abrir PR borrador solo desde feat/igf-taller-tehuacan-carga. No habilitar cuentas."
-  - "Verificar origen E8, mostrar 6 unidades con la muestra privada, pedir fecha real y distinguir fecha estimada de salida efectiva. Conservar reparaciones, importes faltantes y avisos, sin sumar datos del padrón como otro corte. Guardar por revisión, sin duplicar."
+  - "Implementar y probar con datos ficticios en base aislada; hacer commit y push solo en feat/igf-taller-acapulco-app-sergio y abrir un PR borrador con instrucciones de activación y reversión."
 forbidden_actions:
-  - "Aplicar SQL, permisos o cargas en producción; fusionar o desplegar."
-  - "Modificar campos humanos, publicar el Excel real, secretos o modificar main."
+  - "Escribir datos, aplicar SQL, configurar credenciales o activar la conexión en producción."
+  - "Modificar el historial original, publicar datos reales, modificar campos de autorización, fusionar, desplegar o hacer push directo a main."
 max_attempts: 1
-result_report_path: docs/dev-loop/reports/IGF-TALLER-TEHUACAN-CARGA.md
+result_report_path: docs/dev-loop/reports/IGF-TALLER-ACAPULCO-APP-SERGIO.md
