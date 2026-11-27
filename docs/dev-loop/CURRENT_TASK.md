@@ -1,5 +1,5 @@
 task_id: IGF-TALLER-ACAPULCO-APP-SERGIO
-status: AUTHORIZED
+status: DONE_PENDING_REVIEW
 authorized_by: "HUMAN_APPROVER"
 authorized_at: "2026-11-26T19:31:00-06:00"
 human_authorization: "AUTHORIZED_BY_HUMAN: Luis Rogelio Zaragoza Alvarez 2026-11-26"
