@@ -108,6 +108,9 @@ const planMaestro = require("./lib/plan-maestro");
 const comprasDashboard = require("./lib/compras-dashboard");
 
 const app = express();
+require("./lib/igf-acapulco-taller-app").mountPilot(app, {
+  db: { query: (...args) => pool.query(...args) }, json: bodyParser.json,
+});
 app.use(bodyParser.urlencoded({ extended: false }));
 /** 120mb: SEH carpetas legales admite hasta 80,000 KB en base64 (~4/3 del binario). */
 app.use(bodyParser.json({ limit: "120mb" }));
